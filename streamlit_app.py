@@ -35,6 +35,27 @@ TTRI_COLS = ["index", "start", "end", "duration", "aemg", "rms", "iemg", "mpf", 
 
 st.set_page_config(page_title="emg-compare.app", page_icon="📈", layout="wide")
 
+st.markdown(
+    """
+    <style>
+      .stApp {
+        background:
+          radial-gradient(1200px 600px at 10% -10%, #1a3a2e 0%, transparent 55%),
+          radial-gradient(900px 500px at 100% 0%, #123048 0%, transparent 50%),
+          #0b1210;
+      }
+      [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #101a16 0%, #0b1210 100%);
+        border-right: 1px solid #24322b;
+      }
+      [data-testid="stHeader"] {
+        background: rgba(11, 18, 16, 0.7);
+      }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
 
 def init_state() -> None:
     defaults = {
@@ -259,7 +280,7 @@ def render_sidebar() -> None:
     st.sidebar.title("emg-compare.app")
     st.sidebar.caption("Delsys CSV × 自研 TXT")
 
-    st.sidebar.subheader("上傳檔案（Streamlit Cloud 建議）")
+    st.sidebar.subheader("上傳檔案")
     up_delsys = st.sidebar.file_uploader("Delsys CSV", type=["csv"], accept_multiple_files=True, key="up_delsys")
     up_txt = st.sidebar.file_uploader("自研 TXT", type=["txt"], accept_multiple_files=True, key="up_txt")
     if st.sidebar.button("儲存上傳檔案", use_container_width=True):
@@ -280,7 +301,7 @@ def render_sidebar() -> None:
 
     st.sidebar.subheader("Delsys CSV")
     if not delsys_names:
-        st.sidebar.info("尚無 CSV（可上傳或放到 data/delsys）")
+        st.sidebar.info("尚無 CSV")
         st.session_state.selected_delsys = None
     else:
         current = st.session_state.selected_delsys
@@ -294,7 +315,7 @@ def render_sidebar() -> None:
 
     st.sidebar.subheader("自研 TXT（可多選）")
     if not txt_names:
-        st.sidebar.info("尚無 TXT（可上傳或放到 data/txt）")
+        st.sidebar.info("尚無 TXT")
         st.session_state.selected_txt = []
     else:
         defaults = [name for name in st.session_state.selected_txt if name in txt_names]

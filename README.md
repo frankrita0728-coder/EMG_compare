@@ -13,7 +13,7 @@
 檔案配對支援：
 - 手動各選一邊（TXT 可多選）
 - 依檔名自動建議
-- 上傳 CSV / TXT（雲端部署建議用上傳）
+- 上傳 CSV / TXT
 
 ## 本機快速開始
 
@@ -33,10 +33,7 @@ python -m streamlit run streamlit_app.py
    - Repository：`frankrita0728-coder/EMG_compare`
    - Branch：`master`
    - Main file path：`streamlit_app.py`
-4. Deploy 後會得到類似 `https://xxxx.streamlit.app` 的網址
-5. （可選）在 App settings → **Custom domain** 綁定例如 `emg-compare.xx.app`（需你已擁有該網域並依指示設定 DNS）
-
-雲端沒有本機 `data/` 時，請在側邊欄 **上傳檔案**。
+4. Deploy 後網址可設為 `https://emg-compare.streamlit.app`
 
 ## 資料放置（本機）
 
