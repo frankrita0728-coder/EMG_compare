@@ -162,27 +162,34 @@ def emg_mdf_ttri(D, W_L, overlap, Fs):
 
 # ---------------------------------------------------------------------------
 # Contraction detection (ZE1 Schmitt + merge gap)
+# Ported from muscleCaptureForZE1_v2_Rita(Delsys).py capture loop.
 # ---------------------------------------------------------------------------
 
 def detect_contractions_ze1(
     values: list[float] | np.ndarray,
     *,
-    sample_rate_hz: float = 1024.0,
+    sample_rate_hz: float = 1259.0,
     expected_count: int | None = None,
-    up_n: int = 30,
-    down_n: int = 40,
-    merge_gap_n: int = 50,
-    window_size: int = 512,
+    up_n: int = 20,
+    down_n: int = 20,
+    merge_gap_n: int = 20,
+    window_size: int = 529,
     smooth_bins: int = 32,
     target_hz: float = 128.0,
+    data_max: float = 0.1,
+    threshold_mode: str = "delsys",
+    trim_to_expected: bool = False,
 ) -> dict[str, Any]:
     """
     Online-style ZE1 contraction capture rewritten as batch processing.
 
-    Returns intervals in source sample indices and seconds, plus threshold info.
+    Defaults match muscleCaptureForZE1_v2_Rita(Delsys) Schmitt loop, with
+    data_max scaled for mV inputs (original script used 0.0001 for Volt-scale).
+      UP_N=20, DOWN_N=20, MERGE_GAP_N=20, window=529,
+      threshold = EMG_Base + (dataMax - EMG_Base) * 3/100
     """
     emg = np.asarray(values, dtype=float)
-    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1024.0
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
     if emg.size < int(fs * 3) + 10:
         return {
             "contractions": [],
@@ -210,7 +217,10 @@ def detect_contractions_ze1(
     up_streak = 0
     current_start_bin: int | None = None
     moving_avg_list: list[float] = []
+    bin_end_samples: list[int] = []
     segments: list[dict[str, Any]] = []
+
+    mode = (threshold_mode or "delsys").strip().lower()
 
     for i in range(len(emg)):
         start = max(0, i - window_size + 1)
@@ -218,11 +228,12 @@ def detect_contractions_ze1(
         emg_raw_data.append(float(emg[i] - drift))
         emg_raw_abs = np.abs(np.asarray(emg_raw_data, dtype=float))
 
+        # Baseline at ~2 s (same timing as original: mean of current block buffer)
         if (i >= int(fs * 2)) and (not base_check):
             baseline = float(np.mean(emg_raw_abs))
             base_check = True
 
-        if len(emg_raw_data) < block:
+        if len(emg_raw_abs) < block:
             continue
 
         if base_check:
@@ -236,94 +247,105 @@ def detect_contractions_ze1(
         if len(emg128_raw_data) < smooth_bins:
             continue
 
+        # Threshold at ~3 s from last 32×128 Hz bins
         if base_check and (not emg_base_check) and (i >= int(fs * 3)):
             recent = np.asarray(emg128_raw_data[-smooth_bins:], dtype=float)
             emg_base = float(np.mean(recent))
-            std_online = float(np.std(recent))
-            # 舊方法（mV 尺度）：threshold = base + (0.1 - base) * 4/100
-            # 新方法（raw / 大尺度）：threshold = base + 4 * std
-            if abs(emg_base) < 1.0 and std_online < 1.0:
+            if mode in {"raw", "raw_std", "std"}:
+                std_online = float(np.std(recent))
+                threshold = emg_base + std_online * 4.0
+            elif mode in {"legacy_mv", "mv_old"}:
                 threshold = emg_base + (0.1 - emg_base) * 4 / 100
             else:
-                threshold = emg_base + std_online * 4.0
+                # Delsys capture script (active formula)
+                threshold = emg_base + (float(data_max) - emg_base) * 3 / 100
             emg_base_check = True
 
-        if not emg_base_check:
-            continue
+        if emg_base_check:
+            emg_data = float(np.mean(emg128_raw_data[-smooth_bins:]))
+            moving_avg_list.append(emg_data)
+            bin_end_samples.append(i)
 
-        emg_data = float(np.mean(emg128_raw_data[-smooth_bins:]))
-        moving_avg_list.append(emg_data)
+            if emg_data > threshold:
+                active_muscle.append(emg_data)
+                emg_raw_active.extend([emg_data] * block)
+                down_count = 0
 
-        if emg_data > threshold:
-            active_muscle.append(emg_data)
-            # Approximate raw active samples for this analysis bin
-            emg_raw_active.extend([emg_data] * block)
-            down_count = 0
-
-            if not up_trigger:
-                if len(active_muscle) >= up_n:
-                    up_trigger = True
+                if not up_trigger:
+                    if len(active_muscle) >= up_n:
+                        up_trigger = True
+                        tentative_end = False
+                        gap_count = 0
+                        up_streak = 0
+                        current_start_bin = len(moving_avg_list) - 1 - (up_n - 1)
+                else:
+                    if tentative_end:
+                        up_streak += 1
+                        gap_count += 1
+                        if up_streak >= up_n and gap_count <= merge_gap_n:
+                            tentative_end = False
+                            gap_count = 0
+                            up_streak = 0
+            else:
+                if not up_trigger:
+                    active_muscle = []
+                    emg_raw_active = []
+                    down_count = 0
                     tentative_end = False
                     gap_count = 0
                     up_streak = 0
-                    current_start_bin = len(moving_avg_list) - 1 - (up_n - 1)
-            else:
-                if tentative_end:
-                    up_streak += 1
-                    gap_count += 1
-                    if up_streak >= up_n and gap_count <= merge_gap_n:
-                        tentative_end = False
-                        gap_count = 0
-                        up_streak = 0
-        else:
-            if not up_trigger:
-                active_muscle = []
-                emg_raw_active = []
-                down_count = 0
-                tentative_end = False
-                gap_count = 0
-                up_streak = 0
-            else:
-                active_muscle.append(emg_data)
-                emg_raw_active.extend([emg_data] * block)
-
-                if not tentative_end:
-                    down_count += 1
-                    if down_count >= down_n:
-                        tentative_end = True
-                        gap_count = 0
-                        up_streak = 0
-                        down_count = 0
                 else:
-                    gap_count += 1
-                    up_streak = 0
-                    if gap_count > merge_gap_n:
-                        end_bin = len(moving_avg_list) - 1
-                        start_bin = (
-                            current_start_bin
-                            if current_start_bin is not None
-                            else max(0, end_bin - len(emg_raw_active) + 1)
-                        )
-                        segments.append(
-                            {
-                                "start_bin": int(start_bin),
-                                "end_bin": int(end_bin),
-                            }
-                        )
-                        emg_raw_active = []
-                        active_muscle = []
-                        down_count = 0
-                        up_trigger = False
-                        tentative_end = False
-                        gap_count = 0
-                        up_streak = 0
-                        current_start_bin = None
+                    active_muscle.append(emg_data)
+                    emg_raw_active.extend([emg_data] * block)
 
-    # Convert analysis bins → source sample seconds
+                    if not tentative_end:
+                        down_count += 1
+                        if down_count >= down_n:
+                            tentative_end = True
+                            gap_count = 0
+                            up_streak = 0
+                            down_count = 0
+                    else:
+                        gap_count += 1
+                        up_streak = 0
+                        if gap_count > merge_gap_n:
+                            end_bin = len(moving_avg_list) - 1
+                            start_bin = (
+                                current_start_bin
+                                if current_start_bin is not None
+                                else max(0, end_bin - len(active_muscle) + 1)
+                            )
+                            segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
+                            emg_raw_active = []
+                            active_muscle = []
+                            down_count = 0
+                            up_trigger = False
+                            tentative_end = False
+                            gap_count = 0
+                            up_streak = 0
+                            current_start_bin = None
+
+        # Sliding 32-bin overlap window (same as original: del first sample)
+        del emg128_raw_data[0]
+
+    # Flush open segment at EOF
+    if up_trigger and moving_avg_list:
+        end_bin = len(moving_avg_list) - 1
+        start_bin = (
+            current_start_bin
+            if current_start_bin is not None
+            else max(0, end_bin)
+        )
+        segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
+
     contractions: list[dict[str, Any]] = []
     for index, seg in enumerate(segments, start=1):
-        start_sample = int(seg["start_bin"] * block)
-        end_sample = int((seg["end_bin"] + 1) * block)
+        start_bin = max(0, min(int(seg["start_bin"]), len(bin_end_samples) - 1))
+        end_bin = max(0, min(int(seg["end_bin"]), len(bin_end_samples) - 1))
+        # bin_end_samples[k] is the source sample index when that moving-avg bin was produced
+        end_sample = int(bin_end_samples[end_bin]) + 1
+        # Approximate start: end sample of start_bin, minus one analysis block
+        start_sample = int(bin_end_samples[start_bin]) - block + 1
         start_sample = max(0, min(start_sample, len(emg) - 1))
         end_sample = max(start_sample + 1, min(end_sample, len(emg)))
         start_s = start_sample / fs
@@ -340,8 +362,12 @@ def detect_contractions_ze1(
             }
         )
 
-    if expected_count and expected_count > 0 and len(contractions) > expected_count:
-        # Keep longest intervals if too many
+    if (
+        trim_to_expected
+        and expected_count
+        and expected_count > 0
+        and len(contractions) > expected_count
+    ):
         ranked = sorted(contractions, key=lambda c: c["duration"], reverse=True)
         selected = ranked[:expected_count]
         selected.sort(key=lambda c: c["start"])
@@ -349,7 +375,6 @@ def detect_contractions_ze1(
             item["index"] = i
         contractions = selected
 
-    # Fill peak_rms using envelope of each interval
     for item in contractions:
         s = item["start_sample"]
         e = item["end_sample"]
@@ -364,6 +389,10 @@ def detect_contractions_ze1(
         "analysis_hz": float(analysis_hz),
         "method": "ze1_schmitt",
         "envelope": moving_avg_list,
+        "threshold_mode": mode,
+        "up_n": up_n,
+        "down_n": down_n,
+        "merge_gap_n": merge_gap_n,
     }
 
 
