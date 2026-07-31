@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EMG Compare</title>
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <header class="brand">
+        <p class="brand-kicker">Zentan</p>
+        <h1>EMG Compare</h1>
+        <p class="brand-sub">Delsys CSV × 自研 TXT</p>
+      </header>
+
+      <section class="panel-block">
+        <div class="section-title">
+          <h2>Delsys CSV</h2>
+          <button id="refresh-btn" type="button">重新整理</button>
+        </div>
+        <div id="delsys-list" class="file-list"></div>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-title">
+          <h2>自研 TXT <small style="color:var(--muted);font-weight:400">（可多選）</small></h2>
+        </div>
+        <div id="txt-list" class="file-list"></div>
+      </section>
+
+      <section class="panel-block">
+        <div class="section-title">
+          <h2>自動建議</h2>
+        </div>
+        <div id="suggest-list" class="suggest-list"></div>
+      </section>
+
+      <p id="status" class="status">載入中...</p>
+      <p id="paths" class="paths"></p>
+    </aside>
+
+    <main class="main">
+      <nav class="tabs" role="tablist">
+        <button class="tab active" data-tab="waveform" type="button">
+          波形 <span class="tab-badge" id="badge-waveform" hidden>有結果</span>
+        </button>
+        <button class="tab" data-tab="contractions" type="button">
+          收縮區間 <span class="tab-badge" id="badge-contractions" hidden>有結果</span>
+        </button>
+        <button class="tab" data-tab="features" type="button">
+          特徵 <span class="tab-badge" id="badge-features" hidden>有結果</span>
+        </button>
+      </nav>
+
+      <section id="panel-waveform" class="tab-panel active">
+        <div class="toolbar">
+          <label>
+            正規化
+            <select id="norm-method">
+              <option value="zscore">Z-score</option>
+              <option value="maxabs">Max-abs</option>
+              <option value="none">原始值（不正規化）</option>
+            </select>
+          </label>
+          <label class="check-label">
+            <input id="align-by-start" type="checkbox" checked>
+            依起始時間對齊
+          </label>
+          <button id="run-wave-delsys" type="button">執行 Delsys</button>
+          <button id="run-wave-txt" type="button">執行 TXT</button>
+          <button id="run-wave-both" type="button" class="primary">兩邊一起（疊圖）</button>
+        </div>
+        <div class="split-charts">
+          <div class="result-card">
+            <h3>Delsys 結果</h3>
+            <div id="chart-wave-delsys" class="chart chart-sm"></div>
+            <p id="meta-wave-delsys" class="note empty-slot">尚未執行</p>
+          </div>
+          <div class="result-card">
+            <h3>TXT 結果</h3>
+            <div id="chart-wave-txt" class="chart chart-sm"></div>
+            <p id="meta-wave-txt" class="note empty-slot">尚未執行</p>
+          </div>
+        </div>
+        <div class="result-card overlay-card">
+          <h3>疊圖結果（兩邊一起）</h3>
+          <div id="chart-waveform" class="chart"></div>
+          <p id="waveform-note" class="note empty-slot">尚未執行</p>
+        </div>
+      </section>
+
+      <section id="panel-contractions" class="tab-panel">
+        <div class="toolbar">
+          <label>
+            收縮判斷
+            <select id="contraction-method-c">
+              <option value="rms_peak">RMS 峰值法（現有）</option>
+              <option value="ze1_schmitt">ZE1 施密特觸發</option>
+            </select>
+          </label>
+          <label>
+            預期次數
+            <input id="expected-count-c" type="number" min="1" max="10" value="3">
+          </label>
+          <button id="run-contr-delsys" type="button">執行 Delsys</button>
+          <button id="run-contr-txt" type="button">執行 TXT</button>
+          <button id="run-contr-both" type="button" class="primary">兩邊一起</button>
+        </div>
+        <div class="split-charts">
+          <div class="result-card">
+            <h3>Delsys 結果</h3>
+            <div id="chart-delsys-c" class="chart chart-sm"></div>
+            <div id="table-delsys-c" class="table-wrap"><div class="empty">尚未執行</div></div>
+          </div>
+          <div class="result-card">
+            <h3>TXT 結果</h3>
+            <div id="chart-txt-c" class="chart chart-sm"></div>
+            <div id="table-txt-c" class="table-wrap"><div class="empty">尚未執行</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="panel-features" class="tab-panel">
+        <div class="toolbar">
+          <label>
+            收縮判斷
+            <select id="contraction-method-f">
+              <option value="rms_peak">RMS 峰值法（現有）</option>
+              <option value="ze1_schmitt">ZE1 施密特觸發</option>
+            </select>
+          </label>
+          <label>
+            特徵計算
+            <select id="feature-method-f">
+              <option value="spectral">Spectral（現有 iEMG/RMS/MDF/MPF）</option>
+              <option value="ttri">TTRI / ZE1（AEMG + 滑動窗）</option>
+            </select>
+          </label>
+          <label>
+            預期次數
+            <input id="expected-count-f" type="number" min="1" max="10" value="3">
+          </label>
+          <button id="run-feat-delsys" type="button">執行 Delsys</button>
+          <button id="run-feat-txt" type="button">執行 TXT</button>
+          <button id="run-feat-both" type="button" class="primary">兩邊一起（含 Δ）</button>
+        </div>
+        <div class="split-charts">
+          <div class="result-card">
+            <h3>Delsys 特徵</h3>
+            <div id="table-feat-delsys" class="table-wrap"><div class="empty">尚未執行</div></div>
+          </div>
+          <div class="result-card">
+            <h3>TXT 特徵</h3>
+            <div id="table-feat-txt" class="table-wrap"><div class="empty">尚未執行</div></div>
+          </div>
+        </div>
+        <div class="result-card">
+          <h3>差異對照 Δ</h3>
+          <p id="features-note" class="note empty-slot">執行「兩邊一起」後顯示</p>
+          <div id="features-table" class="table-wrap"><div class="empty">尚未執行</div></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
