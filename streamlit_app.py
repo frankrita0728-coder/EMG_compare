@@ -387,6 +387,27 @@ def require_pair() -> tuple[str, list[str]] | None:
     return delsys, txt
 
 
+def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]:
+    """If user picks ExgCh1/Ch2, also include the matching pair name when present."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for name in selected:
+        if name in seen:
+            continue
+        out.append(name)
+        seen.add(name)
+        if "ExgCh1" in name:
+            alt = name.replace("ExgCh1", "ExgCh2")
+        elif "ExgCh2" in name:
+            alt = name.replace("ExgCh2", "ExgCh1")
+        else:
+            continue
+        if alt in available and alt not in seen:
+            out.append(alt)
+            seen.add(alt)
+    return out
+
+
 def render_sidebar() -> None:
     st.sidebar.markdown(
         """
@@ -421,12 +442,12 @@ def render_sidebar() -> None:
         st.sidebar.info("尚無 CSV")
         st.session_state.selected_delsys = None
     else:
-        current = st.session_state.selected_delsys
-        index = delsys_names.index(current) if current in delsys_names else 0
-        st.session_state.selected_delsys = st.sidebar.radio(
+        if st.session_state.selected_delsys not in delsys_names:
+            st.session_state.selected_delsys = delsys_names[0]
+        st.sidebar.radio(
             "選擇 Delsys",
             delsys_names,
-            index=index,
+            key="selected_delsys",
             label_visibility="collapsed",
         )
 
@@ -435,15 +456,25 @@ def render_sidebar() -> None:
         st.sidebar.info("尚無 TXT")
         st.session_state.selected_txt = []
     else:
-        defaults = [name for name in st.session_state.selected_txt if name in txt_names]
-        st.session_state.selected_txt = st.sidebar.multiselect(
+        # Bind via key only — assigning return value + default= breaks multi-select.
+        st.session_state.selected_txt = [
+            name for name in (st.session_state.selected_txt or []) if name in txt_names
+        ]
+        st.sidebar.multiselect(
             "選擇 TXT",
-            txt_names,
-            default=defaults,
+            options=txt_names,
+            key="selected_txt",
             label_visibility="collapsed",
+            help="可同時勾選多個，例如 ExgCh1 + ExgCh2",
         )
+        if st.sidebar.button("自動勾選 Ch1+Ch2 配對", use_container_width=True):
+            st.session_state.selected_txt = sibling_txt_channels(
+                list(st.session_state.selected_txt or []),
+                txt_names,
+            )
+            st.rerun()
 
-    st.sidebar.subheader("自動建議")
+    st.sidebar.markdown("##### 自動建議")
     if st.session_state.selected_delsys:
         raw_suggestions = suggest_for_selection(st.session_state.selected_delsys, "delsys", txt_files)
         suggestions = [
@@ -476,7 +507,10 @@ def render_sidebar() -> None:
             label = f"{delsys_name} ↔ {txt_name}（{item.get('score', 0)}）"
             if st.sidebar.button(label, key=f"sug_{delsys_name}_{txt_name}", use_container_width=True):
                 st.session_state.selected_delsys = delsys_name
-                st.session_state.selected_txt = [txt_name] if txt_name else []
+                st.session_state.selected_txt = sibling_txt_channels(
+                    [txt_name] if txt_name else [],
+                    txt_names,
+                )
                 st.rerun()
 
     st.sidebar.divider()
@@ -484,7 +518,7 @@ def render_sidebar() -> None:
     st.sidebar.caption(f"TXT 資料夾：{DATA_TXT}")
     st.sidebar.caption(
         f"已選：{st.session_state.selected_delsys or '（無）'} / "
-        f"{', '.join(st.session_state.selected_txt) or '（無）'}"
+        f"{', '.join(st.session_state.selected_txt or []) or '（無）'}"
     )
 
 

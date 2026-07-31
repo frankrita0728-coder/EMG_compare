@@ -245,6 +245,7 @@ def detect_contractions_ze1(
 
     emg_raw_data: list[float] = []
     emg128_raw_data: list[float] = []
+    baseline_acc: list[float] = []
     base_check = False
     emg_base_check = False
     active_muscle: list[float] = []
@@ -262,21 +263,27 @@ def detect_contractions_ze1(
     segments: list[dict[str, Any]] = []
 
     mode = (threshold_mode or "delsys").strip().lower()
+    # TXT×mV: wait a bit after 3 s so the post-baseline envelope settles before arming.
+    threshold_ready_s = 4.0 if mode in {"legacy_mv", "mv_old", "txt"} else 3.0
 
     for i in range(len(emg)):
         start = max(0, i - window_size + 1)
         drift = float(np.mean(emg[start : i + 1]))
-        emg_raw_data.append(float(emg[i] - drift))
-        emg_raw_abs = np.abs(np.asarray(emg_raw_data, dtype=float))
+        corrected = float(emg[i] - drift)
+        corrected_abs = abs(corrected)
+        emg_raw_data.append(corrected)
 
-        # Baseline at ~2 s (same timing as original: mean of current block buffer)
-        if (i >= int(fs * 2)) and (not base_check):
-            baseline = float(np.mean(emg_raw_abs))
-            base_check = True
+        # Collect full 0–2 s for baseline (original comment intent)
+        if not base_check:
+            baseline_acc.append(corrected_abs)
+            if i >= int(fs * 2):
+                baseline = float(np.mean(baseline_acc)) if baseline_acc else 0.0
+                base_check = True
 
-        if len(emg_raw_abs) < block:
+        if len(emg_raw_data) < block:
             continue
 
+        emg_raw_abs = np.abs(np.asarray(emg_raw_data, dtype=float))
         if base_check:
             emg_128mean = float(np.mean(emg_raw_abs - baseline))
         else:
@@ -288,17 +295,22 @@ def detect_contractions_ze1(
         if len(emg128_raw_data) < smooth_bins:
             continue
 
-        # Threshold at ~3 s from last 32×128 Hz bins
-        if base_check and (not emg_base_check) and (i >= int(fs * 3)):
+        # Threshold after warm-up (TXT uses 4 s to avoid baseline-settling transient)
+        if base_check and (not emg_base_check) and (i >= int(fs * threshold_ready_s)):
             recent = np.asarray(emg128_raw_data[-smooth_bins:], dtype=float)
             emg_base = float(np.mean(recent))
+            std_online = float(np.std(recent))
             if mode in {"raw", "raw_std", "std"}:
-                std_online = float(np.std(recent))
                 threshold = emg_base + std_online * 4.0
-            elif mode in {"legacy_mv", "mv_old"}:
-                threshold = emg_base + (0.1 - emg_base) * 4 / 100
+            elif mode in {"legacy_mv", "mv_old", "txt"}:
+                legacy = emg_base + (0.1 - emg_base) * 4 / 100
+                if emg_base < 0.5 and std_online < 0.2:
+                    threshold = legacy
+                else:
+                    # Settled rest: mean + 2*std of last 32 bins (~0.25 s)
+                    threshold = emg_base + 2.0 * max(std_online, 1e-6)
             else:
-                # Delsys capture script (active formula)
+                # Delsys capture script (active formula), mV-scaled dataMax
                 threshold = emg_base + (float(data_max) - emg_base) * 3 / 100
             emg_base_check = True
 
@@ -350,12 +362,13 @@ def detect_contractions_ze1(
                         gap_count += 1
                         up_streak = 0
                         if gap_count > merge_gap_n:
-                            end_bin = len(moving_avg_list) - 1
+                            end_bin = len(moving_avg_list) - 1 - merge_gap_n
                             start_bin = (
                                 current_start_bin
                                 if current_start_bin is not None
                                 else max(0, end_bin - len(active_muscle) + 1)
                             )
+                            end_bin = max(int(start_bin), int(end_bin))
                             segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
                             emg_raw_active = []
                             active_muscle = []
@@ -383,10 +396,12 @@ def detect_contractions_ze1(
     for index, seg in enumerate(segments, start=1):
         start_bin = max(0, min(int(seg["start_bin"]), len(bin_end_samples) - 1))
         end_bin = max(0, min(int(seg["end_bin"]), len(bin_end_samples) - 1))
-        # bin_end_samples[k] is the source sample index when that moving-avg bin was produced
+        # bin_end_samples[k] = source sample when moving-avg bin k was produced.
+        # Start of that analysis block ≈ end - block + 1.
         end_sample = int(bin_end_samples[end_bin]) + 1
-        # Approximate start: end sample of start_bin, minus one analysis block
         start_sample = int(bin_end_samples[start_bin]) - block + 1
+        # Pull start back by Schmitt arming lag is already in start_bin (UP_N).
+        # End includes DOWN_N + MERGE_GAP; trim trailing quiet bins for display.
         start_sample = max(0, min(start_sample, len(emg) - 1))
         end_sample = max(start_sample + 1, min(end_sample, len(emg)))
         start_s = start_sample / fs
