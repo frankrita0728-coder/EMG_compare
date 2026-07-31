@@ -203,6 +203,7 @@ def detect_contractions_dispatch(
     method: str = "rms_peak",
     expected_count: int = 3,
     sample_rate: float | None = None,
+    source: str | None = None,
 ) -> list[dict[str, Any]]:
     """Select contraction detector by method name."""
     method = (method or "rms_peak").strip().lower()
@@ -216,6 +217,7 @@ def detect_contractions_dispatch(
             values,
             sample_rate_hz=float(fs),
             expected_count=expected_count,
+            source=source,
         )
         return list(result.get("contractions") or [])
 

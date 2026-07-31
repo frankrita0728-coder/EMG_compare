@@ -117,6 +117,7 @@ def analyze_signal_features(
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
     feature_method: str = "spectral",
+    source: str | None = None,
 ) -> dict[str, Any]:
     contractions = detect_contractions_dispatch(
         times,
@@ -124,6 +125,7 @@ def analyze_signal_features(
         method=contraction_method,
         expected_count=expected_count,
         sample_rate=sample_rate,
+        source=source,
     )
 
     feature_method = (feature_method or "spectral").strip().lower()

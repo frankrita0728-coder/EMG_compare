@@ -162,32 +162,73 @@ def emg_mdf_ttri(D, W_L, overlap, Fs):
 
 # ---------------------------------------------------------------------------
 # Contraction detection (ZE1 Schmitt + merge gap)
-# Ported from muscleCaptureForZE1_v2_Rita(Delsys).py capture loop.
+# Delsys CSV 與自研 TXT 使用不同預設（對應各自原始腳本）。
 # ---------------------------------------------------------------------------
+
+ZE1_PRESETS: dict[str, dict[str, Any]] = {
+    # muscleCaptureForZE1_v2_Rita(Delsys).py
+    "delsys": {
+        "up_n": 20,
+        "down_n": 20,
+        "merge_gap_n": 20,
+        "window_size": 529,
+        "threshold_mode": "delsys",
+        "data_max": 0.1,  # mV 尺度（原腳本 Volt 用 0.0001）
+    },
+    # muscleCaptureForZE1_v2_Rita.py（ZE1 / TXT）
+    "txt": {
+        "up_n": 30,
+        "down_n": 40,
+        "merge_gap_n": 50,
+        "window_size": 512,
+        "threshold_mode": "legacy_mv",
+        "data_max": 0.1,
+    },
+}
+
+
+def resolve_ze1_preset(source: str | None = None) -> dict[str, Any]:
+    key = (source or "delsys").strip().lower()
+    if key in {"txt", "device", "ze1_device"}:
+        return dict(ZE1_PRESETS["txt"])
+    return dict(ZE1_PRESETS["delsys"])
+
 
 def detect_contractions_ze1(
     values: list[float] | np.ndarray,
     *,
     sample_rate_hz: float = 1259.0,
     expected_count: int | None = None,
-    up_n: int = 20,
-    down_n: int = 20,
-    merge_gap_n: int = 20,
-    window_size: int = 529,
+    source: str | None = None,
+    up_n: int | None = None,
+    down_n: int | None = None,
+    merge_gap_n: int | None = None,
+    window_size: int | None = None,
     smooth_bins: int = 32,
     target_hz: float = 128.0,
-    data_max: float = 0.1,
-    threshold_mode: str = "delsys",
+    data_max: float | None = None,
+    threshold_mode: str | None = None,
     trim_to_expected: bool = False,
 ) -> dict[str, Any]:
     """
     Online-style ZE1 contraction capture rewritten as batch processing.
 
-    Defaults match muscleCaptureForZE1_v2_Rita(Delsys) Schmitt loop, with
-    data_max scaled for mV inputs (original script used 0.0001 for Volt-scale).
-      UP_N=20, DOWN_N=20, MERGE_GAP_N=20, window=529,
-      threshold = EMG_Base + (dataMax - EMG_Base) * 3/100
+    Pass source=\"delsys\" or \"txt\" to apply the matching preset.
+    Explicit keyword args override the preset.
     """
+    preset = resolve_ze1_preset(source)
+    if up_n is None:
+        up_n = int(preset["up_n"])
+    if down_n is None:
+        down_n = int(preset["down_n"])
+    if merge_gap_n is None:
+        merge_gap_n = int(preset["merge_gap_n"])
+    if window_size is None:
+        window_size = int(preset["window_size"])
+    if data_max is None:
+        data_max = float(preset["data_max"])
+    if threshold_mode is None:
+        threshold_mode = str(preset["threshold_mode"])
     emg = np.asarray(values, dtype=float)
     fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
     if emg.size < int(fs * 3) + 10:
@@ -390,9 +431,12 @@ def detect_contractions_ze1(
         "method": "ze1_schmitt",
         "envelope": moving_avg_list,
         "threshold_mode": mode,
+        "source_preset": (source or "delsys").strip().lower(),
         "up_n": up_n,
         "down_n": down_n,
         "merge_gap_n": merge_gap_n,
+        "window_size": window_size,
+        "data_max": float(data_max),
     }
 
 

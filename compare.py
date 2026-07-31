@@ -243,6 +243,7 @@ def build_contraction_single(
         method=contraction_method,
         expected_count=expected_count,
         sample_rate=full["sample_rate"],
+        source=source,
     )
     plot = normalize_trace(load_signal(source, filename, for_plot=True), method="zscore")
     return {
@@ -277,6 +278,7 @@ def build_feature_single(
         expected_count=expected_count,
         contraction_method=contraction_method,
         feature_method=feature_method,
+        source=source,
     )
     return {
         "mode": "features_single",
@@ -312,6 +314,7 @@ def build_contraction_compare(
         method=contraction_method,
         expected_count=expected_count,
         sample_rate=left["sample_rate"],
+        source="delsys",
     )
     right_c = detect_contractions_dispatch(
         right["times"],
@@ -319,6 +322,7 @@ def build_contraction_compare(
         method=contraction_method,
         expected_count=expected_count,
         sample_rate=right["sample_rate"],
+        source="txt",
     )
     left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="zscore")
     right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="zscore")
@@ -362,6 +366,7 @@ def build_feature_compare(
         expected_count=expected_count,
         contraction_method=contraction_method,
         feature_method=feature_method,
+        source="delsys",
     )
     right_feat = analyze_signal_features(
         right["times"],
@@ -370,6 +375,7 @@ def build_feature_compare(
         expected_count=expected_count,
         contraction_method=contraction_method,
         feature_method=feature_method,
+        source="txt",
     )
     pairs = compare_feature_rows(
         left_feat["features"],
