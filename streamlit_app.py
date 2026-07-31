@@ -33,24 +33,121 @@ TXT_COLORS = [
 SPECTRAL_COLS = ["index", "start", "end", "duration", "iemg", "rms", "mdf", "mpf", "peak_rms"]
 TTRI_COLS = ["index", "start", "end", "duration", "aemg", "rms", "iemg", "mpf", "mdf", "peak_rms"]
 
-st.set_page_config(page_title="emg-compare.app", page_icon="📈", layout="wide")
+st.set_page_config(
+    page_title="emg-compare.app",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
 
 st.markdown(
     """
     <style>
-      .stApp {
+      :root {
+        --bg: #0f1412;
+        --bg-elevated: #18201c;
+        --bg-panel: #141b18;
+        --line: #2c3a33;
+        --text: #e7efe9;
+        --muted: #93a59a;
+        --accent: #3dd68c;
+        --accent-2: #5ec8ff;
+      }
+      html, body, .stApp {
+        color: var(--text);
         background:
-          radial-gradient(1200px 600px at 10% -10%, #1a3a2e 0%, transparent 55%),
-          radial-gradient(900px 500px at 100% 0%, #123048 0%, transparent 50%),
-          #0b1210;
+          radial-gradient(1200px 600px at 10% -10%, rgba(62, 214, 140, 0.12), transparent 55%),
+          radial-gradient(900px 500px at 100% 0%, rgba(94, 200, 255, 0.10), transparent 50%),
+          linear-gradient(180deg, #101612 0%, #0c100e 100%);
       }
+      [data-testid="stHeader"] { background: transparent; }
+      [data-testid="stToolbar"] { visibility: hidden; height: 0; }
+      #MainMenu { visibility: hidden; }
+      footer { visibility: hidden; }
       [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #101a16 0%, #0b1210 100%);
-        border-right: 1px solid #24322b;
+        background: rgba(14, 20, 17, 0.95);
+        border-right: 1px solid var(--line);
       }
-      [data-testid="stHeader"] {
-        background: rgba(11, 18, 16, 0.7);
+      [data-testid="stSidebar"] > div:first-child {
+        padding-top: 1rem;
       }
+      section.main > div {
+        padding-top: 0.6rem;
+        padding-left: 1.2rem;
+        padding-right: 1.2rem;
+      }
+      .brand-kicker {
+        margin: 0;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        font-size: 0.72rem;
+        color: var(--accent);
+      }
+      .brand-title {
+        margin: 0.25rem 0 0.15rem;
+        font-size: 1.55rem;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .brand-sub {
+        margin: 0 0 0.8rem;
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+      .result-card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: rgba(20, 27, 24, 0.85);
+        padding: 0.85rem 1rem 1rem;
+        margin-bottom: 0.85rem;
+      }
+      .result-card h3 {
+        margin: 0 0 0.55rem;
+        font-size: 0.98rem;
+        font-weight: 650;
+        color: var(--text);
+      }
+      .empty-slot {
+        margin: 0;
+        padding: 0.75rem 0.9rem;
+        border-radius: 8px;
+        background: rgba(94, 200, 255, 0.12);
+        color: var(--accent-2);
+        font-size: 0.92rem;
+      }
+      div[data-testid="stTabs"] [data-baseweb="tab-list"] {
+        gap: 0.35rem;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 0.8rem;
+      }
+      div[data-testid="stTabs"] button[data-baseweb="tab"] {
+        background: transparent;
+        color: var(--muted);
+        border-radius: 8px 8px 0 0;
+      }
+      div[data-testid="stTabs"] button[aria-selected="true"] {
+        color: var(--text);
+        border-bottom: 2px solid var(--accent);
+      }
+      .stButton > button {
+        border: 1px solid var(--line);
+        background: var(--bg-elevated);
+        color: var(--text);
+        border-radius: 8px;
+      }
+      .stButton > button[kind="primary"],
+      .stButton > button[data-testid="baseButton-primary"] {
+        background: linear-gradient(180deg, #3dd68c, #2bb673);
+        color: #062316;
+        border-color: transparent;
+        font-weight: 650;
+      }
+      div[data-testid="stFileUploader"] section {
+        background: var(--bg-panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .block-container { max-width: 1400px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -92,21 +189,36 @@ def save_uploads(uploaded_files, dest: Path) -> list[str]:
     return saved
 
 
-def plot_layout(title: str = "", y_title: str = "Normalized", height: int = 360) -> dict[str, Any]:
+def plot_layout(title: str = "", y_title: str = "Normalized", height: int = 320) -> dict[str, Any]:
     return {
-        "title": title,
+        "title": {"text": title, "font": {"size": 14}},
         "height": height,
         "margin": {"t": 48, "r": 16, "b": 40, "l": 48},
         "legend": {"orientation": "h", "y": 1.12},
         "xaxis_title": "Time (s)",
         "yaxis_title": y_title,
         "template": "plotly_dark",
+        "paper_bgcolor": "rgba(0,0,0,0)",
+        "plot_bgcolor": "rgba(0,0,0,0)",
+        "font": {"color": "#e7efe9"},
     }
+
+
+def card_open(title: str) -> None:
+    st.markdown(f'<div class="result-card"><h3>{title}</h3>', unsafe_allow_html=True)
+
+
+def card_close() -> None:
+    st.markdown("</div>", unsafe_allow_html=True)
+
+
+def empty_slot(text: str = "尚未執行") -> None:
+    st.markdown(f'<p class="empty-slot">{text}</p>', unsafe_allow_html=True)
 
 
 def y_title_for_norm(method: str) -> str:
     if method == "none":
-        return "Original"
+        return "mV"
     if method == "maxabs":
         return "Norm (maxabs)"
     return "Norm (zscore)"
@@ -276,11 +388,16 @@ def require_pair() -> tuple[str, list[str]] | None:
 
 
 def render_sidebar() -> None:
-    st.sidebar.markdown("### Zentan")
-    st.sidebar.title("emg-compare.app")
-    st.sidebar.caption("Delsys CSV × 自研 TXT")
+    st.sidebar.markdown(
+        """
+        <p class="brand-kicker">Zentan</p>
+        <p class="brand-title">emg-compare.app</p>
+        <p class="brand-sub">Delsys CSV × 自研 TXT</p>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    st.sidebar.subheader("上傳檔案")
+    st.sidebar.markdown("##### 上傳檔案")
     up_delsys = st.sidebar.file_uploader("Delsys CSV", type=["csv"], accept_multiple_files=True, key="up_delsys")
     up_txt = st.sidebar.file_uploader("自研 TXT", type=["txt"], accept_multiple_files=True, key="up_txt")
     if st.sidebar.button("儲存上傳檔案", use_container_width=True):
@@ -292,28 +409,28 @@ def render_sidebar() -> None:
         else:
             st.sidebar.info("沒有選到檔案")
 
-    if st.sidebar.button("重新整理檔案列表", use_container_width=True):
+    if st.sidebar.button("重新整理", use_container_width=True):
         st.session_state.file_nonce += 1
 
     delsys_files, txt_files = refresh_file_lists()
     delsys_names = [item["name"] for item in delsys_files]
     txt_names = [item["name"] for item in txt_files]
 
-    st.sidebar.subheader("Delsys CSV")
+    st.sidebar.markdown("##### Delsys CSV")
     if not delsys_names:
         st.sidebar.info("尚無 CSV")
         st.session_state.selected_delsys = None
     else:
         current = st.session_state.selected_delsys
         index = delsys_names.index(current) if current in delsys_names else 0
-        st.session_state.selected_delsys = st.sidebar.selectbox(
+        st.session_state.selected_delsys = st.sidebar.radio(
             "選擇 Delsys",
             delsys_names,
             index=index,
             label_visibility="collapsed",
         )
 
-    st.sidebar.subheader("自研 TXT（可多選）")
+    st.sidebar.markdown("##### 自研 TXT（可多選）")
     if not txt_names:
         st.sidebar.info("尚無 TXT")
         st.session_state.selected_txt = []
@@ -436,7 +553,7 @@ def tab_waveform() -> None:
 
     left, right = st.columns(2)
     with left:
-        st.subheader("Delsys 結果")
+        card_open("Delsys 結果")
         if st.session_state.wave_delsys:
             st.plotly_chart(
                 fig_from_trace(
@@ -446,11 +563,13 @@ def tab_waveform() -> None:
                     y_title=y_title,
                 ),
                 use_container_width=True,
+                config={"displayModeBar": False},
             )
         else:
-            st.info("尚未執行")
+            empty_slot()
+        card_close()
     with right:
-        st.subheader("TXT 結果")
+        card_open("TXT 結果")
         if st.session_state.wave_txt:
             fig = go.Figure()
             for i, trace in enumerate(st.session_state.wave_txt):
@@ -464,11 +583,12 @@ def tab_waveform() -> None:
                     )
                 )
             fig.update_layout(**plot_layout(title="TXT", y_title=y_title))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
         else:
-            st.info("尚未執行")
+            empty_slot()
+        card_close()
 
-    st.subheader("疊圖結果（兩邊一起）")
+    card_open("疊圖結果（兩邊一起）")
     overlay = st.session_state.wave_overlay
     if overlay and overlay.get("overlay"):
         st.plotly_chart(
@@ -478,11 +598,13 @@ def tab_waveform() -> None:
                 y_title=y_title,
             ),
             use_container_width=True,
+            config={"displayModeBar": False},
         )
         if overlay.get("note"):
             st.caption(overlay["note"])
     else:
-        st.info("尚未執行")
+        empty_slot()
+    card_close()
 
 
 def tab_contractions() -> None:
@@ -538,18 +660,20 @@ def tab_contractions() -> None:
 
     left, right = st.columns(2)
     with left:
-        st.subheader("Delsys 結果")
+        card_open("Delsys 結果")
         result = st.session_state.contr_delsys
         if result:
             st.plotly_chart(
                 fig_contractions(result, color=DELSYS_COLOR, title=result.get("filename", "Delsys")),
                 use_container_width=True,
+                config={"displayModeBar": False},
             )
             st.dataframe(contractions_to_rows(result.get("contractions") or []), use_container_width=True)
         else:
-            st.info("尚未執行")
+            empty_slot()
+        card_close()
     with right:
-        st.subheader("TXT 結果")
+        card_open("TXT 結果")
         results = st.session_state.contr_txt
         if results:
             fig = go.Figure()
@@ -571,10 +695,11 @@ def tab_contractions() -> None:
                     row["file"] = result.get("filename")
                     all_rows.append(row)
             fig.update_layout(**plot_layout(title="TXT 收縮區間", y_title="Norm (zscore)", height=300))
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.dataframe(all_rows, use_container_width=True)
         else:
-            st.info("尚未執行")
+            empty_slot()
+        card_close()
 
 
 def tab_features() -> None:
@@ -728,7 +853,6 @@ def tab_features() -> None:
 def main() -> None:
     init_state()
     render_sidebar()
-    st.title("emg-compare.app")
     tab1, tab2, tab3 = st.tabs(["波形", "收縮區間", "特徵"])
     with tab1:
         tab_waveform()

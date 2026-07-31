@@ -11,6 +11,8 @@ TIME_PREFIX = re.compile(r"^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$")
 HEX_VALUE = re.compile(r"^[0-9A-Fa-f]+$")
 SAMPLE_RATE_RE = re.compile(r"ExgSampleRate\s*,\s*([0-9.]+)", re.IGNORECASE)
 DEFAULT_SAMPLE_RATE = 1024.0
+# Convert device ADC counts to mV (same scale used for raw / feature analysis).
+TXT_MV_PER_COUNT = 0.03
 
 
 def list_txt_files() -> list[dict[str, str]]:
@@ -120,7 +122,7 @@ def load_txt_emg(
 
     samples = load_column(path)
     sample_rate = parse_sample_rate(path)
-    values = [float(v) for v in samples]
+    values = [float(v) * TXT_MV_PER_COUNT for v in samples]
     times = [i / sample_rate for i in range(len(values))]
     point_count = len(values)
     if for_plot:
@@ -135,7 +137,7 @@ def load_txt_emg(
         "filename": path.name,
         "label": path.stem,
         "signal_name": f"EXG {channel}",
-        "unit": "raw",
+        "unit": "mV",
         "sample_rate": sample_rate,
         "point_count": point_count,
         "times": times,
@@ -143,6 +145,7 @@ def load_txt_emg(
         "metadata": {
             "ExgSampleRate": f"{sample_rate} Hz",
             "Start time": start_info.get("start_label") or "",
+            "Scale": f"{TXT_MV_PER_COUNT} mV/count",
         },
         "sensor_name": channel,
         **start_info,

@@ -1,7 +1,11 @@
 [theme]
 base = "dark"
 primaryColor = "#3dd68c"
-backgroundColor = "#0b1210"
-secondaryBackgroundColor = "#15201b"
+backgroundColor = "#0c100e"
+secondaryBackgroundColor = "#18201c"
 textColor = "#e7efe9"
 font = "sans serif"
+
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true

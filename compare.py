@@ -116,9 +116,9 @@ def build_waveform_compare(
 
     note_parts = []
     if norm_method == "none":
-        note_parts.append("顯示原始單位波形（Delsys: mV，TXT: raw）；未做正規化，幅度尺度可能差很多。")
+        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.03 mV/count）。")
     else:
-        note_parts.append("兩來源單位不同，圖上使用正規化後波形疊圖。")
+        note_parts.append("兩來源單位已換算後再正規化疊圖。")
     if align_by_start and align_info.get("aligned"):
         note_parts.append(
             f"已依起始時間對齊（參考點 {align_info.get('reference_label')}）。"
@@ -203,9 +203,9 @@ def build_waveform_overlay(
 
     note_parts = []
     if norm_method == "none":
-        note_parts.append("顯示原始單位波形（Delsys: mV，TXT: raw）；未做正規化，幅度尺度可能差很多。")
+        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.03 mV/count）。")
     else:
-        note_parts.append("兩來源單位不同，圖上使用正規化後波形疊圖。")
+        note_parts.append("兩來源單位已換算後再正規化疊圖。")
     if align_by_start and align_info.get("aligned"):
         note_parts.append(
             f"已依起始時間對齊（參考點 {align_info.get('reference_label')}）。"
@@ -401,5 +401,5 @@ def build_feature_compare(
             "series": right_feat.get("series"),
         },
         "pairs": pairs,
-        "note": "iEMG / RMS 受單位影響（mV vs raw），MDF / MPF / 時長較適合跨裝置對照。",
+        "note": "TXT 已換算為 mV（×0.03）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
     }
