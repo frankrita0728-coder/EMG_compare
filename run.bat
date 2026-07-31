@@ -3,7 +3,7 @@ chcp 65001 >nul
 cd /d "%~dp0"
 
 echo ========================================
-echo  EMG Compare (Streamlit)
+echo  emg-compare.app (Streamlit)
 echo ========================================
 echo.
 

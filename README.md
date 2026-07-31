@@ -1,4 +1,4 @@
-# EMG Compare
+# emg-compare.app
 
 比對 **Delsys CSV**（`emgcsv(delsys)`）與 **自研 TXT**（`emgtxt2chart`）的 EMG 資料。
 

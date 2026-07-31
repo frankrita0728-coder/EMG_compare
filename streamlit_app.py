@@ -33,7 +33,7 @@ TXT_COLORS = [
 SPECTRAL_COLS = ["index", "start", "end", "duration", "iemg", "rms", "mdf", "mpf", "peak_rms"]
 TTRI_COLS = ["index", "start", "end", "duration", "aemg", "rms", "iemg", "mpf", "mdf", "peak_rms"]
 
-st.set_page_config(page_title="EMG Compare", page_icon="📈", layout="wide")
+st.set_page_config(page_title="emg-compare.app", page_icon="📈", layout="wide")
 
 
 def init_state() -> None:
@@ -256,7 +256,7 @@ def require_pair() -> tuple[str, list[str]] | None:
 
 def render_sidebar() -> None:
     st.sidebar.markdown("### Zentan")
-    st.sidebar.title("EMG Compare")
+    st.sidebar.title("emg-compare.app")
     st.sidebar.caption("Delsys CSV × 自研 TXT")
 
     st.sidebar.subheader("上傳檔案（Streamlit Cloud 建議）")
@@ -707,7 +707,7 @@ def tab_features() -> None:
 def main() -> None:
     init_state()
     render_sidebar()
-    st.title("EMG Compare")
+    st.title("emg-compare.app")
     tab1, tab2, tab3 = st.tabs(["波形", "收縮區間", "特徵"])
     with tab1:
         tab_waveform()
