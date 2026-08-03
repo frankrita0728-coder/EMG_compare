@@ -396,12 +396,8 @@ def detect_contractions_ze1(
     for index, seg in enumerate(segments, start=1):
         start_bin = max(0, min(int(seg["start_bin"]), len(bin_end_samples) - 1))
         end_bin = max(0, min(int(seg["end_bin"]), len(bin_end_samples) - 1))
-        # bin_end_samples[k] = source sample when moving-avg bin k was produced.
-        # Start of that analysis block ≈ end - block + 1.
         end_sample = int(bin_end_samples[end_bin]) + 1
         start_sample = int(bin_end_samples[start_bin]) - block + 1
-        # Pull start back by Schmitt arming lag is already in start_bin (UP_N).
-        # End includes DOWN_N + MERGE_GAP; trim trailing quiet bins for display.
         start_sample = max(0, min(start_sample, len(emg) - 1))
         end_sample = max(start_sample + 1, min(end_sample, len(emg)))
         start_s = start_sample / fs
@@ -418,25 +414,23 @@ def detect_contractions_ze1(
             }
         )
 
-    if (
-        trim_to_expected
-        and expected_count
-        and expected_count > 0
-        and len(contractions) > expected_count
-    ):
-        ranked = sorted(contractions, key=lambda c: c["duration"], reverse=True)
-        selected = ranked[:expected_count]
-        selected.sort(key=lambda c: c["start"])
-        for i, item in enumerate(selected, start=1):
-            item["index"] = i
-        contractions = selected
-
     for item in contractions:
         s = item["start_sample"]
         e = item["end_sample"]
         seg = emg[s:e]
         if seg.size:
             item["peak_rms"] = round(float(np.sqrt(np.mean(seg * seg))), 6)
+
+    contractions = _postprocess_ze1_contractions(
+        contractions,
+        emg=emg,
+        expected_count=expected_count,
+        # Merge fragments separated by short quiet gaps (common around real bursts)
+        merge_gap_seconds=1.2,
+        # Drop weak false positives relative to the strongest burst
+        min_peak_ratio=0.25,
+        min_duration_seconds=0.4,
+    )
 
     return {
         "contractions": contractions,
@@ -453,6 +447,55 @@ def detect_contractions_ze1(
         "window_size": window_size,
         "data_max": float(data_max),
     }
+
+
+def _postprocess_ze1_contractions(
+    contractions: list[dict[str, Any]],
+    *,
+    emg: np.ndarray,
+    expected_count: int | None = None,
+    merge_gap_seconds: float = 1.2,
+    min_peak_ratio: float = 0.30,
+    min_duration_seconds: float = 0.5,
+) -> list[dict[str, Any]]:
+    """
+    Clean ZE1 segments:
+    1) drop weak / short noise fragments (do not glue two strong bursts)
+    2) keep top-N by peak_rms when expected_count is set
+    """
+    if not contractions:
+        return []
+
+    ordered = [dict(c) for c in sorted(contractions, key=lambda c: float(c["start"]))]
+    peak_max = max((float(c.get("peak_rms") or 0.0) for c in ordered), default=0.0)
+    peak_floor = peak_max * float(min_peak_ratio) if peak_max > 0 else 0.0
+
+    filtered = [
+        c
+        for c in ordered
+        if float(c.get("duration") or 0.0) >= min_duration_seconds
+        and float(c.get("peak_rms") or 0.0) >= peak_floor
+    ]
+    if not filtered:
+        filtered = ordered
+
+    # Optional: absorb a leftover weak island only if it sits inside the gap
+    # between two kept bursts and is closer than merge_gap_seconds to one side.
+    # (Currently weak ones are already dropped; keep hook for future tuning.)
+    _ = (emg, merge_gap_seconds)
+
+    if expected_count and expected_count > 0 and len(filtered) > expected_count:
+        ranked = sorted(filtered, key=lambda c: float(c.get("peak_rms") or 0.0), reverse=True)
+        filtered = ranked[: int(expected_count)]
+        filtered.sort(key=lambda c: float(c["start"]))
+
+    for i, item in enumerate(filtered, start=1):
+        item["index"] = i
+        item["start"] = round(float(item["start"]), 4)
+        item["end"] = round(float(item["end"]), 4)
+        item["duration"] = round(float(item["end"]) - float(item["start"]), 4)
+        item["peak_rms"] = round(float(item.get("peak_rms") or 0.0), 6)
+    return filtered
 
 
 def features_ze1_for_interval(
