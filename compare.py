@@ -116,7 +116,7 @@ def build_waveform_compare(
 
     note_parts = []
     if norm_method == "none":
-        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.03 mV/count）。")
+        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.00026 mV/count）。")
     else:
         note_parts.append("兩來源單位已換算後再正規化疊圖。")
     if align_by_start and align_info.get("aligned"):
@@ -203,7 +203,7 @@ def build_waveform_overlay(
 
     note_parts = []
     if norm_method == "none":
-        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.03 mV/count）。")
+        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.00026 mV/count）。")
     else:
         note_parts.append("兩來源單位已換算後再正規化疊圖。")
     if align_by_start and align_info.get("aligned"):

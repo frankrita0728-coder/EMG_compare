@@ -11,8 +11,9 @@ TIME_PREFIX = re.compile(r"^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$")
 HEX_VALUE = re.compile(r"^[0-9A-Fa-f]+$")
 SAMPLE_RATE_RE = re.compile(r"ExgSampleRate\s*,\s*([0-9.]+)", re.IGNORECASE)
 DEFAULT_SAMPLE_RATE = 1024.0
-# Convert device ADC counts to mV (same scale used for raw / feature analysis).
-TXT_MV_PER_COUNT = 0.03
+# ADC count → mV. Calibrated against paired Delsys CSV (same session);
+# previous 0.03 made TXT amplitude features ~100× larger than Delsys mV.
+TXT_MV_PER_COUNT = 0.00026
 
 
 def list_txt_files() -> list[dict[str, str]]:
