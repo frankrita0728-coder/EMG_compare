@@ -424,12 +424,15 @@ def detect_contractions_ze1(
     contractions = _postprocess_ze1_contractions(
         contractions,
         emg=emg,
+        sample_rate_hz=fs,
         expected_count=expected_count,
-        # Merge fragments separated by short quiet gaps (common around real bursts)
         merge_gap_seconds=1.2,
-        # Drop weak false positives relative to the strongest burst
         min_peak_ratio=0.25,
         min_duration_seconds=0.4,
+        # Pull back quiet tails left by Schmitt DOWN/MERGE (~0.8–1.2 s visually)
+        tail_trim_seconds=1.0,
+        tail_rms_ratio=0.18,
+        tail_pad_seconds=0.12,
     )
 
     return {
@@ -449,19 +452,70 @@ def detect_contractions_ze1(
     }
 
 
+def _trim_ze1_tail(
+    emg: np.ndarray,
+    *,
+    start_sample: int,
+    end_sample: int,
+    peak_rms: float,
+    sample_rate_hz: float,
+    max_trim_seconds: float = 1.0,
+    rms_ratio: float = 0.18,
+    pad_seconds: float = 0.12,
+    window_seconds: float = 0.08,
+) -> tuple[int, int]:
+    """
+    Shorten interval end by removing a quiet trailing region.
+    Walk backward with a short RMS window until activity reappears, then add a small pad.
+    """
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
+    s0 = max(0, int(start_sample))
+    e0 = max(s0 + 1, min(int(end_sample), len(emg)))
+    if e0 - s0 < int(fs * 0.6):
+        return s0, e0
+
+    win = max(3, int(round(fs * window_seconds)))
+    max_trim = max(win, int(round(fs * max_trim_seconds)))
+    floor = max(float(peak_rms) * float(rms_ratio), 1e-9)
+    pad = max(0, int(round(fs * pad_seconds)))
+
+    new_end = e0
+    trimmed = 0
+    i = e0
+    while i - win >= s0 and trimmed < max_trim:
+        chunk = emg[i - win : i]
+        rms = float(np.sqrt(np.mean(chunk * chunk))) if chunk.size else 0.0
+        if rms >= floor:
+            new_end = min(e0, i + pad)
+            break
+        i -= max(1, win // 2)
+        trimmed = e0 - i
+    else:
+        # Entire searchable tail was quiet; pull back by max_trim but keep min duration.
+        new_end = max(s0 + int(fs * 0.5), e0 - max_trim)
+
+    new_end = max(s0 + 1, min(int(new_end), len(emg)))
+    return s0, new_end
+
+
 def _postprocess_ze1_contractions(
     contractions: list[dict[str, Any]],
     *,
     emg: np.ndarray,
+    sample_rate_hz: float = 1259.0,
     expected_count: int | None = None,
     merge_gap_seconds: float = 1.2,
     min_peak_ratio: float = 0.30,
     min_duration_seconds: float = 0.5,
+    tail_trim_seconds: float = 1.0,
+    tail_rms_ratio: float = 0.18,
+    tail_pad_seconds: float = 0.12,
 ) -> list[dict[str, Any]]:
     """
     Clean ZE1 segments:
-    1) drop weak / short noise fragments (do not glue two strong bursts)
-    2) keep top-N by peak_rms when expected_count is set
+    1) drop weak / short noise fragments
+    2) trim quiet trailing tails (~1 s)
+    3) keep top-N by peak_rms when expected_count is set
     """
     if not contractions:
         return []
@@ -479,10 +533,28 @@ def _postprocess_ze1_contractions(
     if not filtered:
         filtered = ordered
 
-    # Optional: absorb a leftover weak island only if it sits inside the gap
-    # between two kept bursts and is closer than merge_gap_seconds to one side.
-    # (Currently weak ones are already dropped; keep hook for future tuning.)
-    _ = (emg, merge_gap_seconds)
+    _ = merge_gap_seconds  # reserved for future neighbor-merge tuning
+
+    # Trim quiet tails left by Schmitt DOWN_N / MERGE_GAP.
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
+    for item in filtered:
+        s1, e1 = _trim_ze1_tail(
+            emg,
+            start_sample=int(item["start_sample"]),
+            end_sample=int(item["end_sample"]),
+            peak_rms=float(item.get("peak_rms") or 0.0),
+            sample_rate_hz=fs,
+            max_trim_seconds=tail_trim_seconds,
+            rms_ratio=tail_rms_ratio,
+            pad_seconds=tail_pad_seconds,
+        )
+        item["start_sample"] = s1
+        item["end_sample"] = e1
+        item["start"] = s1 / fs
+        item["end"] = e1 / fs
+        item["duration"] = float(item["end"]) - float(item["start"])
+        seg = emg[s1:e1]
+        item["peak_rms"] = round(float(np.sqrt(np.mean(seg * seg))), 6) if seg.size else 0.0
 
     if expected_count and expected_count > 0 and len(filtered) > expected_count:
         ranked = sorted(filtered, key=lambda c: float(c.get("peak_rms") or 0.0), reverse=True)
