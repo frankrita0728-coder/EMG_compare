@@ -6,6 +6,7 @@ import csv
 import io
 import zipfile
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from reportlab.lib import colors
@@ -13,18 +14,54 @@ from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
+
+def _find_cjk_font() -> str | None:
+    """Prefer a system/bundled CJK TrueType/TTC font so Traditional Chinese renders."""
+    root = Path(__file__).resolve().parent
+    candidates = [
+        *sorted((root / "assets" / "fonts").glob("*.ttf")),
+        *sorted((root / "assets" / "fonts").glob("*.otf")),
+        *sorted((root / "assets" / "fonts").glob("*.ttc")),
+        Path(r"C:\Windows\Fonts\msjh.ttc"),
+        Path(r"C:\Windows\Fonts\msjhbd.ttc"),
+        Path(r"C:\Windows\Fonts\mingliu.ttc"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
+        Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+    ]
+    for path in candidates:
+        if path.exists():
+            return str(path)
+    return None
 
 
 def _register_fonts() -> str:
-    """Return a CID font name that can render Traditional Chinese."""
-    name = "MHei-Medium"
+    font_path = _find_cjk_font()
+    if font_path:
+        try:
+            pdfmetrics.registerFont(TTFont("EMG_CJK", font_path, subfontIndex=0))
+            return "EMG_CJK"
+        except Exception:
+            pass
+    # Streamlit Cloud / Linux without CJK TTF: use ReportLab built-in CID fonts.
     try:
-        pdfmetrics.registerFont(UnicodeCIDFont(name))
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+        pdfmetrics.registerFont(UnicodeCIDFont("MSung-Light"))
+        return "MSung-Light"
     except Exception:
-        name = "Helvetica"
-    return name
+        pass
+    try:
+        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+        return "STSong-Light"
+    except Exception:
+        pass
+    return "Helvetica"
 
 
 def _fmt(value: Any) -> str:
@@ -35,14 +72,22 @@ def _fmt(value: Any) -> str:
     return str(value)
 
 
+def _escape(text: str) -> str:
+    return (
+        str(text)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
 def _rows_from_features(features: list[dict[str, Any]], method: str) -> list[list[str]]:
     if method in {"ttri", "ze1", "muscle_capture"}:
         cols = ["index", "start", "end", "duration", "aemg", "rms", "iemg", "mpf", "mdf", "peak_rms"]
     else:
         cols = ["index", "start", "end", "duration", "iemg", "rms", "mdf", "mpf", "peak_rms"]
-    header = cols
     body = [[_fmt(row.get(col)) for col in cols] for row in features]
-    return [header, *body]
+    return [cols, *body]
 
 
 def _rows_from_contractions(contractions: list[dict[str, Any]]) -> list[list[str]]:
@@ -59,7 +104,7 @@ def _rows_from_delta(pairs: list[dict[str, Any]]) -> list[list[str]]:
         for key in (item.get("delta") or {}):
             if key not in keys:
                 keys.append(key)
-    header = ["index", *[f"Δ {k}" for k in keys]]
+    header = ["index", *[f"d_{k}" for k in keys]]
     body = []
     for item in pairs:
         delta = item.get("delta") or {}
@@ -89,9 +134,90 @@ def _make_table(data: list[list[str]], font_name: str) -> Table:
     return table
 
 
+def _series_chart_png(series: dict[str, Any] | None, *, title: str) -> bytes | None:
+    """
+    Render TTRI feature curves for PDF.
+    Amplitude (RMS/iEMG) and frequency (MPF/MDF) use separate panels so scales stay readable.
+    """
+    if not series:
+        return None
+
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception:
+        return None
+
+    font_path = _find_cjk_font()
+    if font_path:
+        try:
+            from matplotlib import font_manager
+
+            font_manager.fontManager.addfont(font_path)
+            plt.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
+            plt.rcParams["axes.unicode_minus"] = False
+        except Exception:
+            pass
+
+    fig, (ax_amp, ax_freq) = plt.subplots(2, 1, figsize=(10.5, 5.2), sharex=True)
+    fig.patch.set_facecolor("#0f1412")
+    for ax in (ax_amp, ax_freq):
+        ax.set_facecolor("#141b18")
+        ax.tick_params(colors="#e7efe9")
+        ax.xaxis.label.set_color("#e7efe9")
+        ax.yaxis.label.set_color("#e7efe9")
+        for spine in ax.spines.values():
+            spine.set_color("#2c3a33")
+        ax.grid(True, color="#24322b", alpha=0.7)
+
+    amp_specs = [("rms", "RMS", "#5ec8ff"), ("iemg", "iEMG", "#3dd68c")]
+    freq_specs = [("mpf", "MPF", "#f0b429"), ("mdf", "MDF", "#c78bff")]
+
+    for key, label, color in amp_specs:
+        block = series.get(key) or {}
+        times = block.get("times") or []
+        values = block.get("values") or []
+        if times and values:
+            ax_amp.plot(times, values, label=label, color=color, linewidth=1.2)
+
+    for key, label, color in freq_specs:
+        block = series.get(key) or {}
+        times = block.get("times") or []
+        values = block.get("values") or []
+        if times and values:
+            ax_freq.plot(times, values, label=label, color=color, linewidth=1.2)
+
+    aemg = series.get("aemg")
+    subtitle = f"{title}  |  AEMG={aemg}" if aemg is not None else title
+    ax_amp.set_title(subtitle, color="#e7efe9", fontsize=11)
+    ax_amp.set_ylabel("Amplitude")
+    ax_freq.set_ylabel("Frequency (Hz)")
+    ax_freq.set_xlabel("Time (s)")
+    ax_amp.legend(loc="upper right", facecolor="#18201c", edgecolor="#2c3a33", labelcolor="#e7efe9")
+    ax_freq.legend(loc="upper right", facecolor="#18201c", edgecolor="#2c3a33", labelcolor="#e7efe9")
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=140, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _add_series_image(story: list[Any], series: dict[str, Any] | None, title: str) -> None:
+    png = _series_chart_png(series, title=title)
+    if not png:
+        return
+    img = Image(io.BytesIO(png), width=24 * cm, height=11.8 * cm)
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(img)
+
+
 def build_results_pdf(
     *,
-    title: str = "emg-compare.app 分析報告",
+    title: str = "emg-compare.app Report",
     meta: dict[str, Any] | None = None,
     feat_delsys: dict[str, Any] | None = None,
     feat_txt_tables: list[dict[str, Any]] | None = None,
@@ -99,7 +225,7 @@ def build_results_pdf(
     contr_delsys: dict[str, Any] | None = None,
     contr_txt: list[dict[str, Any]] | None = None,
 ) -> bytes:
-    """Build a PDF report bytes for feature / contraction results."""
+    """Build a PDF report bytes for feature / contraction results (tables + charts)."""
     font_name = _register_fonts()
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(
@@ -139,47 +265,49 @@ def build_results_pdf(
     )
 
     story: list[Any] = []
-    story.append(Paragraph(title, title_style))
+    story.append(Paragraph(_escape(title), title_style))
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    story.append(Paragraph(f"匯出時間：{stamp}", body_style))
+    story.append(Paragraph(_escape(f"Export time: {stamp}"), body_style))
 
     meta = meta or {}
     if meta:
-        lines = [f"{key}：{_fmt(value)}" for key, value in meta.items()]
-        story.append(Paragraph(" / ".join(lines), body_style))
+        lines = [f"{key}: {_fmt(value)}" for key, value in meta.items()]
+        story.append(Paragraph(_escape(" / ".join(lines)), body_style))
     story.append(Spacer(1, 0.3 * cm))
 
     if feat_delsys and feat_delsys.get("result"):
         method = feat_delsys.get("feature_method") or "spectral"
         filename = feat_delsys["result"].get("filename") or "Delsys"
-        story.append(Paragraph(f"Delsys 特徵 — {filename}（{method}）", h_style))
+        story.append(Paragraph(_escape(f"Delsys Features — {filename} ({method})"), h_style))
         story.append(_make_table(_rows_from_features(feat_delsys["result"].get("features") or [], method), font_name))
+        _add_series_image(story, feat_delsys["result"].get("series"), str(filename))
 
     for item in feat_txt_tables or []:
         result = item.get("result") or {}
         method = item.get("feature_method") or "spectral"
         filename = result.get("filename") or "TXT"
-        story.append(Paragraph(f"TXT 特徵 — {filename}（{method}）", h_style))
+        story.append(Paragraph(_escape(f"TXT Features — {filename} ({method})"), h_style))
         story.append(_make_table(_rows_from_features(result.get("features") or [], method), font_name))
+        _add_series_image(story, result.get("series"), str(filename))
 
     if feat_delta and feat_delta.get("pairs"):
-        story.append(Paragraph("差異對照 Δ（Delsys − 第一個 TXT）", h_style))
+        story.append(Paragraph(_escape("Delta (Delsys - first TXT)"), h_style))
         if feat_delta.get("note"):
-            story.append(Paragraph(str(feat_delta["note"]), body_style))
+            story.append(Paragraph(_escape(str(feat_delta["note"])), body_style))
         story.append(_make_table(_rows_from_delta(feat_delta.get("pairs") or []), font_name))
 
     if contr_delsys:
         filename = contr_delsys.get("filename") or "Delsys"
-        story.append(Paragraph(f"Delsys 收縮區間 — {filename}", h_style))
+        story.append(Paragraph(_escape(f"Delsys Contractions — {filename}"), h_style))
         story.append(_make_table(_rows_from_contractions(contr_delsys.get("contractions") or []), font_name))
 
     for item in contr_txt or []:
         filename = item.get("filename") or "TXT"
-        story.append(Paragraph(f"TXT 收縮區間 — {filename}", h_style))
+        story.append(Paragraph(_escape(f"TXT Contractions — {filename}"), h_style))
         story.append(_make_table(_rows_from_contractions(item.get("contractions") or []), font_name))
 
     if len(story) <= 3:
-        story.append(Paragraph("尚無可匯出的結果，請先執行分析。", body_style))
+        story.append(Paragraph("No results to export. Please run analysis first.", body_style))
 
     doc.build(story)
     return buffer.getvalue()

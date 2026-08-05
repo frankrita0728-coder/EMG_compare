@@ -2,3 +2,4 @@ numpy>=1.26
 streamlit>=1.28
 plotly>=5.18
 reportlab>=4.0
+matplotlib>=3.8

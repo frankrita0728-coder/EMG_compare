@@ -7,7 +7,7 @@ from detector import detect_contractions_dispatch
 from features import analyze_signal_features, compare_feature_rows
 from normalize import normalize_trace
 from parsers.delsys import load_delsys_emg
-from parsers.txt_device import load_txt_emg
+from parsers.txt_device import TXT_MV_PER_COUNT, load_txt_emg
 
 
 def load_signal(
@@ -407,5 +407,5 @@ def build_feature_compare(
             "series": right_feat.get("series"),
         },
         "pairs": pairs,
-        "note": "TXT 已換算為 mV（×0.03）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
+        "note": f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
     }

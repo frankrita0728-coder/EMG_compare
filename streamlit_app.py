@@ -328,24 +328,50 @@ def feature_rows(features: list[dict[str, Any]], method: str) -> list[dict[str, 
 def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure | None:
     if not series:
         return None
-    fig = go.Figure()
-    mapping = [
-        ("rms", "RMS"),
-        ("iemg", "iEMG"),
-        ("mpf", "MPF"),
-        ("mdf", "MDF"),
-    ]
-    for key, label in mapping:
+
+    # Split amplitude vs frequency so small mV-scale RMS/iEMG stay visible.
+    from plotly.subplots import make_subplots
+
+    fig = make_subplots(
+        rows=2,
+        cols=1,
+        shared_xaxes=True,
+        vertical_spacing=0.08,
+        subplot_titles=("Amplitude (RMS / iEMG)", "Frequency (MPF / MDF)"),
+    )
+    amp_specs = [("rms", "RMS", "#5ec8ff"), ("iemg", "iEMG", "#3dd68c")]
+    freq_specs = [("mpf", "MPF", "#f0b429"), ("mdf", "MDF", "#c78bff")]
+    for key, label, color in amp_specs:
         block = series.get(key) or {}
         times = block.get("times") or []
         values = block.get("values") or []
         if times and values:
-            fig.add_trace(go.Scatter(x=times, y=values, mode="lines", name=label))
+            fig.add_trace(
+                go.Scatter(x=times, y=values, mode="lines", name=label, line={"color": color, "width": 1.3}),
+                row=1,
+                col=1,
+            )
+    for key, label, color in freq_specs:
+        block = series.get(key) or {}
+        times = block.get("times") or []
+        values = block.get("values") or []
+        if times and values:
+            fig.add_trace(
+                go.Scatter(x=times, y=values, mode="lines", name=label, line={"color": color, "width": 1.3}),
+                row=2,
+                col=1,
+            )
     if not fig.data:
         return None
     aemg = series.get("aemg")
     subtitle = f"{title} · AEMG={aemg}" if aemg is not None else title
-    fig.update_layout(**plot_layout(title=subtitle, y_title="Feature", height=360))
+    layout = plot_layout(title=subtitle, y_title="", height=520)
+    layout.pop("xaxis_title", None)
+    layout.pop("yaxis_title", None)
+    fig.update_layout(**layout, legend={"orientation": "h", "y": 1.16}, margin={"t": 72, "r": 16, "b": 40, "l": 52})
+    fig.update_yaxes(title_text="Amplitude", row=1, col=1)
+    fig.update_yaxes(title_text="Hz", row=2, col=1)
+    fig.update_xaxes(title_text="Time (s)", row=2, col=1)
     return fig
 
 
