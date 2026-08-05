@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +18,7 @@ from pairing import suggest_for_selection, suggest_pairs
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
 from paths import DATA_DELSYS, DATA_TXT, ensure_data_dirs
+from export_report import build_results_csv_zip, build_results_pdf
 
 DELSYS_COLOR = "#5ec8ff"
 TXT_COLORS = [
@@ -735,6 +737,8 @@ def tab_contractions() -> None:
             empty_slot()
         card_close()
 
+    render_export_panel(context="contractions")
+
 
 def tab_features() -> None:
     c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.6])
@@ -882,6 +886,71 @@ def tab_features() -> None:
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
     else:
         st.info("執行「兩邊一起」後顯示")
+
+    render_export_panel(context="features")
+
+
+def render_export_panel(*, context: str) -> None:
+    """Download PDF / CSV exports from current session results."""
+    has_feat = bool(st.session_state.feat_delsys or st.session_state.feat_txt_tables or st.session_state.feat_delta)
+    has_contr = bool(st.session_state.contr_delsys or st.session_state.contr_txt)
+    if not has_feat and not has_contr:
+        return
+
+    st.markdown("---")
+    st.subheader("匯出結果")
+    st.caption("可下載 PDF 報告，或 CSV 壓縮檔（可用 Excel 開啟）。")
+
+    meta = {
+        "頁籤": "特徵" if context == "features" else "收縮區間",
+        "Delsys": st.session_state.selected_delsys or "（未選）",
+        "TXT": ", ".join(st.session_state.selected_txt or []) or "（未選）",
+    }
+    if st.session_state.feat_delsys:
+        meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""
+    if st.session_state.feat_delta:
+        meta["收縮判斷"] = st.session_state.feat_delta.get("contraction_method") or ""
+
+    try:
+        pdf_bytes = build_results_pdf(
+            meta=meta,
+            feat_delsys=st.session_state.feat_delsys,
+            feat_txt_tables=st.session_state.feat_txt_tables,
+            feat_delta=st.session_state.feat_delta,
+            contr_delsys=st.session_state.contr_delsys,
+            contr_txt=st.session_state.contr_txt,
+        )
+        csv_zip = build_results_csv_zip(
+            feat_delsys=st.session_state.feat_delsys,
+            feat_txt_tables=st.session_state.feat_txt_tables,
+            feat_delta=st.session_state.feat_delta,
+            contr_delsys=st.session_state.contr_delsys,
+            contr_txt=st.session_state.contr_txt,
+        )
+    except Exception as exc:  # noqa: BLE001 — show export errors in UI
+        st.error(f"產生匯出檔失敗：{exc}")
+        return
+
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    c1, c2 = st.columns(2)
+    with c1:
+        st.download_button(
+            "下載 PDF 報告",
+            data=pdf_bytes,
+            file_name=f"emg_compare_report_{stamp}.pdf",
+            mime="application/pdf",
+            use_container_width=True,
+            key=f"dl_pdf_{context}",
+        )
+    with c2:
+        st.download_button(
+            "下載 CSV（ZIP）",
+            data=csv_zip,
+            file_name=f"emg_compare_tables_{stamp}.zip",
+            mime="application/zip",
+            use_container_width=True,
+            key=f"dl_csv_{context}",
+        )
 
 
 def main() -> None:
