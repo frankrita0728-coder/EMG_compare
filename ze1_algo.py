@@ -310,14 +310,22 @@ def detect_contractions_ze1(
                     # Settled rest: mean + 2*std of last 32 bins (~0.25 s)
                     threshold = emg_base + 2.0 * max(std_online, 1e-6)
             else:
-                # Delsys capture script (active formula), mV-scaled dataMax
-                threshold = emg_base + (float(data_max) - emg_base) * 3 / 100
+                # Delsys capture script (active formula), mV-scaled dataMax.
+                # After baseline subtraction, emg_base is often ~0 so the formula
+                # alone yields ~0.003 and keeps inter-burst rest "active".
+                # Floor with mean+4*std of the warm-up envelope window.
+                formula = emg_base + (float(data_max) - emg_base) * 3 / 100
+                adaptive = emg_base + 4.0 * max(std_online, 1e-6)
+                threshold = max(formula, adaptive)
             emg_base_check = True
 
         if emg_base_check:
             emg_data = float(np.mean(emg128_raw_data[-smooth_bins:]))
             moving_avg_list.append(emg_data)
             bin_end_samples.append(i)
+            # True Schmitt: leave threshold lower than enter, so mid-burst dips
+            # (common on TXT) do not end the interval too early.
+            down_threshold = float(threshold) * 0.55
 
             if emg_data > threshold:
                 active_muscle.append(emg_data)
@@ -347,6 +355,22 @@ def detect_contractions_ze1(
                     tentative_end = False
                     gap_count = 0
                     up_streak = 0
+                elif emg_data > down_threshold:
+                    # Hold active inside the hysteresis band.
+                    active_muscle.append(emg_data)
+                    emg_raw_active.extend([emg_data] * block)
+                    down_count = 0
+                    if tentative_end:
+                        up_streak += 1
+                        gap_count += 1
+                        if up_streak >= up_n and gap_count <= merge_gap_n:
+                            tentative_end = False
+                            gap_count = 0
+                            up_streak = 0
+                    else:
+                        tentative_end = False
+                        gap_count = 0
+                        up_streak = 0
                 else:
                     active_muscle.append(emg_data)
                     emg_raw_active.extend([emg_data] * block)
@@ -427,10 +451,10 @@ def detect_contractions_ze1(
         sample_rate_hz=fs,
         expected_count=expected_count,
         merge_gap_seconds=1.2,
-        min_peak_ratio=0.25,
-        min_duration_seconds=0.4,
-        # Pull back quiet tails left by Schmitt DOWN/MERGE (~0.8–1.2 s visually)
-        tail_trim_seconds=1.0,
+        min_peak_ratio=0.35,
+        min_duration_seconds=0.5,
+        # Pull back quiet tails left by Schmitt DOWN/MERGE
+        tail_trim_seconds=2.0,
         tail_rms_ratio=0.18,
         tail_pad_seconds=0.12,
     )
