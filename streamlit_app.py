@@ -368,7 +368,9 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
     layout = plot_layout(title=subtitle, y_title="", height=520)
     layout.pop("xaxis_title", None)
     layout.pop("yaxis_title", None)
-    fig.update_layout(**layout, legend={"orientation": "h", "y": 1.16}, margin={"t": 72, "r": 16, "b": 40, "l": 52})
+    layout["legend"] = {"orientation": "h", "y": 1.16}
+    layout["margin"] = {"t": 72, "r": 16, "b": 40, "l": 52}
+    fig.update_layout(**layout)
     fig.update_yaxes(title_text="Amplitude", row=1, col=1)
     fig.update_yaxes(title_text="Hz", row=2, col=1)
     fig.update_xaxes(title_text="Time (s)", row=2, col=1)
