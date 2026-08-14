@@ -19,18 +19,23 @@ from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Tabl
 
 
 def _find_cjk_font() -> str | None:
-    """Prefer a system/bundled CJK TrueType/TTC font so Traditional Chinese renders."""
+    """Prefer a single-file CJK TTF/OTF; TTC collections are less reliable in ReportLab/Matplotlib."""
     root = Path(__file__).resolve().parent
     candidates = [
         *sorted((root / "assets" / "fonts").glob("*.ttf")),
         *sorted((root / "assets" / "fonts").glob("*.otf")),
-        *sorted((root / "assets" / "fonts").glob("*.ttc")),
+        # Standalone TTF first (cmap works with ReportLab TTFont).
+        Path(r"C:\Windows\Fonts\kaiu.ttf"),  # DFKai-SB Traditional Chinese
+        Path(r"C:\Windows\Fonts\simhei.ttf"),
+        Path(r"C:\Windows\Fonts\simsun.ttc"),
         Path(r"C:\Windows\Fonts\msjh.ttc"),
         Path(r"C:\Windows\Fonts\msjhbd.ttc"),
+        Path(r"C:\Windows\Fonts\msyh.ttc"),
         Path(r"C:\Windows\Fonts\mingliu.ttc"),
         Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"),
         Path("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc"),
         Path("/usr/share/fonts/truetype/wqy/wqy-microhei.ttc"),
+        *sorted((root / "assets" / "fonts").glob("*.ttc")),
     ]
     for path in candidates:
         if path.exists():
@@ -41,27 +46,38 @@ def _find_cjk_font() -> str | None:
 def _register_fonts() -> str:
     font_path = _find_cjk_font()
     if font_path:
+        suffix = Path(font_path).suffix.lower()
+        # TTC: try a few subfont indices; some collections put CJK face at index 0/1.
+        indices = (0, 1, 2) if suffix == ".ttc" else (0,)
+        for idx in indices:
+            try:
+                pdfmetrics.registerFont(TTFont("EMG_CJK", font_path, subfontIndex=idx))
+                return "EMG_CJK"
+            except Exception:
+                continue
+    # Streamlit Cloud / Linux without CJK TTF: ReportLab built-in CID fonts.
+    for cid_name in ("MHei-Medium", "MSung-Light", "STSong-Light"):
         try:
-            pdfmetrics.registerFont(TTFont("EMG_CJK", font_path, subfontIndex=0))
-            return "EMG_CJK"
+            from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+            pdfmetrics.registerFont(UnicodeCIDFont(cid_name))
+            return cid_name
         except Exception:
-            pass
-    # Streamlit Cloud / Linux without CJK TTF: use ReportLab built-in CID fonts.
-    try:
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-
-        pdfmetrics.registerFont(UnicodeCIDFont("MSung-Light"))
-        return "MSung-Light"
-    except Exception:
-        pass
-    try:
-        from reportlab.pdfbase.cidfonts import UnicodeCIDFont
-
-        pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
-        return "STSong-Light"
-    except Exception:
-        pass
+            continue
     return "Helvetica"
+
+
+def _matplotlib_font_properties():
+    """Return FontProperties for CJK titles, or None."""
+    font_path = _find_cjk_font()
+    if not font_path:
+        return None
+    try:
+        from matplotlib import font_manager
+
+        return font_manager.FontProperties(fname=font_path)
+    except Exception:
+        return None
 
 
 def _fmt(value: Any) -> str:
@@ -150,13 +166,10 @@ def _series_chart_png(series: dict[str, Any] | None, *, title: str) -> bytes | N
     except Exception:
         return None
 
-    font_path = _find_cjk_font()
-    if font_path:
+    font_prop = _matplotlib_font_properties()
+    if font_prop is not None:
         try:
-            from matplotlib import font_manager
-
-            font_manager.fontManager.addfont(font_path)
-            plt.rcParams["font.family"] = font_manager.FontProperties(fname=font_path).get_name()
+            plt.rcParams["font.family"] = font_prop.get_name()
             plt.rcParams["axes.unicode_minus"] = False
         except Exception:
             pass
@@ -190,8 +203,23 @@ def _series_chart_png(series: dict[str, Any] | None, *, title: str) -> bytes | N
             ax_freq.plot(times, values, label=label, color=color, linewidth=1.2)
 
     aemg = series.get("aemg")
-    subtitle = f"{title}  |  AEMG={aemg}" if aemg is not None else title
-    ax_amp.set_title(subtitle, color="#e7efe9", fontsize=11)
+    # Keep chart title ASCII-safe: full Chinese filenames are shown in the PDF heading above.
+    short = Path(str(title)).name
+    try:
+        short.encode("ascii")
+        label = short if len(short) <= 54 else short[:51] + "..."
+    except UnicodeEncodeError:
+        label = "Feature series"
+    subtitle = f"{label}  |  AEMG={aemg}" if aemg is not None else label
+    title_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 11}
+    if font_prop is not None:
+        title_kwargs["fontproperties"] = font_prop
+        # With a CJK-capable font, show the real filename (truncated if long).
+        shown = Path(str(title)).name
+        if len(shown) > 54:
+            shown = shown[:51] + "..."
+        subtitle = f"{shown}  |  AEMG={aemg}" if aemg is not None else shown
+    ax_amp.set_title(subtitle, **title_kwargs)
     ax_amp.set_ylabel("Amplitude")
     ax_freq.set_ylabel("Frequency (Hz)")
     ax_freq.set_xlabel("Time (s)")
@@ -267,18 +295,18 @@ def build_results_pdf(
     story: list[Any] = []
     story.append(Paragraph(_escape(title), title_style))
     stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    story.append(Paragraph(_escape(f"Export time: {stamp}"), body_style))
+    story.append(Paragraph(_escape(f"匯出時間：{stamp}"), body_style))
 
     meta = meta or {}
     if meta:
-        lines = [f"{key}: {_fmt(value)}" for key, value in meta.items()]
+        lines = [f"{key}：{_fmt(value)}" for key, value in meta.items()]
         story.append(Paragraph(_escape(" / ".join(lines)), body_style))
     story.append(Spacer(1, 0.3 * cm))
 
     if feat_delsys and feat_delsys.get("result"):
         method = feat_delsys.get("feature_method") or "spectral"
         filename = feat_delsys["result"].get("filename") or "Delsys"
-        story.append(Paragraph(_escape(f"Delsys Features — {filename} ({method})"), h_style))
+        story.append(Paragraph(_escape(f"Delsys 特徵 — {filename}（{method}）"), h_style))
         story.append(_make_table(_rows_from_features(feat_delsys["result"].get("features") or [], method), font_name))
         _add_series_image(story, feat_delsys["result"].get("series"), str(filename))
 
@@ -286,28 +314,28 @@ def build_results_pdf(
         result = item.get("result") or {}
         method = item.get("feature_method") or "spectral"
         filename = result.get("filename") or "TXT"
-        story.append(Paragraph(_escape(f"TXT Features — {filename} ({method})"), h_style))
+        story.append(Paragraph(_escape(f"TXT 特徵 — {filename}（{method}）"), h_style))
         story.append(_make_table(_rows_from_features(result.get("features") or [], method), font_name))
         _add_series_image(story, result.get("series"), str(filename))
 
     if feat_delta and feat_delta.get("pairs"):
-        story.append(Paragraph(_escape("Delta (Delsys - first TXT)"), h_style))
+        story.append(Paragraph(_escape("差異對照（Delsys − 第一個 TXT）"), h_style))
         if feat_delta.get("note"):
             story.append(Paragraph(_escape(str(feat_delta["note"])), body_style))
         story.append(_make_table(_rows_from_delta(feat_delta.get("pairs") or []), font_name))
 
     if contr_delsys:
         filename = contr_delsys.get("filename") or "Delsys"
-        story.append(Paragraph(_escape(f"Delsys Contractions — {filename}"), h_style))
+        story.append(Paragraph(_escape(f"Delsys 收縮區間 — {filename}"), h_style))
         story.append(_make_table(_rows_from_contractions(contr_delsys.get("contractions") or []), font_name))
 
     for item in contr_txt or []:
         filename = item.get("filename") or "TXT"
-        story.append(Paragraph(_escape(f"TXT Contractions — {filename}"), h_style))
+        story.append(Paragraph(_escape(f"TXT 收縮區間 — {filename}"), h_style))
         story.append(_make_table(_rows_from_contractions(item.get("contractions") or []), font_name))
 
     if len(story) <= 3:
-        story.append(Paragraph("No results to export. Please run analysis first.", body_style))
+        story.append(Paragraph(_escape("尚無可匯出的結果，請先執行分析。"), body_style))
 
     doc.build(story)
     return buffer.getvalue()
