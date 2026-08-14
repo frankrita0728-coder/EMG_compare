@@ -522,6 +522,98 @@ def _trim_ze1_tail(
     return s0, new_end
 
 
+def _split_ze1_multiburst(
+    contractions: list[dict[str, Any]],
+    *,
+    emg: np.ndarray,
+    sample_rate_hz: float,
+    min_seg_seconds: float = 10.0,
+    min_sep_seconds: float = 1.0,
+    valley_ratio: float = 0.35,
+    min_peak_ratio: float = 0.22,
+    window_seconds: float = 0.20,
+    hop_seconds: float = 0.05,
+) -> list[dict[str, Any]]:
+    """
+    Split long ZE1 intervals that clearly contain multiple activity bursts.
+    Used when a too-low threshold merges several contractions into one segment.
+    """
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1024.0
+    out: list[dict[str, Any]] = []
+
+    def pack(base: dict[str, Any], a: int, b: int) -> dict[str, Any]:
+        piece = dict(base)
+        piece["start_sample"] = int(a)
+        piece["end_sample"] = int(b)
+        piece["start"] = a / fs
+        piece["end"] = b / fs
+        piece["duration"] = piece["end"] - piece["start"]
+        chunk = emg[a:b]
+        piece["peak_rms"] = (
+            round(float(np.sqrt(np.mean(chunk * chunk))), 6) if chunk.size else 0.0
+        )
+        return piece
+
+    for item in contractions:
+        s0 = int(item["start_sample"])
+        e0 = int(item["end_sample"])
+        if (e0 - s0) / fs < min_seg_seconds:
+            out.append(item)
+            continue
+
+        seg = emg[s0:e0]
+        win = max(3, int(round(fs * window_seconds)))
+        hop = max(1, int(round(fs * hop_seconds)))
+        if len(seg) < win * 4:
+            out.append(item)
+            continue
+
+        rms: list[float] = []
+        centers: list[int] = []
+        for i in range(0, len(seg) - win + 1, hop):
+            chunk = seg[i : i + win]
+            rms.append(float(np.sqrt(np.mean(chunk * chunk))))
+            centers.append(i + win // 2)
+        rms_a = np.asarray(rms, dtype=float)
+        centers_a = np.asarray(centers, dtype=int)
+        # Robust peak avoids a single contact spike dominating max().
+        peak = float(np.percentile(rms_a, 95)) if rms_a.size else 0.0
+        if peak <= 0:
+            out.append(item)
+            continue
+        peak_floor = peak * min_peak_ratio
+        valley_floor = peak * valley_ratio
+
+        peaks: list[int] = []
+        for i in range(1, len(rms_a) - 1):
+            if rms_a[i] >= rms_a[i - 1] and rms_a[i] >= rms_a[i + 1] and rms_a[i] >= peak_floor:
+                if not peaks or (centers_a[i] - centers_a[peaks[-1]]) / fs >= min_sep_seconds:
+                    peaks.append(i)
+                elif rms_a[i] > rms_a[peaks[-1]]:
+                    peaks[-1] = i
+        if len(peaks) < 2:
+            out.append(item)
+            continue
+
+        cuts = [s0]
+        for a, b in zip(peaks, peaks[1:]):
+            span = rms_a[a : b + 1]
+            vi = a + int(np.argmin(span))
+            if float(rms_a[vi]) <= valley_floor and (centers_a[b] - centers_a[a]) / fs >= min_sep_seconds:
+                cuts.append(s0 + int(centers_a[vi]))
+        cuts.append(e0)
+
+        parts: list[dict[str, Any]] = []
+        for i in range(len(cuts) - 1):
+            a, b = cuts[i], cuts[i + 1]
+            if b - a >= int(fs * 0.8):
+                parts.append(pack(item, a, b))
+        out.extend(parts if len(parts) >= 2 else [item])
+
+    out.sort(key=lambda c: float(c["start"]))
+    return out
+
+
 def _postprocess_ze1_contractions(
     contractions: list[dict[str, Any]],
     *,
@@ -539,7 +631,8 @@ def _postprocess_ze1_contractions(
     Clean ZE1 segments:
     1) drop weak / short noise fragments
     2) trim quiet trailing tails (~1 s)
-    3) keep top-N by peak_rms when expected_count is set
+    3) split over-merged multi-burst intervals
+    4) keep top-N by peak_rms when expected_count is set
     """
     if not contractions:
         return []
@@ -587,6 +680,8 @@ def _postprocess_ze1_contractions(
         item["duration"] = float(item["end"]) - float(item["start"])
         seg = emg[s1:e1]
         item["peak_rms"] = round(float(np.sqrt(np.mean(seg * seg))), 6) if seg.size else 0.0
+
+    filtered = _split_ze1_multiburst(filtered, emg=emg, sample_rate_hz=fs)
 
     if expected_count and expected_count > 0 and len(filtered) > expected_count:
         # Prefer sustained bursts over short high-amplitude spikes (electrode pop).
