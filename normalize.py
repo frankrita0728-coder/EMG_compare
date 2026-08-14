@@ -24,6 +24,28 @@ def zscore(values: list[float]) -> list[float]:
     return [(v - avg) / sigma for v in values]
 
 
+def robust_zscore(values: list[float]) -> list[float]:
+    """Median/MAD z-score so brief electrode spikes do not flatten the plot."""
+    if not values:
+        return []
+    sorted_vals = sorted(values)
+    mid = len(sorted_vals) // 2
+    if len(sorted_vals) % 2:
+        med = sorted_vals[mid]
+    else:
+        med = 0.5 * (sorted_vals[mid - 1] + sorted_vals[mid])
+    deviations = sorted(abs(v - med) for v in values)
+    mid_d = len(deviations) // 2
+    if len(deviations) % 2:
+        mad = deviations[mid_d]
+    else:
+        mad = 0.5 * (deviations[mid_d - 1] + deviations[mid_d])
+    sigma = 1.4826 * mad
+    if sigma <= 1e-12:
+        return zscore(values)
+    return [(v - med) / sigma for v in values]
+
+
 def maxabs(values: list[float]) -> list[float]:
     peak = max((abs(v) for v in values), default=0.0)
     if peak <= 1e-12:
@@ -42,6 +64,10 @@ def normalize_trace(trace: dict[str, Any], method: str = "zscore") -> dict[str, 
     elif method == "maxabs":
         normalized = maxabs(values)
         unit = "norm (maxabs)"
+    elif method in {"robust", "robust_zscore", "mad"}:
+        method = "robust_zscore"
+        normalized = robust_zscore(values)
+        unit = "norm (robust z)"
     else:
         method = "zscore"
         normalized = zscore(values)

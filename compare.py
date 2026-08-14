@@ -245,7 +245,7 @@ def build_contraction_single(
         sample_rate=full["sample_rate"],
         source=source,
     )
-    plot = normalize_trace(load_signal(source, filename, for_plot=True), method="zscore")
+    plot = normalize_trace(load_signal(source, filename, for_plot=True), method="robust_zscore")
     return {
         "mode": "contractions_single",
         "source": source,
@@ -324,8 +324,8 @@ def build_contraction_compare(
         sample_rate=right["sample_rate"],
         source="txt",
     )
-    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="zscore")
-    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="zscore")
+    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="robust_zscore")
+    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="robust_zscore")
     return {
         "mode": "contractions",
         "expected_count": expected_count,

@@ -545,7 +545,15 @@ def _postprocess_ze1_contractions(
         return []
 
     ordered = [dict(c) for c in sorted(contractions, key=lambda c: float(c["start"]))]
-    peak_max = max((float(c.get("peak_rms") or 0.0) for c in ordered), default=0.0)
+    # Ignore brief contact/cable spikes when setting the weak-peak floor.
+    sustained_for_peak = [
+        float(c.get("peak_rms") or 0.0)
+        for c in ordered
+        if float(c.get("duration") or 0.0) >= 1.5
+    ]
+    peak_max = max(sustained_for_peak, default=0.0)
+    if peak_max <= 0:
+        peak_max = max((float(c.get("peak_rms") or 0.0) for c in ordered), default=0.0)
     peak_floor = peak_max * float(min_peak_ratio) if peak_max > 0 else 0.0
 
     filtered = [
@@ -581,7 +589,11 @@ def _postprocess_ze1_contractions(
         item["peak_rms"] = round(float(np.sqrt(np.mean(seg * seg))), 6) if seg.size else 0.0
 
     if expected_count and expected_count > 0 and len(filtered) > expected_count:
-        ranked = sorted(filtered, key=lambda c: float(c.get("peak_rms") or 0.0), reverse=True)
+        # Prefer sustained bursts over short high-amplitude spikes (electrode pop).
+        sustained_min = 1.5
+        sustained = [c for c in filtered if float(c.get("duration") or 0.0) >= sustained_min]
+        pool = sustained if len(sustained) >= int(expected_count) else filtered
+        ranked = sorted(pool, key=lambda c: float(c.get("peak_rms") or 0.0), reverse=True)
         filtered = ranked[: int(expected_count)]
         filtered.sort(key=lambda c: float(c["start"]))
 

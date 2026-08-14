@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import plotly.graph_objects as go
 import streamlit as st
 
@@ -296,9 +297,16 @@ def fig_contractions(result: dict[str, Any], *, color: str, title: str) -> go.Fi
             }
         )
     fig.update_layout(
-        **plot_layout(title=title, y_title="Norm (zscore)", height=300),
+        **plot_layout(title=title, y_title="Norm (robust z)", height=320),
         shapes=shapes,
     )
+    # Keep rare spikes from dominating the visible scale.
+    ys = list(result.get("values") or [])
+    if ys:
+        lo = float(np.percentile(ys, 0.5))
+        hi = float(np.percentile(ys, 99.5))
+        pad = max(0.5, 0.08 * (hi - lo))
+        fig.update_yaxes(range=[lo - pad, hi + pad])
     return fig
 
 
@@ -330,14 +338,17 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
         return None
 
     # Split amplitude vs frequency so small mV-scale RMS/iEMG stay visible.
+    from pathlib import Path
+
     from plotly.subplots import make_subplots
 
     fig = make_subplots(
         rows=2,
         cols=1,
         shared_xaxes=True,
-        vertical_spacing=0.08,
+        vertical_spacing=0.14,
         subplot_titles=("Amplitude (RMS / iEMG)", "Frequency (MPF / MDF)"),
+        row_heights=[0.5, 0.5],
     )
     amp_specs = [("rms", "RMS", "#5ec8ff"), ("iemg", "iEMG", "#3dd68c")]
     freq_specs = [("mpf", "MPF", "#f0b429"), ("mdf", "MDF", "#c78bff")]
@@ -363,17 +374,36 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
             )
     if not fig.data:
         return None
+
+    short_name = Path(str(title)).name
+    if len(short_name) > 42:
+        short_name = short_name[:39] + "..."
     aemg = series.get("aemg")
-    subtitle = f"{title} · AEMG={aemg}" if aemg is not None else title
-    layout = plot_layout(title=subtitle, y_title="", height=520)
-    layout.pop("xaxis_title", None)
-    layout.pop("yaxis_title", None)
-    layout["legend"] = {"orientation": "h", "y": 1.16}
-    layout["margin"] = {"t": 72, "r": 16, "b": 40, "l": 52}
-    fig.update_layout(**layout)
-    fig.update_yaxes(title_text="Amplitude", row=1, col=1)
-    fig.update_yaxes(title_text="Hz", row=2, col=1)
-    fig.update_xaxes(title_text="Time (s)", row=2, col=1)
+    subtitle = f"{short_name}  ·  AEMG={aemg}" if aemg is not None else short_name
+
+    fig.update_layout(
+        title={"text": subtitle, "font": {"size": 13}, "x": 0.0, "xanchor": "left", "y": 0.995, "yanchor": "top"},
+        height=660,
+        margin={"t": 56, "r": 24, "b": 72, "l": 60},
+        legend={
+            "orientation": "h",
+            "yanchor": "top",
+            "y": -0.08,
+            "xanchor": "center",
+            "x": 0.5,
+            "bgcolor": "rgba(0,0,0,0)",
+            "font": {"size": 11},
+        },
+        template="plotly_dark",
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        font={"color": "#e7efe9"},
+        hovermode="x unified",
+    )
+    fig.update_annotations(font={"size": 12}, yshift=8)
+    fig.update_yaxes(title_text="Amplitude", title_font={"size": 11}, row=1, col=1, automargin=True)
+    fig.update_yaxes(title_text="Hz", title_font={"size": 11}, row=2, col=1, automargin=True)
+    fig.update_xaxes(title_text="Time (s)", title_font={"size": 11}, row=2, col=1, automargin=True)
     return fig
 
 
@@ -758,7 +788,15 @@ def tab_contractions() -> None:
                     row = contractions_to_rows([item])[0]
                     row["file"] = result.get("filename")
                     all_rows.append(row)
-            fig.update_layout(**plot_layout(title="TXT 收縮區間", y_title="Norm (zscore)", height=300))
+            fig.update_layout(**plot_layout(title="TXT 收縮區間", y_title="Norm (robust z)", height=320))
+            ys = []
+            for result in results:
+                ys.extend(result.get("values") or [])
+            if ys:
+                lo = float(np.percentile(ys, 0.5))
+                hi = float(np.percentile(ys, 99.5))
+                pad = max(0.5, 0.08 * (hi - lo))
+                fig.update_yaxes(range=[lo - pad, hi + pad])
             st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
             st.dataframe(all_rows, use_container_width=True)
         else:
