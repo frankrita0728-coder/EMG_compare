@@ -4,6 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from align import FILENAME_STAMP_RE
+
 
 SUBJECT_PATTERNS = (
     ("frank", "Frank"),
@@ -28,12 +30,14 @@ SIDE_PATTERNS = (
     ("-lc", "LC"),
     (" la", "LA"),
     ("_la", "LA"),
+    ("-la", "LA"),
     (" ra", "RA"),
     ("_ra", "RA"),
+    ("-ra", "RA"),
 )
 
 LOAD_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|KG|Kg)", re.IGNORECASE)
-CHANNEL_RE = re.compile(r"ExgCh([12])", re.IGNORECASE)
+CHANNEL_RE = re.compile(r"(?:ExgCh|_?Ch)([12])(?![0-9])", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -43,6 +47,7 @@ class FileTags:
     muscle: str = ""
     load: str = ""
     channel: str = ""
+    stamp_minutes: int | None = None
 
     def score_against(self, other: FileTags) -> int:
         score = 0
@@ -56,6 +61,15 @@ class FileTags:
             score += 10
         if self.channel and other.channel and self.channel == other.channel:
             score += 5
+        # Weak time proximity from filename stamps (ZE2 / ZE1 style names).
+        if self.stamp_minutes is not None and other.stamp_minutes is not None:
+            delta = abs(self.stamp_minutes - other.stamp_minutes)
+            if delta <= 2:
+                score += 25
+            elif delta <= 10:
+                score += 12
+            elif delta <= 60:
+                score += 4
         return score
 
     def as_dict(self) -> dict[str, str]:
@@ -65,11 +79,26 @@ class FileTags:
             "muscle": self.muscle,
             "load": self.load,
             "channel": self.channel,
+            "stamp_minutes": "" if self.stamp_minutes is None else str(self.stamp_minutes),
         }
 
 
 def _normalize_name(name: str) -> str:
     return name.lower().replace("（", "(").replace("）", ")")
+
+
+def _stamp_minutes(filename: str) -> int | None:
+    match = FILENAME_STAMP_RE.search(filename or "")
+    if not match:
+        return None
+    try:
+        month = int(match.group("month"))
+        day = int(match.group("day"))
+        hour = int(match.group("hour"))
+        minute = int(match.group("minute"))
+        return ((month * 31) + day) * 1440 + hour * 60 + minute
+    except (TypeError, ValueError):
+        return None
 
 
 def extract_tags(filename: str) -> FileTags:
@@ -113,7 +142,14 @@ def extract_tags(filename: str) -> FileTags:
     if channel_match:
         channel = f"Ch{channel_match.group(1)}"
 
-    return FileTags(subject=subject, side=side, muscle=muscle, load=load, channel=channel)
+    return FileTags(
+        subject=subject,
+        side=side,
+        muscle=muscle,
+        load=load,
+        channel=channel,
+        stamp_minutes=_stamp_minutes(filename),
+    )
 
 
 def suggest_pairs(
@@ -121,6 +157,7 @@ def suggest_pairs(
     txt_files: list[dict[str, Any]],
     *,
     limit: int = 12,
+    right_key: str = "txt",
 ) -> list[dict[str, Any]]:
     suggestions: list[dict[str, Any]] = []
     for left in delsys_files:
@@ -138,14 +175,15 @@ def suggest_pairs(
                 {
                     "score": score,
                     "delsys": left["name"],
-                    "txt": right["name"],
+                    right_key: right["name"],
                     "delsys_tags": left_tags.as_dict(),
-                    "txt_tags": right_tags.as_dict(),
+                    f"{right_key}_tags": right_tags.as_dict(),
                     "reason": _reason(left_tags, right_tags),
+                    "right_source": right.get("source") or right_key,
                 }
             )
 
-    suggestions.sort(key=lambda item: (-item["score"], item["delsys"], item["txt"]))
+    suggestions.sort(key=lambda item: (-item["score"], item["delsys"], item.get(right_key) or ""))
     return suggestions[:limit]
 
 
@@ -188,4 +226,10 @@ def _reason(a: FileTags, b: FileTags) -> str:
         parts.append(a.side)
     if a.load and a.load == b.load:
         parts.append(a.load)
+    if a.channel and a.channel == b.channel:
+        parts.append(a.channel)
+    if a.stamp_minutes is not None and b.stamp_minutes is not None:
+        delta = abs(a.stamp_minutes - b.stamp_minutes)
+        if delta <= 60:
+            parts.append(f"時間±{delta}分")
     return " / ".join(parts) if parts else "弱相關"

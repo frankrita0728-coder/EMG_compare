@@ -249,9 +249,11 @@ def build_results_pdf(
     meta: dict[str, Any] | None = None,
     feat_delsys: dict[str, Any] | None = None,
     feat_txt_tables: list[dict[str, Any]] | None = None,
+    feat_ze2_tables: list[dict[str, Any]] | None = None,
     feat_delta: dict[str, Any] | None = None,
     contr_delsys: dict[str, Any] | None = None,
     contr_txt: list[dict[str, Any]] | None = None,
+    contr_ze2: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Build a PDF report bytes for feature / contraction results (tables + charts)."""
     font_name = _register_fonts()
@@ -318,8 +320,16 @@ def build_results_pdf(
         story.append(_make_table(_rows_from_features(result.get("features") or [], method), font_name))
         _add_series_image(story, result.get("series"), str(filename))
 
+    for item in feat_ze2_tables or []:
+        result = item.get("result") or {}
+        method = item.get("feature_method") or "spectral"
+        filename = result.get("filename") or "ZE2"
+        story.append(Paragraph(_escape(f"ZE2 特徵 — {filename}（{method}）"), h_style))
+        story.append(_make_table(_rows_from_features(result.get("features") or [], method), font_name))
+        _add_series_image(story, result.get("series"), str(filename))
+
     if feat_delta and feat_delta.get("pairs"):
-        story.append(Paragraph(_escape("差異對照（Delsys − 第一個 TXT）"), h_style))
+        story.append(Paragraph(_escape("差異對照（Delsys − 對照來源）"), h_style))
         if feat_delta.get("note"):
             story.append(Paragraph(_escape(str(feat_delta["note"])), body_style))
         story.append(_make_table(_rows_from_delta(feat_delta.get("pairs") or []), font_name))
@@ -332,6 +342,11 @@ def build_results_pdf(
     for item in contr_txt or []:
         filename = item.get("filename") or "TXT"
         story.append(Paragraph(_escape(f"TXT 收縮區間 — {filename}"), h_style))
+        story.append(_make_table(_rows_from_contractions(item.get("contractions") or []), font_name))
+
+    for item in contr_ze2 or []:
+        filename = item.get("filename") or "ZE2"
+        story.append(Paragraph(_escape(f"ZE2 收縮區間 — {filename}"), h_style))
         story.append(_make_table(_rows_from_contractions(item.get("contractions") or []), font_name))
 
     if len(story) <= 3:
@@ -351,9 +366,11 @@ def build_results_csv_zip(
     *,
     feat_delsys: dict[str, Any] | None = None,
     feat_txt_tables: list[dict[str, Any]] | None = None,
+    feat_ze2_tables: list[dict[str, Any]] | None = None,
     feat_delta: dict[str, Any] | None = None,
     contr_delsys: dict[str, Any] | None = None,
     contr_txt: list[dict[str, Any]] | None = None,
+    contr_ze2: list[dict[str, Any]] | None = None,
 ) -> bytes:
     """Build a ZIP of CSV tables (UTF-8 BOM for Excel)."""
     buffer = io.BytesIO()
@@ -376,6 +393,16 @@ def build_results_csv_zip(
             stem = str(result.get("filename") or f"txt_{idx}").replace("/", "_")
             zf.writestr(f"features_txt_{idx}_{stem}.csv", text.getvalue().encode("utf-8"))
 
+        for idx, item in enumerate(feat_ze2_tables or [], start=1):
+            result = item.get("result") or {}
+            method = item.get("feature_method") or "spectral"
+            rows = _rows_from_features(result.get("features") or [], method)
+            text = io.StringIO()
+            text.write("\ufeff")
+            _write_csv(text, rows)
+            stem = str(result.get("filename") or f"ze2_{idx}").replace("/", "_")
+            zf.writestr(f"features_ze2_{idx}_{stem}.csv", text.getvalue().encode("utf-8"))
+
         if feat_delta and feat_delta.get("pairs"):
             rows = _rows_from_delta(feat_delta.get("pairs") or [])
             text = io.StringIO()
@@ -397,5 +424,13 @@ def build_results_csv_zip(
             _write_csv(text, rows)
             stem = str(item.get("filename") or f"txt_{idx}").replace("/", "_")
             zf.writestr(f"contractions_txt_{idx}_{stem}.csv", text.getvalue().encode("utf-8"))
+
+        for idx, item in enumerate(contr_ze2 or [], start=1):
+            rows = _rows_from_contractions(item.get("contractions") or [])
+            text = io.StringIO()
+            text.write("\ufeff")
+            _write_csv(text, rows)
+            stem = str(item.get("filename") or f"ze2_{idx}").replace("/", "_")
+            zf.writestr(f"contractions_ze2_{idx}_{stem}.csv", text.getvalue().encode("utf-8"))
 
     return buffer.getvalue()

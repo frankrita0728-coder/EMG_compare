@@ -2,23 +2,28 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
+
+# Fully initialize pandas before Plotly validators touch it (avoids circular-import races).
+import pandas as pd  # noqa: F401
 import plotly.graph_objects as go
 import streamlit as st
 
 from compare import (
     build_feature_compare,
+    build_feature_compare_ze2,
     build_feature_single,
     build_contraction_single,
     build_waveform_overlay,
     build_waveform_single,
 )
-from pairing import suggest_for_selection, suggest_pairs
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
-from paths import DATA_DELSYS, DATA_TXT, ensure_data_dirs
+from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
+from parsers.ze2_txt import ZE2_MV_PER_COUNT, list_ze2_files
+from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2, ensure_data_dirs
 from export_report import build_results_csv_zip, build_results_pdf
 
 DELSYS_COLOR = "#5ec8ff"
@@ -31,6 +36,16 @@ TXT_COLORS = [
     "#48e0a0",
     "#90f0b0",
     "#68d8e0",
+]
+ZE2_COLORS = [
+    "#f0b429",
+    "#ff9f43",
+    "#e8c547",
+    "#f4a261",
+    "#e9c46a",
+    "#f7b267",
+    "#ffd166",
+    "#f4d35e",
 ]
 
 SPECTRAL_COLS = ["index", "start", "end", "duration", "iemg", "rms", "mdf", "mpf", "peak_rms"]
@@ -137,6 +152,9 @@ st.markdown(
         background: var(--bg-elevated);
         color: var(--text);
         border-radius: 8px;
+        white-space: nowrap;
+        min-height: 2.6rem;
+        height: auto !important;
       }
       .stButton > button[kind="primary"],
       .stButton > button[data-testid="baseButton-primary"] {
@@ -150,7 +168,7 @@ st.markdown(
         border: 1px solid var(--line);
         border-radius: 10px;
       }
-      .block-container { max-width: 1400px; }
+      .block-container { max-width: 1680px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -161,13 +179,20 @@ def init_state() -> None:
     defaults = {
         "selected_delsys": None,
         "selected_txt": [],
+        "selected_ze2": [],
+        "ze2_fs": float(ZE2_DEFAULT_FS),
+        "ze2_mv": float(ZE2_MV_PER_COUNT),
+        "apply_bandpass": True,
         "wave_delsys": None,
         "wave_txt": None,
+        "wave_ze2": None,
         "wave_overlay": None,
         "contr_delsys": None,
         "contr_txt": None,
+        "contr_ze2": None,
         "feat_delsys": None,
         "feat_txt_tables": None,
+        "feat_ze2_tables": None,
         "feat_delta": None,
         "file_nonce": 0,
     }
@@ -176,9 +201,17 @@ def init_state() -> None:
             st.session_state[key] = value
 
 
-def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     ensure_data_dirs()
-    return list_delsys_files(), list_txt_files()
+    return list_delsys_files(), list_txt_files(), list_ze2_files()
+
+
+def device_load_kwargs() -> dict[str, Any]:
+    return {
+        "ze2_sample_rate": float(st.session_state.get("ze2_fs") or ZE2_DEFAULT_FS),
+        "ze2_mv_per_count": float(st.session_state.get("ze2_mv") or ZE2_MV_PER_COUNT),
+        "apply_bandpass": bool(st.session_state.get("apply_bandpass", True)),
+    }
 
 
 def save_uploads(uploaded_files, dest: Path) -> list[str]:
@@ -192,12 +225,12 @@ def save_uploads(uploaded_files, dest: Path) -> list[str]:
     return saved
 
 
-def plot_layout(title: str = "", y_title: str = "Normalized", height: int = 320) -> dict[str, Any]:
+def plot_layout(title: str = "", y_title: str = "Normalized", height: int = 520) -> dict[str, Any]:
     return {
-        "title": {"text": title, "font": {"size": 14}},
+        "title": {"text": title, "font": {"size": 15}},
         "height": height,
-        "margin": {"t": 48, "r": 16, "b": 40, "l": 48},
-        "legend": {"orientation": "h", "y": 1.12},
+        "margin": {"t": 56, "r": 24, "b": 48, "l": 56},
+        "legend": {"orientation": "h", "y": 1.08},
         "xaxis_title": "Time (s)",
         "yaxis_title": y_title,
         "template": "plotly_dark",
@@ -219,6 +252,24 @@ def empty_slot(text: str = "尚未執行") -> None:
     st.markdown(f'<p class="empty-slot">{text}</p>', unsafe_allow_html=True)
 
 
+def _short_tab_label(prefix: str, filename: str | None, *, max_len: int = 32) -> str:
+    name = Path(str(filename or "未命名")).name
+    if len(name) > max_len:
+        name = name[: max_len - 1] + "…"
+    return f"{prefix} · {name}"
+
+
+def render_result_pages(pages: list[tuple[str, Any]]) -> None:
+    """One full-width chart page (Streamlit tab) per file / view."""
+    if not pages:
+        empty_slot()
+        return
+    tabs = st.tabs([label for label, _ in pages])
+    for tab, (_, render_fn) in zip(tabs, pages):
+        with tab:
+            render_fn()
+
+
 def y_title_for_norm(method: str) -> str:
     if method == "none":
         return "mV"
@@ -227,55 +278,81 @@ def y_title_for_norm(method: str) -> str:
     return "Norm (zscore)"
 
 
-def fig_from_trace(trace: dict[str, Any], *, color: str, title: str, y_title: str) -> go.Figure:
+def _plot_series(xs: Sequence[Any] | None, ys: Sequence[Any] | None) -> tuple[list[float], list[float]]:
+    """Convert trace arrays to plain Python lists for Plotly (avoids pandas validator races)."""
+    x = np.asarray(xs if xs is not None else [], dtype=float).reshape(-1)
+    y = np.asarray(ys if ys is not None else [], dtype=float).reshape(-1)
+    n = int(min(x.size, y.size))
+    if n <= 0:
+        return [], []
+    return x[:n].tolist(), y[:n].tolist()
+
+
+def fig_from_trace(
+    trace: dict[str, Any],
+    *,
+    color: str,
+    title: str,
+    y_title: str,
+    height: int = 520,
+) -> go.Figure:
+    x, y = _plot_series(trace.get("times"), trace.get("values"))
     fig = go.Figure(
         data=[
-            go.Scattergl(
-                x=trace["times"],
-                y=trace["values"],
+            go.Scatter(
+                x=x,
+                y=y,
                 mode="lines",
                 name=trace.get("filename") or title,
-                line={"color": color, "width": 1.2},
+                line={"color": color, "width": 1.4},
             )
         ]
     )
-    fig.update_layout(**plot_layout(title=title or trace.get("filename", ""), y_title=y_title))
+    fig.update_layout(**plot_layout(title=title or trace.get("filename", ""), y_title=y_title, height=height))
     return fig
 
 
-def fig_overlay(traces: list[dict[str, Any]], *, title: str, y_title: str) -> go.Figure:
+def fig_overlay(traces: list[dict[str, Any]], *, title: str, y_title: str, height: int = 560) -> go.Figure:
     fig = go.Figure()
     txt_i = 0
+    ze2_i = 0
     for item in traces:
-        if item.get("source") == "delsys":
+        source = item.get("source")
+        if source == "delsys":
             color = DELSYS_COLOR
             name = f"Delsys · {item['filename']}"
+        elif source == "ze2":
+            color = ZE2_COLORS[ze2_i % len(ZE2_COLORS)]
+            name = f"ZE2 · {item['filename']}"
+            ze2_i += 1
         else:
             color = TXT_COLORS[txt_i % len(TXT_COLORS)]
             name = f"TXT · {item['filename']}"
             txt_i += 1
+        x, y = _plot_series(item.get("times"), item.get("values"))
         fig.add_trace(
-            go.Scattergl(
-                x=item["times"],
-                y=item["values"],
+            go.Scatter(
+                x=x,
+                y=y,
                 mode="lines",
                 name=name,
-                line={"color": color, "width": 1.3},
+                line={"color": color, "width": 1.5},
             )
         )
-    fig.update_layout(**plot_layout(title=title, y_title=y_title, height=420))
+    fig.update_layout(**plot_layout(title=title, y_title=y_title, height=height))
     return fig
 
 
-def fig_contractions(result: dict[str, Any], *, color: str, title: str) -> go.Figure:
+def fig_contractions(result: dict[str, Any], *, color: str, title: str, height: int = 520) -> go.Figure:
+    x, y = _plot_series(result.get("times"), result.get("values"))
     fig = go.Figure(
         data=[
-            go.Scattergl(
-                x=result["times"],
-                y=result["values"],
+            go.Scatter(
+                x=x,
+                y=y,
                 mode="lines",
                 name=result.get("filename") or title,
-                line={"color": color, "width": 1.2},
+                line={"color": color, "width": 1.4},
             )
         ]
     )
@@ -297,7 +374,7 @@ def fig_contractions(result: dict[str, Any], *, color: str, title: str) -> go.Fi
             }
         )
     fig.update_layout(
-        **plot_layout(title=title, y_title="Norm (robust z)", height=320),
+        **plot_layout(title=title, y_title="Norm (robust z)", height=height),
         shapes=shapes,
     )
     # Keep rare spikes from dominating the visible scale.
@@ -357,8 +434,9 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
         times = block.get("times") or []
         values = block.get("values") or []
         if times and values:
+            x, y = _plot_series(times, values)
             fig.add_trace(
-                go.Scatter(x=times, y=values, mode="lines", name=label, line={"color": color, "width": 1.3}),
+                go.Scatter(x=x, y=y, mode="lines", name=label, line={"color": color, "width": 1.3}),
                 row=1,
                 col=1,
             )
@@ -367,8 +445,9 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
         times = block.get("times") or []
         values = block.get("values") or []
         if times and values:
+            x, y = _plot_series(times, values)
             fig.add_trace(
-                go.Scatter(x=times, y=values, mode="lines", name=label, line={"color": color, "width": 1.3}),
+                go.Scatter(x=x, y=y, mode="lines", name=label, line={"color": color, "width": 1.3}),
                 row=2,
                 col=1,
             )
@@ -383,7 +462,7 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
 
     fig.update_layout(
         title={"text": subtitle, "font": {"size": 13}, "x": 0.0, "xanchor": "left", "y": 0.995, "yanchor": "top"},
-        height=660,
+        height=720,
         margin={"t": 56, "r": 24, "b": 72, "l": 60},
         legend={
             "orientation": "h",
@@ -416,9 +495,11 @@ def delta_rows(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for key, value in (item.get("delsys") or {}).items():
             if key not in {"index"}:
                 row[f"D {key}"] = value
-        for key, value in (item.get("txt") or {}).items():
+        right = item.get("ze2") or item.get("txt") or {}
+        prefix = "Z" if item.get("ze2") else "T"
+        for key, value in right.items():
             if key not in {"index"}:
-                row[f"T {key}"] = value
+                row[f"{prefix} {key}"] = value
         rows.append(row)
     return rows
 
@@ -434,17 +515,30 @@ def require_delsys() -> str | None:
 def require_txt() -> list[str] | None:
     names = list(st.session_state.selected_txt or [])
     if not names:
-        st.warning("請先選擇至少一個 TXT")
+        st.warning("請先選擇至少一個 ZE1 TXT")
         return None
     return names
 
 
-def require_pair() -> tuple[str, list[str]] | None:
-    delsys = require_delsys()
-    txt = require_txt()
-    if not delsys or not txt:
+def require_ze2() -> list[str] | None:
+    names = list(st.session_state.selected_ze2 or [])
+    if not names:
+        st.warning("請先選擇至少一個 ZE2 TXT")
         return None
-    return delsys, txt
+    return names
+
+
+def require_pair() -> tuple[str, list[str], list[str]] | None:
+    """Require Delsys plus at least one of ZE1 TXT or ZE2."""
+    delsys = require_delsys()
+    if not delsys:
+        return None
+    txt = list(st.session_state.selected_txt or [])
+    ze2 = list(st.session_state.selected_ze2 or [])
+    if not txt and not ze2:
+        st.warning("請至少選擇一個 ZE1 TXT 或 ZE2")
+        return None
+    return delsys, txt, ze2
 
 
 def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]:
@@ -468,122 +562,148 @@ def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]
     return out
 
 
+def sibling_ze2_channels(selected: list[str], available: list[str]) -> list[str]:
+    """If user picks _Ch1/_Ch2, also include the matching pair name when present."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for name in selected:
+        if name in seen:
+            continue
+        out.append(name)
+        seen.add(name)
+        if "_Ch1." in name or name.endswith("_Ch1.txt"):
+            alt = name.replace("_Ch1.", "_Ch2.").replace("_Ch1.txt", "_Ch2.txt")
+        elif "_Ch2." in name or name.endswith("_Ch2.txt"):
+            alt = name.replace("_Ch2.", "_Ch1.").replace("_Ch2.txt", "_Ch1.txt")
+        else:
+            continue
+        if alt in available and alt not in seen:
+            out.append(alt)
+            seen.add(alt)
+    return out
+
+
 def render_sidebar() -> None:
     st.sidebar.markdown(
         """
         <p class="brand-kicker">Zentan</p>
         <p class="brand-title">emg-compare.app</p>
-        <p class="brand-sub">Delsys CSV × 自研 TXT</p>
+        <p class="brand-sub">Delsys × ZE1 TXT × ZE2</p>
         """,
         unsafe_allow_html=True,
     )
 
-    st.sidebar.markdown("##### 上傳檔案")
-    up_delsys = st.sidebar.file_uploader("Delsys CSV", type=["csv"], accept_multiple_files=True, key="up_delsys")
-    up_txt = st.sidebar.file_uploader("自研 TXT", type=["txt"], accept_multiple_files=True, key="up_txt")
-    if st.sidebar.button("儲存上傳檔案", use_container_width=True):
-        saved_d = save_uploads(up_delsys, DATA_DELSYS)
-        saved_t = save_uploads(up_txt, DATA_TXT)
-        st.session_state.file_nonce += 1
-        if saved_d or saved_t:
-            st.sidebar.success(f"已存入 {len(saved_d)} CSV、{len(saved_t)} TXT")
-        else:
-            st.sidebar.info("沒有選到檔案")
+    with st.sidebar.expander("上傳檔案", expanded=False):
+        up_delsys = st.file_uploader("Delsys CSV", type=["csv"], accept_multiple_files=True, key="up_delsys")
+        up_txt = st.file_uploader("自研 ZE1 TXT", type=["txt"], accept_multiple_files=True, key="up_txt")
+        up_ze2 = st.file_uploader("ZE2 TXT", type=["txt"], accept_multiple_files=True, key="up_ze2")
+        if st.button("儲存上傳檔案", use_container_width=True):
+            saved_d = save_uploads(up_delsys, DATA_DELSYS)
+            saved_t = save_uploads(up_txt, DATA_TXT)
+            saved_z = save_uploads(up_ze2, DATA_ZE2)
+            st.session_state.file_nonce += 1
+            if saved_d or saved_t or saved_z:
+                st.success(f"已存入 {len(saved_d)} CSV、{len(saved_t)} ZE1、{len(saved_z)} ZE2")
+            else:
+                st.info("沒有選到檔案")
 
-    if st.sidebar.button("重新整理", use_container_width=True):
+    if st.sidebar.button("重新整理檔案列表", use_container_width=True):
         st.session_state.file_nonce += 1
 
-    delsys_files, txt_files = refresh_file_lists()
+    delsys_files, txt_files, ze2_files = refresh_file_lists()
     delsys_names = [item["name"] for item in delsys_files]
     txt_names = [item["name"] for item in txt_files]
+    ze2_names = [item["name"] for item in ze2_files]
 
-    st.sidebar.markdown("##### Delsys CSV")
+    st.sidebar.markdown(f"##### Delsys CSV（{len(delsys_names)}）")
     if not delsys_names:
         st.sidebar.info("尚無 CSV")
         st.session_state.selected_delsys = None
     else:
         if st.session_state.selected_delsys not in delsys_names:
             st.session_state.selected_delsys = delsys_names[0]
-        st.sidebar.radio(
+        st.sidebar.selectbox(
             "選擇 Delsys",
             delsys_names,
             key="selected_delsys",
             label_visibility="collapsed",
         )
 
-    st.sidebar.markdown("##### 自研 TXT（可多選）")
+    st.sidebar.markdown(f"##### 自研 ZE1 TXT（{len(txt_names)}，可多選）")
     if not txt_names:
-        st.sidebar.info("尚無 TXT")
+        st.sidebar.info("尚無 ZE1 TXT")
         st.session_state.selected_txt = []
     else:
-        # Bind via key only — assigning return value + default= breaks multi-select.
         st.session_state.selected_txt = [
             name for name in (st.session_state.selected_txt or []) if name in txt_names
         ]
         st.sidebar.multiselect(
-            "選擇 TXT",
+            "選擇 ZE1 TXT",
             options=txt_names,
             key="selected_txt",
             label_visibility="collapsed",
+            placeholder="點擊搜尋／選擇檔案…",
             help="可同時勾選多個，例如 ExgCh1 + ExgCh2",
         )
-        if st.sidebar.button("自動勾選 Ch1+Ch2 配對", use_container_width=True):
+        if st.sidebar.button("自動勾選 ZE1 Ch1+Ch2", use_container_width=True):
             st.session_state.selected_txt = sibling_txt_channels(
                 list(st.session_state.selected_txt or []),
                 txt_names,
             )
             st.rerun()
 
-    st.sidebar.markdown("##### 自動建議")
-    if st.session_state.selected_delsys:
-        raw_suggestions = suggest_for_selection(st.session_state.selected_delsys, "delsys", txt_files)
-        suggestions = [
-            {
-                "delsys": st.session_state.selected_delsys,
-                "txt": item["name"],
-                "score": item.get("score", 0),
-            }
-            for item in raw_suggestions
-        ]
-    elif st.session_state.selected_txt:
-        raw_suggestions = suggest_for_selection(st.session_state.selected_txt[0], "txt", delsys_files)
-        suggestions = [
-            {
-                "delsys": item["name"],
-                "txt": st.session_state.selected_txt[0],
-                "score": item.get("score", 0),
-            }
-            for item in raw_suggestions
-        ]
+    st.sidebar.markdown(f"##### ZE2 TXT（{len(ze2_names)}，可多選）")
+    if not ze2_names:
+        st.sidebar.info("尚無 ZE2 TXT")
+        st.session_state.selected_ze2 = []
     else:
-        suggestions = suggest_pairs(delsys_files, txt_files)
+        st.session_state.selected_ze2 = [
+            name for name in (st.session_state.selected_ze2 or []) if name in ze2_names
+        ]
+        st.sidebar.multiselect(
+            "選擇 ZE2",
+            options=ze2_names,
+            key="selected_ze2",
+            label_visibility="collapsed",
+            placeholder="點擊搜尋／選擇檔案…",
+            help="24-bit hex；可同時勾選 Ch1 + Ch2",
+        )
+        if st.sidebar.button("自動勾選 ZE2 Ch1+Ch2", use_container_width=True):
+            st.session_state.selected_ze2 = sibling_ze2_channels(
+                list(st.session_state.selected_ze2 or []),
+                ze2_names,
+            )
+            st.rerun()
 
-    if not suggestions:
-        st.sidebar.caption("尚無建議")
-    else:
-        for item in suggestions[:8]:
-            delsys_name = item.get("delsys")
-            txt_name = item.get("txt")
-            label = f"{delsys_name} ↔ {txt_name}（{item.get('score', 0)}）"
-            if st.sidebar.button(label, key=f"sug_{delsys_name}_{txt_name}", use_container_width=True):
-                st.session_state.selected_delsys = delsys_name
-                st.session_state.selected_txt = sibling_txt_channels(
-                    [txt_name] if txt_name else [],
-                    txt_names,
-                )
-                st.rerun()
-
-    st.sidebar.divider()
-    st.sidebar.caption(f"Delsys 資料夾：{DATA_DELSYS}")
-    st.sidebar.caption(f"TXT 資料夾：{DATA_TXT}")
-    st.sidebar.caption(
-        f"已選：{st.session_state.selected_delsys or '（無）'} / "
-        f"{', '.join(st.session_state.selected_txt or []) or '（無）'}"
-    )
+    with st.sidebar.expander("濾波 / ZE2 參數", expanded=False):
+        st.selectbox(
+            "ZE1 / ZE2 數位濾波",
+            options=[True, False],
+            format_func=lambda on: "開啟（20–400 Hz Butterworth）" if on else "關閉（原始訊號）",
+            key="apply_bandpass",
+            help="僅套用在 ZE1 TXT 與 ZE2；Delsys 不變。",
+        )
+        st.number_input(
+            "ZE2 採樣率 Hz",
+            min_value=1.0,
+            max_value=10000.0,
+            step=1.0,
+            key="ze2_fs",
+            help=f"預設 {ZE2_DEFAULT_FS}",
+        )
+        st.number_input(
+            "ZE2 mV / count",
+            min_value=1e-9,
+            max_value=1.0,
+            step=0.00001,
+            format="%.6f",
+            key="ze2_mv",
+            help=f"預設 {ZE2_MV_PER_COUNT}",
+        )
 
 
 def tab_waveform() -> None:
-    c1, c2, c3 = st.columns([1.2, 1.2, 1.6])
+    c1, c2 = st.columns([1.2, 1.2])
     with c1:
         norm_method = st.selectbox(
             "正規化",
@@ -596,13 +716,16 @@ def tab_waveform() -> None:
         )
     with c2:
         align_by_start = st.checkbox("依起始時間對齊", value=True)
-    with c3:
-        b1, b2, b3 = st.columns(3)
-        run_d = b1.button("執行 Delsys", use_container_width=True)
-        run_t = b2.button("執行 TXT", use_container_width=True)
-        run_both = b3.button("兩邊一起（疊圖）", type="primary", use_container_width=True)
+
+    b1, b2, b3, b4 = st.columns([1, 1, 1, 1.3])
+    run_d = b1.button("Delsys", use_container_width=True)
+    run_t = b2.button("ZE1", use_container_width=True)
+    run_z = b3.button("ZE2", use_container_width=True)
+    run_both = b4.button("一起疊圖", type="primary", use_container_width=True)
 
     y_title = y_title_for_norm(norm_method)
+    device_kwargs = device_load_kwargs()
+    apply_bandpass = bool(device_kwargs["apply_bandpass"])
 
     if run_d:
         name = require_delsys()
@@ -620,89 +743,137 @@ def tab_waveform() -> None:
             try:
                 traces = []
                 for name in names:
-                    data = build_waveform_single("txt", name, norm_method=norm_method)
+                    data = build_waveform_single(
+                        "txt",
+                        name,
+                        norm_method=norm_method,
+                        apply_bandpass=apply_bandpass,
+                    )
                     traces.append(data["trace"])
                 st.session_state.wave_txt = traces
-                st.success(f"TXT 波形完成：{len(names)} 個")
+                st.success(f"ZE1 波形完成：{len(names)} 個")
+            except (FileNotFoundError, ValueError) as exc:
+                st.error(str(exc))
+
+    if run_z:
+        names = require_ze2()
+        if names:
+            try:
+                traces = []
+                for name in names:
+                    data = build_waveform_single(
+                        "ze2",
+                        name,
+                        norm_method=norm_method,
+                        **device_kwargs,
+                    )
+                    traces.append(data["trace"])
+                st.session_state.wave_ze2 = traces
+                st.success(f"ZE2 波形完成：{len(names)} 個")
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
     if run_both:
         pair = require_pair()
         if pair:
-            delsys_name, txt_names = pair
+            delsys_name, txt_names, ze2_names = pair
             try:
                 data = build_waveform_overlay(
                     delsys_name,
                     txt_names,
+                    ze2_names,
                     norm_method=norm_method,
                     align_by_start=align_by_start,
+                    **device_kwargs,
                 )
                 st.session_state.wave_delsys = data["delsys"]
-                st.session_state.wave_txt = data["txt_list"]
+                st.session_state.wave_txt = data.get("txt_list") or []
+                st.session_state.wave_ze2 = data.get("ze2_list") or []
                 st.session_state.wave_overlay = data
                 st.success("疊圖完成")
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    left, right = st.columns(2)
-    with left:
-        card_open("Delsys 結果")
-        if st.session_state.wave_delsys:
+    pages: list[tuple[str, Any]] = []
+
+    if st.session_state.wave_delsys:
+        trace = st.session_state.wave_delsys
+
+        def _render_delsys(tr=trace) -> None:
             st.plotly_chart(
                 fig_from_trace(
-                    st.session_state.wave_delsys,
+                    tr,
                     color=DELSYS_COLOR,
-                    title=st.session_state.wave_delsys.get("filename", "Delsys"),
+                    title=tr.get("filename", "Delsys"),
                     y_title=y_title,
                 ),
                 use_container_width=True,
-                config={"displayModeBar": False},
+                config={"displayModeBar": True},
             )
-        else:
-            empty_slot()
-        card_close()
-    with right:
-        card_open("TXT 結果")
-        if st.session_state.wave_txt:
-            fig = go.Figure()
-            for i, trace in enumerate(st.session_state.wave_txt):
-                fig.add_trace(
-                    go.Scattergl(
-                        x=trace["times"],
-                        y=trace["values"],
-                        mode="lines",
-                        name=trace.get("filename"),
-                        line={"color": TXT_COLORS[i % len(TXT_COLORS)], "width": 1.2},
-                    )
-                )
-            fig.update_layout(**plot_layout(title="TXT", y_title=y_title))
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        else:
-            empty_slot()
-        card_close()
 
-    card_open("疊圖結果（兩邊一起）")
+        pages.append((_short_tab_label("Delsys", trace.get("filename")), _render_delsys))
+
+    for i, trace in enumerate(st.session_state.wave_txt or []):
+        color = TXT_COLORS[i % len(TXT_COLORS)]
+
+        def _render_txt(tr=trace, c=color) -> None:
+            st.plotly_chart(
+                fig_from_trace(
+                    tr,
+                    color=c,
+                    title=tr.get("filename", "ZE1"),
+                    y_title=y_title,
+                ),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+
+        pages.append((_short_tab_label("ZE1", trace.get("filename")), _render_txt))
+
+    for i, trace in enumerate(st.session_state.wave_ze2 or []):
+        color = ZE2_COLORS[i % len(ZE2_COLORS)]
+
+        def _render_ze2(tr=trace, c=color) -> None:
+            st.plotly_chart(
+                fig_from_trace(
+                    tr,
+                    color=c,
+                    title=tr.get("filename", "ZE2"),
+                    y_title=y_title,
+                ),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+
+        pages.append((_short_tab_label("ZE2", trace.get("filename")), _render_ze2))
+
     overlay = st.session_state.wave_overlay
     if overlay and overlay.get("overlay"):
-        st.plotly_chart(
-            fig_overlay(
-                overlay["overlay"],
-                title=f"波形疊圖（{overlay.get('norm_method')}）",
-                y_title=y_title,
-            ),
-            use_container_width=True,
-            config={"displayModeBar": False},
-        )
-        if overlay.get("note"):
-            st.caption(overlay["note"])
+
+        def _render_overlay(ov=overlay) -> None:
+            st.plotly_chart(
+                fig_overlay(
+                    ov["overlay"],
+                    title=f"波形疊圖（{ov.get('norm_method')}）",
+                    y_title=y_title,
+                ),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+            if ov.get("note"):
+                st.caption(ov["note"])
+
+        pages.append(("疊圖", _render_overlay))
+
+    if pages:
+        st.caption("每個檔案一個頁籤，圖為全寬顯示。")
+        render_result_pages(pages)
     else:
         empty_slot()
-    card_close()
 
 
 def tab_contractions() -> None:
-    c1, c2, c3 = st.columns([1.4, 0.8, 1.8])
+    c1, c2 = st.columns([1.6, 0.8])
     with c1:
         contraction_method = st.selectbox(
             "收縮判斷",
@@ -715,11 +886,15 @@ def tab_contractions() -> None:
         )
     with c2:
         expected = st.number_input("預期次數", min_value=1, max_value=10, value=3, key="contr_expected")
-    with c3:
-        b1, b2, b3 = st.columns(3)
-        run_d = b1.button("執行 Delsys", key="contr_d", use_container_width=True)
-        run_t = b2.button("執行 TXT", key="contr_t", use_container_width=True)
-        run_both = b3.button("兩邊一起", key="contr_both", type="primary", use_container_width=True)
+
+    b1, b2, b3, b4 = st.columns([1, 1, 1, 1.3])
+    run_d = b1.button("Delsys", key="contr_d", use_container_width=True)
+    run_t = b2.button("ZE1", key="contr_t", use_container_width=True)
+    run_z = b3.button("ZE2", key="contr_z", use_container_width=True)
+    run_both = b4.button("一起", key="contr_both", type="primary", use_container_width=True)
+
+    device_kwargs = device_load_kwargs()
+    apply_bandpass = bool(device_kwargs["apply_bandpass"])
 
     if run_d or run_both:
         name = require_delsys()
@@ -735,9 +910,11 @@ def tab_contractions() -> None:
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    if run_t or run_both:
-        names = require_txt()
-        if names:
+    if run_t or (run_both and st.session_state.selected_txt):
+        names = list(st.session_state.selected_txt or [])
+        if run_t and not names:
+            require_txt()
+        elif names:
             try:
                 results = []
                 for name in names:
@@ -746,68 +923,88 @@ def tab_contractions() -> None:
                         name,
                         expected_count=int(expected),
                         contraction_method=contraction_method,
+                        apply_bandpass=apply_bandpass,
                     )
                     results.append(data["result"])
                 st.session_state.contr_txt = results
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    left, right = st.columns(2)
-    with left:
-        card_open("Delsys 結果")
-        result = st.session_state.contr_delsys
-        if result:
-            st.plotly_chart(
-                fig_contractions(result, color=DELSYS_COLOR, title=result.get("filename", "Delsys")),
-                use_container_width=True,
-                config={"displayModeBar": False},
-            )
-            st.dataframe(contractions_to_rows(result.get("contractions") or []), use_container_width=True)
-        else:
-            empty_slot()
-        card_close()
-    with right:
-        card_open("TXT 結果")
-        results = st.session_state.contr_txt
-        if results:
-            fig = go.Figure()
-            all_rows = []
-            for i, result in enumerate(results):
-                color = TXT_COLORS[i % len(TXT_COLORS)]
-                fig.add_trace(
-                    go.Scattergl(
-                        x=result["times"],
-                        y=result["values"],
-                        mode="lines",
-                        name=result.get("filename"),
-                        line={"color": color, "width": 1.2},
+    if run_z or (run_both and st.session_state.selected_ze2):
+        names = list(st.session_state.selected_ze2 or [])
+        if run_z and not names:
+            require_ze2()
+        elif names:
+            try:
+                results = []
+                for name in names:
+                    data = build_contraction_single(
+                        "ze2",
+                        name,
+                        expected_count=int(expected),
+                        contraction_method=contraction_method,
+                        **device_kwargs,
                     )
-                )
-                for item in result.get("contractions") or []:
-                    fig.add_vrect(x0=item["start"], x1=item["end"], fillcolor=color, opacity=0.12, line_width=0)
-                    row = contractions_to_rows([item])[0]
-                    row["file"] = result.get("filename")
-                    all_rows.append(row)
-            fig.update_layout(**plot_layout(title="TXT 收縮區間", y_title="Norm (robust z)", height=320))
-            ys = []
-            for result in results:
-                ys.extend(result.get("values") or [])
-            if ys:
-                lo = float(np.percentile(ys, 0.5))
-                hi = float(np.percentile(ys, 99.5))
-                pad = max(0.5, 0.08 * (hi - lo))
-                fig.update_yaxes(range=[lo - pad, hi + pad])
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.dataframe(all_rows, use_container_width=True)
-        else:
-            empty_slot()
-        card_close()
+                    results.append(data["result"])
+                st.session_state.contr_ze2 = results
+            except (FileNotFoundError, ValueError) as exc:
+                st.error(str(exc))
+
+    if run_both:
+        require_pair()
+
+    pages: list[tuple[str, Any]] = []
+
+    if st.session_state.contr_delsys:
+        result = st.session_state.contr_delsys
+
+        def _render_delsys(res=result) -> None:
+            st.plotly_chart(
+                fig_contractions(res, color=DELSYS_COLOR, title=res.get("filename", "Delsys")),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+            st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
+
+        pages.append((_short_tab_label("Delsys", result.get("filename")), _render_delsys))
+
+    for i, result in enumerate(st.session_state.contr_txt or []):
+        color = TXT_COLORS[i % len(TXT_COLORS)]
+
+        def _render_txt(res=result, c=color) -> None:
+            st.plotly_chart(
+                fig_contractions(res, color=c, title=res.get("filename", "ZE1")),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+            st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
+
+        pages.append((_short_tab_label("ZE1", result.get("filename")), _render_txt))
+
+    for i, result in enumerate(st.session_state.contr_ze2 or []):
+        color = ZE2_COLORS[i % len(ZE2_COLORS)]
+
+        def _render_ze2(res=result, c=color) -> None:
+            st.plotly_chart(
+                fig_contractions(res, color=c, title=res.get("filename", "ZE2")),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+            st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
+
+        pages.append((_short_tab_label("ZE2", result.get("filename")), _render_ze2))
+
+    if pages:
+        st.caption("每個檔案一個頁籤，圖為全寬顯示。")
+        render_result_pages(pages)
+    else:
+        empty_slot()
 
     render_export_panel(context="contractions")
 
 
 def tab_features() -> None:
-    c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.6])
+    c1, c2, c3 = st.columns([1.3, 1.5, 0.7])
     with c1:
         contraction_method = st.selectbox(
             "收縮判斷",
@@ -830,11 +1027,15 @@ def tab_features() -> None:
         )
     with c3:
         expected = st.number_input("預期次數", min_value=1, max_value=10, value=3, key="feat_expected")
-    with c4:
-        b1, b2, b3 = st.columns(3)
-        run_d = b1.button("執行 Delsys", key="feat_d", use_container_width=True)
-        run_t = b2.button("執行 TXT", key="feat_t", use_container_width=True)
-        run_both = b3.button("兩邊一起（含 Δ）", key="feat_both", type="primary", use_container_width=True)
+
+    b1, b2, b3, b4 = st.columns([1, 1, 1, 1.4])
+    run_d = b1.button("Delsys", key="feat_d", use_container_width=True)
+    run_t = b2.button("ZE1", key="feat_t", use_container_width=True)
+    run_z = b3.button("ZE2", key="feat_z", use_container_width=True)
+    run_both = b4.button("一起（含 Δ）", key="feat_both", type="primary", use_container_width=True)
+
+    device_kwargs = device_load_kwargs()
+    apply_bandpass = bool(device_kwargs["apply_bandpass"])
 
     if run_d:
         name = require_delsys()
@@ -864,85 +1065,171 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
+                        apply_bandpass=apply_bandpass,
                     )
                     tables.append(data)
                 st.session_state.feat_txt_tables = tables
-                st.success(f"TXT 特徵完成（{len(names)} 個）")
+                st.success(f"ZE1 特徵完成（{len(names)} 個）")
+            except (FileNotFoundError, ValueError) as exc:
+                st.error(str(exc))
+
+    if run_z:
+        names = require_ze2()
+        if names:
+            try:
+                tables = []
+                for name in names:
+                    data = build_feature_single(
+                        "ze2",
+                        name,
+                        expected_count=int(expected),
+                        contraction_method=contraction_method,
+                        feature_method=feature_method,
+                        **device_kwargs,
+                    )
+                    tables.append(data)
+                st.session_state.feat_ze2_tables = tables
+                st.success(f"ZE2 特徵完成（{len(names)} 個）")
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
     if run_both:
         pair = require_pair()
         if pair:
-            delsys_name, txt_names = pair
+            delsys_name, txt_names, ze2_names = pair
             try:
-                compare = build_feature_compare(
-                    delsys_name,
-                    txt_names[0],
-                    expected_count=int(expected),
-                    contraction_method=contraction_method,
-                    feature_method=feature_method,
-                )
-                st.session_state.feat_delsys = {
-                    "feature_method": feature_method,
-                    "result": {
-                        "filename": compare["delsys"]["filename"],
-                        "features": compare["delsys"]["features"],
-                        "count": compare["delsys"]["count"],
-                        "series": compare["delsys"].get("series"),
-                    },
-                }
-                tables = [
-                    {
-                        "feature_method": feature_method,
-                        "result": {
-                            "filename": compare["txt"]["filename"],
-                            "features": compare["txt"]["features"],
-                            "count": compare["txt"]["count"],
-                            "series": compare["txt"].get("series"),
-                        },
-                    }
-                ]
-                for name in txt_names[1:]:
-                    extra = build_feature_single(
-                        "txt",
-                        name,
+                if txt_names:
+                    compare = build_feature_compare(
+                        delsys_name,
+                        txt_names[0],
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
+                        apply_bandpass=apply_bandpass,
                     )
-                    tables.append(extra)
-                st.session_state.feat_txt_tables = tables
-                st.session_state.feat_delta = compare
-                st.success(f"特徵比對完成（Δ 以第一個 TXT：{txt_names[0]}）")
+                    st.session_state.feat_delsys = {
+                        "feature_method": feature_method,
+                        "result": {
+                            "filename": compare["delsys"]["filename"],
+                            "features": compare["delsys"]["features"],
+                            "count": compare["delsys"]["count"],
+                            "series": compare["delsys"].get("series"),
+                        },
+                    }
+                    tables = [
+                        {
+                            "feature_method": feature_method,
+                            "result": {
+                                "filename": compare["txt"]["filename"],
+                                "features": compare["txt"]["features"],
+                                "count": compare["txt"]["count"],
+                                "series": compare["txt"].get("series"),
+                            },
+                        }
+                    ]
+                    for name in txt_names[1:]:
+                        tables.append(
+                            build_feature_single(
+                                "txt",
+                                name,
+                                expected_count=int(expected),
+                                contraction_method=contraction_method,
+                                feature_method=feature_method,
+                                apply_bandpass=apply_bandpass,
+                            )
+                        )
+                    st.session_state.feat_txt_tables = tables
+                    st.session_state.feat_delta = compare
+                    delta_label = f"ZE1：{txt_names[0]}"
+                else:
+                    compare = build_feature_compare_ze2(
+                        delsys_name,
+                        ze2_names[0],
+                        expected_count=int(expected),
+                        contraction_method=contraction_method,
+                        feature_method=feature_method,
+                        **device_kwargs,
+                    )
+                    st.session_state.feat_delsys = {
+                        "feature_method": feature_method,
+                        "result": {
+                            "filename": compare["delsys"]["filename"],
+                            "features": compare["delsys"]["features"],
+                            "count": compare["delsys"]["count"],
+                            "series": compare["delsys"].get("series"),
+                        },
+                    }
+                    st.session_state.feat_delta = compare
+                    delta_label = f"ZE2：{ze2_names[0]}"
+
+                if ze2_names:
+                    z_tables = []
+                    for name in ze2_names:
+                        z_tables.append(
+                            build_feature_single(
+                                "ze2",
+                                name,
+                                expected_count=int(expected),
+                                contraction_method=contraction_method,
+                                feature_method=feature_method,
+                                **device_kwargs,
+                            )
+                        )
+                    st.session_state.feat_ze2_tables = z_tables
+                st.success(f"特徵比對完成（Δ 以 {delta_label}）")
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    left, right = st.columns(2)
-    with left:
-        st.subheader("Delsys 特徵")
+    pages: list[tuple[str, Any]] = []
+
+    if st.session_state.feat_delsys:
         data = st.session_state.feat_delsys
-        if data:
-            method = data.get("feature_method") or feature_method
-            st.dataframe(feature_rows(data["result"]["features"], method), use_container_width=True)
-            series_fig = plot_ttri_series(data["result"].get("series"), title=data["result"].get("filename", "Delsys"))
+
+        def _render_delsys(payload=data) -> None:
+            method = payload.get("feature_method") or feature_method
+            st.dataframe(feature_rows(payload["result"]["features"], method), use_container_width=True)
+            series_fig = plot_ttri_series(
+                payload["result"].get("series"),
+                title=payload["result"].get("filename", "Delsys"),
+            )
             if series_fig:
-                st.plotly_chart(series_fig, use_container_width=True)
-        else:
-            st.info("尚未執行")
-    with right:
-        st.subheader("TXT 特徵")
-        tables = st.session_state.feat_txt_tables
-        if tables:
-            for data in tables:
-                method = data.get("feature_method") or feature_method
-                st.markdown(f"**{data['result'].get('filename', 'TXT')}**")
-                st.dataframe(feature_rows(data["result"]["features"], method), use_container_width=True)
-                series_fig = plot_ttri_series(data["result"].get("series"), title=data["result"].get("filename", "TXT"))
-                if series_fig:
-                    st.plotly_chart(series_fig, use_container_width=True)
-        else:
-            st.info("尚未執行")
+                st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
+
+        pages.append((_short_tab_label("Delsys", data["result"].get("filename")), _render_delsys))
+
+    for data in st.session_state.feat_txt_tables or []:
+
+        def _render_txt(payload=data) -> None:
+            method = payload.get("feature_method") or feature_method
+            st.dataframe(feature_rows(payload["result"]["features"], method), use_container_width=True)
+            series_fig = plot_ttri_series(
+                payload["result"].get("series"),
+                title=payload["result"].get("filename", "ZE1"),
+            )
+            if series_fig:
+                st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
+
+        pages.append((_short_tab_label("ZE1", data["result"].get("filename")), _render_txt))
+
+    for data in st.session_state.feat_ze2_tables or []:
+
+        def _render_ze2(payload=data) -> None:
+            method = payload.get("feature_method") or feature_method
+            st.dataframe(feature_rows(payload["result"]["features"], method), use_container_width=True)
+            series_fig = plot_ttri_series(
+                payload["result"].get("series"),
+                title=payload["result"].get("filename", "ZE2"),
+            )
+            if series_fig:
+                st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
+
+        pages.append((_short_tab_label("ZE2", data["result"].get("filename")), _render_ze2))
+
+    if pages:
+        st.caption("每個檔案一個頁籤，圖為全寬顯示。")
+        render_result_pages(pages)
+    else:
+        st.info("尚未執行")
 
     st.subheader("差異對照 Δ")
     delta = st.session_state.feat_delta
@@ -951,15 +1238,20 @@ def tab_features() -> None:
             st.caption(delta["note"])
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
     else:
-        st.info("執行「兩邊一起」後顯示")
+        st.info("執行「一起（含 Δ）」後顯示")
 
     render_export_panel(context="features")
 
 
 def render_export_panel(*, context: str) -> None:
     """Download PDF / CSV exports from current session results."""
-    has_feat = bool(st.session_state.feat_delsys or st.session_state.feat_txt_tables or st.session_state.feat_delta)
-    has_contr = bool(st.session_state.contr_delsys or st.session_state.contr_txt)
+    has_feat = bool(
+        st.session_state.feat_delsys
+        or st.session_state.feat_txt_tables
+        or st.session_state.feat_ze2_tables
+        or st.session_state.feat_delta
+    )
+    has_contr = bool(st.session_state.contr_delsys or st.session_state.contr_txt or st.session_state.contr_ze2)
     if not has_feat and not has_contr:
         return
 
@@ -970,7 +1262,11 @@ def render_export_panel(*, context: str) -> None:
     meta = {
         "頁籤": "特徵" if context == "features" else "收縮區間",
         "Delsys": st.session_state.selected_delsys or "（未選）",
-        "TXT": ", ".join(st.session_state.selected_txt or []) or "（未選）",
+        "ZE1": ", ".join(st.session_state.selected_txt or []) or "（未選）",
+        "ZE2": ", ".join(st.session_state.selected_ze2 or []) or "（未選）",
+        "ZE2 fs": st.session_state.get("ze2_fs"),
+        "ZE2 mV/count": st.session_state.get("ze2_mv"),
+        "濾波": "開啟 20–400 Hz" if st.session_state.get("apply_bandpass", True) else "關閉",
     }
     if st.session_state.feat_delsys:
         meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""
@@ -982,16 +1278,20 @@ def render_export_panel(*, context: str) -> None:
             meta=meta,
             feat_delsys=st.session_state.feat_delsys,
             feat_txt_tables=st.session_state.feat_txt_tables,
+            feat_ze2_tables=st.session_state.feat_ze2_tables,
             feat_delta=st.session_state.feat_delta,
             contr_delsys=st.session_state.contr_delsys,
             contr_txt=st.session_state.contr_txt,
+            contr_ze2=st.session_state.contr_ze2,
         )
         csv_zip = build_results_csv_zip(
             feat_delsys=st.session_state.feat_delsys,
             feat_txt_tables=st.session_state.feat_txt_tables,
+            feat_ze2_tables=st.session_state.feat_ze2_tables,
             feat_delta=st.session_state.feat_delta,
             contr_delsys=st.session_state.contr_delsys,
             contr_txt=st.session_state.contr_txt,
+            contr_ze2=st.session_state.contr_ze2,
         )
     except Exception as exc:  # noqa: BLE001 — show export errors in UI
         st.error(f"產生匯出檔失敗：{exc}")
