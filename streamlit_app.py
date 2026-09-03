@@ -176,13 +176,22 @@ st.markdown(
 
 
 def init_state() -> None:
+    # Migrate legacy shared filter toggle before seeding defaults.
+    if "apply_bandpass" in st.session_state:
+        legacy = bool(st.session_state.pop("apply_bandpass"))
+        if "apply_bandpass_ze1" not in st.session_state:
+            st.session_state.apply_bandpass_ze1 = legacy
+        if "apply_bandpass_ze2" not in st.session_state:
+            st.session_state.apply_bandpass_ze2 = legacy
+
     defaults = {
         "selected_delsys": None,
         "selected_txt": [],
         "selected_ze2": [],
         "ze2_fs": float(ZE2_DEFAULT_FS),
         "ze2_mv": float(ZE2_MV_PER_COUNT),
-        "apply_bandpass": True,
+        "apply_bandpass_ze1": True,
+        "apply_bandpass_ze2": True,
         "wave_delsys": None,
         "wave_txt": None,
         "wave_ze2": None,
@@ -199,6 +208,10 @@ def init_state() -> None:
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    # Refresh ZE2 mV default once (0.00026 → 0.000048).
+    if st.session_state.get("_ze2_mv_ver") != 2:
+        st.session_state.ze2_mv = float(ZE2_MV_PER_COUNT)
+        st.session_state._ze2_mv_ver = 2
 
 
 def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -210,7 +223,18 @@ def device_load_kwargs() -> dict[str, Any]:
     return {
         "ze2_sample_rate": float(st.session_state.get("ze2_fs") or ZE2_DEFAULT_FS),
         "ze2_mv_per_count": float(st.session_state.get("ze2_mv") or ZE2_MV_PER_COUNT),
-        "apply_bandpass": bool(st.session_state.get("apply_bandpass", True)),
+        "apply_bandpass_ze1": bool(st.session_state.get("apply_bandpass_ze1", True)),
+        "apply_bandpass_ze2": bool(st.session_state.get("apply_bandpass_ze2", True)),
+    }
+
+
+def ze2_run_kwargs() -> dict[str, Any]:
+    """Kwargs for ZE2 loaders that take a single apply_bandpass flag."""
+    opts = device_load_kwargs()
+    return {
+        "ze2_sample_rate": opts["ze2_sample_rate"],
+        "ze2_mv_per_count": opts["ze2_mv_per_count"],
+        "apply_bandpass": opts["apply_bandpass_ze2"],
     }
 
 
@@ -259,14 +283,127 @@ def _short_tab_label(prefix: str, filename: str | None, *, max_len: int = 32) ->
     return f"{prefix} · {name}"
 
 
-def render_result_pages(pages: list[tuple[str, Any]]) -> None:
-    """One full-width chart page (Streamlit tab) per file / view."""
+def clear_wave_result(*, source: str, filename: str | None = None) -> None:
+    if source == "delsys":
+        st.session_state.wave_delsys = None
+    elif source == "txt" and filename:
+        st.session_state.wave_txt = [
+            item for item in (st.session_state.wave_txt or []) if item.get("filename") != filename
+        ]
+    elif source == "ze2" and filename:
+        st.session_state.wave_ze2 = [
+            item for item in (st.session_state.wave_ze2 or []) if item.get("filename") != filename
+        ]
+    elif source == "overlay":
+        st.session_state.wave_overlay = None
+
+
+def clear_contr_result(*, source: str, filename: str | None = None) -> None:
+    if source == "delsys":
+        st.session_state.contr_delsys = None
+    elif source == "txt" and filename:
+        st.session_state.contr_txt = [
+            item for item in (st.session_state.contr_txt or []) if item.get("filename") != filename
+        ]
+    elif source == "ze2" and filename:
+        st.session_state.contr_ze2 = [
+            item for item in (st.session_state.contr_ze2 or []) if item.get("filename") != filename
+        ]
+
+
+def clear_feat_result(*, source: str, filename: str | None = None) -> None:
+    if source == "delsys":
+        st.session_state.feat_delsys = None
+        st.session_state.feat_delta = None
+    elif source == "txt" and filename:
+        st.session_state.feat_txt_tables = [
+            item
+            for item in (st.session_state.feat_txt_tables or [])
+            if (item.get("result") or {}).get("filename") != filename
+        ]
+        st.session_state.feat_delta = None
+    elif source == "ze2" and filename:
+        st.session_state.feat_ze2_tables = [
+            item
+            for item in (st.session_state.feat_ze2_tables or [])
+            if (item.get("result") or {}).get("filename") != filename
+        ]
+        st.session_state.feat_delta = None
+
+
+def clear_all_results_for_files(filenames: set[str]) -> None:
+    """Drop cached charts/tables that reference deleted filenames."""
+    if st.session_state.wave_delsys and st.session_state.wave_delsys.get("filename") in filenames:
+        st.session_state.wave_delsys = None
+    st.session_state.wave_txt = [
+        item for item in (st.session_state.wave_txt or []) if item.get("filename") not in filenames
+    ]
+    st.session_state.wave_ze2 = [
+        item for item in (st.session_state.wave_ze2 or []) if item.get("filename") not in filenames
+    ]
+    if st.session_state.wave_overlay:
+        overlay = st.session_state.wave_overlay.get("overlay") or []
+        if any(item.get("filename") in filenames for item in overlay):
+            st.session_state.wave_overlay = None
+
+    if st.session_state.contr_delsys and st.session_state.contr_delsys.get("filename") in filenames:
+        st.session_state.contr_delsys = None
+    st.session_state.contr_txt = [
+        item for item in (st.session_state.contr_txt or []) if item.get("filename") not in filenames
+    ]
+    st.session_state.contr_ze2 = [
+        item for item in (st.session_state.contr_ze2 or []) if item.get("filename") not in filenames
+    ]
+
+    feat_d = st.session_state.feat_delsys
+    if feat_d and (feat_d.get("result") or {}).get("filename") in filenames:
+        st.session_state.feat_delsys = None
+    st.session_state.feat_txt_tables = [
+        item
+        for item in (st.session_state.feat_txt_tables or [])
+        if (item.get("result") or {}).get("filename") not in filenames
+    ]
+    st.session_state.feat_ze2_tables = [
+        item
+        for item in (st.session_state.feat_ze2_tables or [])
+        if (item.get("result") or {}).get("filename") not in filenames
+    ]
+    st.session_state.feat_delta = None
+
+
+def delete_local_data_file(source: str, filename: str) -> bool:
+    """Delete a file only from this project's data folders (not sibling fallbacks)."""
+    name = Path(filename).name
+    root = {"delsys": DATA_DELSYS, "txt": DATA_TXT, "ze2": DATA_ZE2}.get(source)
+    if root is None:
+        return False
+    path = root / name
+    if path.exists() and path.is_file():
+        path.unlink()
+        return True
+    return False
+
+
+def render_result_pages(
+    pages: list[tuple[str, Any]] | list[tuple[str, Any, Any]],
+    *,
+    context: str,
+) -> None:
+    """One full-width chart page (Streamlit tab) per file / view, with optional clear button."""
     if not pages:
         empty_slot()
         return
-    tabs = st.tabs([label for label, _ in pages])
-    for tab, (_, render_fn) in zip(tabs, pages):
+    labels = [item[0] for item in pages]
+    tabs = st.tabs(labels)
+    for idx, (tab, page) in enumerate(zip(tabs, pages)):
+        label = page[0]
+        render_fn = page[1]
+        remove_fn = page[2] if len(page) > 2 else None
         with tab:
+            if remove_fn is not None:
+                if st.button("清除此結果", key=f"clear_result_{context}_{idx}_{label}", type="secondary"):
+                    remove_fn()
+                    st.rerun()
             render_fn()
 
 
@@ -675,13 +812,58 @@ def render_sidebar() -> None:
             )
             st.rerun()
 
+    with st.sidebar.expander("刪除資料檔", expanded=False):
+        st.caption("從本機 data 資料夾刪除檔案（不可復原）。")
+        del_delsys = st.multiselect("刪除 Delsys", options=delsys_names, key="delete_delsys_files")
+        del_txt = st.multiselect("刪除 ZE1 TXT", options=txt_names, key="delete_txt_files")
+        del_ze2 = st.multiselect("刪除 ZE2 TXT", options=ze2_names, key="delete_ze2_files")
+        confirm = st.checkbox("我確認要刪除勾選的檔案", key="delete_confirm")
+        if st.button("刪除勾選檔案", type="primary", use_container_width=True, disabled=not confirm):
+            deleted: list[str] = []
+            for name in del_delsys:
+                if delete_local_data_file("delsys", name):
+                    deleted.append(name)
+            for name in del_txt:
+                if delete_local_data_file("txt", name):
+                    deleted.append(name)
+            for name in del_ze2:
+                if delete_local_data_file("ze2", name):
+                    deleted.append(name)
+            if deleted:
+                nameset = set(deleted)
+                if st.session_state.selected_delsys in nameset:
+                    st.session_state.selected_delsys = None
+                st.session_state.selected_txt = [
+                    name for name in (st.session_state.selected_txt or []) if name not in nameset
+                ]
+                st.session_state.selected_ze2 = [
+                    name for name in (st.session_state.selected_ze2 or []) if name not in nameset
+                ]
+                clear_all_results_for_files(nameset)
+                st.session_state.file_nonce += 1
+                st.session_state.delete_delsys_files = []
+                st.session_state.delete_txt_files = []
+                st.session_state.delete_ze2_files = []
+                st.session_state.delete_confirm = False
+                st.success(f"已刪除 {len(deleted)} 個檔案")
+                st.rerun()
+            else:
+                st.warning("沒有刪除任何檔案（可能不在本機 data 資料夾）")
+
     with st.sidebar.expander("濾波 / ZE2 參數", expanded=False):
         st.selectbox(
-            "ZE1 / ZE2 數位濾波",
+            "ZE1 數位濾波",
             options=[True, False],
-            format_func=lambda on: "開啟（20–400 Hz Butterworth）" if on else "關閉（原始訊號）",
-            key="apply_bandpass",
-            help="僅套用在 ZE1 TXT 與 ZE2；Delsys 不變。",
+            format_func=lambda on: "開啟（20–400 Hz）" if on else "關閉（原始）",
+            key="apply_bandpass_ze1",
+            help="僅套用在 ZE1 TXT。",
+        )
+        st.selectbox(
+            "ZE2 數位濾波",
+            options=[True, False],
+            format_func=lambda on: "開啟（20–400 Hz）" if on else "關閉（原始）",
+            key="apply_bandpass_ze2",
+            help="僅套用在 ZE2 TXT。",
         )
         st.number_input(
             "ZE2 採樣率 Hz",
@@ -695,7 +877,7 @@ def render_sidebar() -> None:
             "ZE2 mV / count",
             min_value=1e-9,
             max_value=1.0,
-            step=0.00001,
+            step=0.000001,
             format="%.6f",
             key="ze2_mv",
             help=f"預設 {ZE2_MV_PER_COUNT}",
@@ -724,8 +906,9 @@ def tab_waveform() -> None:
     run_both = b4.button("一起疊圖", type="primary", use_container_width=True)
 
     y_title = y_title_for_norm(norm_method)
-    device_kwargs = device_load_kwargs()
-    apply_bandpass = bool(device_kwargs["apply_bandpass"])
+    opts = device_load_kwargs()
+    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze2_kwargs = ze2_run_kwargs()
 
     if run_d:
         name = require_delsys()
@@ -747,7 +930,7 @@ def tab_waveform() -> None:
                         "txt",
                         name,
                         norm_method=norm_method,
-                        apply_bandpass=apply_bandpass,
+                        apply_bandpass=apply_bandpass_ze1,
                     )
                     traces.append(data["trace"])
                 st.session_state.wave_txt = traces
@@ -765,7 +948,7 @@ def tab_waveform() -> None:
                         "ze2",
                         name,
                         norm_method=norm_method,
-                        **device_kwargs,
+                        **ze2_kwargs,
                     )
                     traces.append(data["trace"])
                 st.session_state.wave_ze2 = traces
@@ -784,7 +967,10 @@ def tab_waveform() -> None:
                     ze2_names,
                     norm_method=norm_method,
                     align_by_start=align_by_start,
-                    **device_kwargs,
+                    ze2_sample_rate=opts["ze2_sample_rate"],
+                    ze2_mv_per_count=opts["ze2_mv_per_count"],
+                    apply_bandpass_ze1=opts["apply_bandpass_ze1"],
+                    apply_bandpass_ze2=opts["apply_bandpass_ze2"],
                 )
                 st.session_state.wave_delsys = data["delsys"]
                 st.session_state.wave_txt = data.get("txt_list") or []
@@ -794,7 +980,7 @@ def tab_waveform() -> None:
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    pages: list[tuple[str, Any]] = []
+    pages: list[tuple[str, Any, Any]] = []
 
     if st.session_state.wave_delsys:
         trace = st.session_state.wave_delsys
@@ -811,10 +997,17 @@ def tab_waveform() -> None:
                 config={"displayModeBar": True},
             )
 
-        pages.append((_short_tab_label("Delsys", trace.get("filename")), _render_delsys))
+        pages.append(
+            (
+                _short_tab_label("Delsys", trace.get("filename")),
+                _render_delsys,
+                lambda: clear_wave_result(source="delsys"),
+            )
+        )
 
     for i, trace in enumerate(st.session_state.wave_txt or []):
         color = TXT_COLORS[i % len(TXT_COLORS)]
+        fname = trace.get("filename")
 
         def _render_txt(tr=trace, c=color) -> None:
             st.plotly_chart(
@@ -828,10 +1021,17 @@ def tab_waveform() -> None:
                 config={"displayModeBar": True},
             )
 
-        pages.append((_short_tab_label("ZE1", trace.get("filename")), _render_txt))
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_txt,
+                lambda name=fname: clear_wave_result(source="txt", filename=name),
+            )
+        )
 
     for i, trace in enumerate(st.session_state.wave_ze2 or []):
         color = ZE2_COLORS[i % len(ZE2_COLORS)]
+        fname = trace.get("filename")
 
         def _render_ze2(tr=trace, c=color) -> None:
             st.plotly_chart(
@@ -845,7 +1045,13 @@ def tab_waveform() -> None:
                 config={"displayModeBar": True},
             )
 
-        pages.append((_short_tab_label("ZE2", trace.get("filename")), _render_ze2))
+        pages.append(
+            (
+                _short_tab_label("ZE2", fname),
+                _render_ze2,
+                lambda name=fname: clear_wave_result(source="ze2", filename=name),
+            )
+        )
 
     overlay = st.session_state.wave_overlay
     if overlay and overlay.get("overlay"):
@@ -863,11 +1069,19 @@ def tab_waveform() -> None:
             if ov.get("note"):
                 st.caption(ov["note"])
 
-        pages.append(("疊圖", _render_overlay))
+        pages.append(("疊圖", _render_overlay, lambda: clear_wave_result(source="overlay")))
 
     if pages:
-        st.caption("每個檔案一個頁籤，圖為全寬顯示。")
-        render_result_pages(pages)
+        st.caption("每個檔案一個頁籤；可按「清除此結果」移除圖表。")
+        c_clear, _ = st.columns([1, 3])
+        with c_clear:
+            if st.button("清除全部波形結果", key="clear_all_wave"):
+                st.session_state.wave_delsys = None
+                st.session_state.wave_txt = None
+                st.session_state.wave_ze2 = None
+                st.session_state.wave_overlay = None
+                st.rerun()
+        render_result_pages(pages, context="wave")
     else:
         empty_slot()
 
@@ -893,8 +1107,9 @@ def tab_contractions() -> None:
     run_z = b3.button("ZE2", key="contr_z", use_container_width=True)
     run_both = b4.button("一起", key="contr_both", type="primary", use_container_width=True)
 
-    device_kwargs = device_load_kwargs()
-    apply_bandpass = bool(device_kwargs["apply_bandpass"])
+    opts = device_load_kwargs()
+    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze2_kwargs = ze2_run_kwargs()
 
     if run_d or run_both:
         name = require_delsys()
@@ -923,7 +1138,7 @@ def tab_contractions() -> None:
                         name,
                         expected_count=int(expected),
                         contraction_method=contraction_method,
-                        apply_bandpass=apply_bandpass,
+                        apply_bandpass=apply_bandpass_ze1,
                     )
                     results.append(data["result"])
                 st.session_state.contr_txt = results
@@ -943,7 +1158,7 @@ def tab_contractions() -> None:
                         name,
                         expected_count=int(expected),
                         contraction_method=contraction_method,
-                        **device_kwargs,
+                        **ze2_kwargs,
                     )
                     results.append(data["result"])
                 st.session_state.contr_ze2 = results
@@ -953,7 +1168,7 @@ def tab_contractions() -> None:
     if run_both:
         require_pair()
 
-    pages: list[tuple[str, Any]] = []
+    pages: list[tuple[str, Any, Any]] = []
 
     if st.session_state.contr_delsys:
         result = st.session_state.contr_delsys
@@ -966,10 +1181,17 @@ def tab_contractions() -> None:
             )
             st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
 
-        pages.append((_short_tab_label("Delsys", result.get("filename")), _render_delsys))
+        pages.append(
+            (
+                _short_tab_label("Delsys", result.get("filename")),
+                _render_delsys,
+                lambda: clear_contr_result(source="delsys"),
+            )
+        )
 
     for i, result in enumerate(st.session_state.contr_txt or []):
         color = TXT_COLORS[i % len(TXT_COLORS)]
+        fname = result.get("filename")
 
         def _render_txt(res=result, c=color) -> None:
             st.plotly_chart(
@@ -979,10 +1201,17 @@ def tab_contractions() -> None:
             )
             st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
 
-        pages.append((_short_tab_label("ZE1", result.get("filename")), _render_txt))
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_txt,
+                lambda name=fname: clear_contr_result(source="txt", filename=name),
+            )
+        )
 
     for i, result in enumerate(st.session_state.contr_ze2 or []):
         color = ZE2_COLORS[i % len(ZE2_COLORS)]
+        fname = result.get("filename")
 
         def _render_ze2(res=result, c=color) -> None:
             st.plotly_chart(
@@ -992,11 +1221,24 @@ def tab_contractions() -> None:
             )
             st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
 
-        pages.append((_short_tab_label("ZE2", result.get("filename")), _render_ze2))
+        pages.append(
+            (
+                _short_tab_label("ZE2", fname),
+                _render_ze2,
+                lambda name=fname: clear_contr_result(source="ze2", filename=name),
+            )
+        )
 
     if pages:
-        st.caption("每個檔案一個頁籤，圖為全寬顯示。")
-        render_result_pages(pages)
+        st.caption("每個檔案一個頁籤；可按「清除此結果」移除圖表。")
+        c_clear, _ = st.columns([1, 3])
+        with c_clear:
+            if st.button("清除全部收縮結果", key="clear_all_contr"):
+                st.session_state.contr_delsys = None
+                st.session_state.contr_txt = None
+                st.session_state.contr_ze2 = None
+                st.rerun()
+        render_result_pages(pages, context="contr")
     else:
         empty_slot()
 
@@ -1034,8 +1276,9 @@ def tab_features() -> None:
     run_z = b3.button("ZE2", key="feat_z", use_container_width=True)
     run_both = b4.button("一起（含 Δ）", key="feat_both", type="primary", use_container_width=True)
 
-    device_kwargs = device_load_kwargs()
-    apply_bandpass = bool(device_kwargs["apply_bandpass"])
+    opts = device_load_kwargs()
+    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze2_kwargs = ze2_run_kwargs()
 
     if run_d:
         name = require_delsys()
@@ -1065,7 +1308,7 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
-                        apply_bandpass=apply_bandpass,
+                        apply_bandpass=apply_bandpass_ze1,
                     )
                     tables.append(data)
                 st.session_state.feat_txt_tables = tables
@@ -1085,7 +1328,7 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
-                        **device_kwargs,
+                        **ze2_kwargs,
                     )
                     tables.append(data)
                 st.session_state.feat_ze2_tables = tables
@@ -1105,7 +1348,7 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
-                        apply_bandpass=apply_bandpass,
+                        apply_bandpass=apply_bandpass_ze1,
                     )
                     st.session_state.feat_delsys = {
                         "feature_method": feature_method,
@@ -1135,7 +1378,7 @@ def tab_features() -> None:
                                 expected_count=int(expected),
                                 contraction_method=contraction_method,
                                 feature_method=feature_method,
-                                apply_bandpass=apply_bandpass,
+                                apply_bandpass=apply_bandpass_ze1,
                             )
                         )
                     st.session_state.feat_txt_tables = tables
@@ -1148,7 +1391,7 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
-                        **device_kwargs,
+                        **ze2_kwargs,
                     )
                     st.session_state.feat_delsys = {
                         "feature_method": feature_method,
@@ -1172,7 +1415,7 @@ def tab_features() -> None:
                                 expected_count=int(expected),
                                 contraction_method=contraction_method,
                                 feature_method=feature_method,
-                                **device_kwargs,
+                                **ze2_kwargs,
                             )
                         )
                     st.session_state.feat_ze2_tables = z_tables
@@ -1180,7 +1423,7 @@ def tab_features() -> None:
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    pages: list[tuple[str, Any]] = []
+    pages: list[tuple[str, Any, Any]] = []
 
     if st.session_state.feat_delsys:
         data = st.session_state.feat_delsys
@@ -1195,9 +1438,16 @@ def tab_features() -> None:
             if series_fig:
                 st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
 
-        pages.append((_short_tab_label("Delsys", data["result"].get("filename")), _render_delsys))
+        pages.append(
+            (
+                _short_tab_label("Delsys", data["result"].get("filename")),
+                _render_delsys,
+                lambda: clear_feat_result(source="delsys"),
+            )
+        )
 
     for data in st.session_state.feat_txt_tables or []:
+        fname = data["result"].get("filename")
 
         def _render_txt(payload=data) -> None:
             method = payload.get("feature_method") or feature_method
@@ -1209,9 +1459,16 @@ def tab_features() -> None:
             if series_fig:
                 st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
 
-        pages.append((_short_tab_label("ZE1", data["result"].get("filename")), _render_txt))
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_txt,
+                lambda name=fname: clear_feat_result(source="txt", filename=name),
+            )
+        )
 
     for data in st.session_state.feat_ze2_tables or []:
+        fname = data["result"].get("filename")
 
         def _render_ze2(payload=data) -> None:
             method = payload.get("feature_method") or feature_method
@@ -1223,11 +1480,25 @@ def tab_features() -> None:
             if series_fig:
                 st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
 
-        pages.append((_short_tab_label("ZE2", data["result"].get("filename")), _render_ze2))
+        pages.append(
+            (
+                _short_tab_label("ZE2", fname),
+                _render_ze2,
+                lambda name=fname: clear_feat_result(source="ze2", filename=name),
+            )
+        )
 
     if pages:
-        st.caption("每個檔案一個頁籤，圖為全寬顯示。")
-        render_result_pages(pages)
+        st.caption("每個檔案一個頁籤；可按「清除此結果」移除圖表。")
+        c_clear, _ = st.columns([1, 3])
+        with c_clear:
+            if st.button("清除全部特徵結果", key="clear_all_feat"):
+                st.session_state.feat_delsys = None
+                st.session_state.feat_txt_tables = None
+                st.session_state.feat_ze2_tables = None
+                st.session_state.feat_delta = None
+                st.rerun()
+        render_result_pages(pages, context="feat")
     else:
         st.info("尚未執行")
 
@@ -1237,6 +1508,9 @@ def tab_features() -> None:
         if delta.get("note"):
             st.caption(delta["note"])
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
+        if st.button("清除 Δ 對照", key="clear_feat_delta"):
+            st.session_state.feat_delta = None
+            st.rerun()
     else:
         st.info("執行「一起（含 Δ）」後顯示")
 
@@ -1266,7 +1540,8 @@ def render_export_panel(*, context: str) -> None:
         "ZE2": ", ".join(st.session_state.selected_ze2 or []) or "（未選）",
         "ZE2 fs": st.session_state.get("ze2_fs"),
         "ZE2 mV/count": st.session_state.get("ze2_mv"),
-        "濾波": "開啟 20–400 Hz" if st.session_state.get("apply_bandpass", True) else "關閉",
+        "ZE1 濾波": "開" if st.session_state.get("apply_bandpass_ze1", True) else "關",
+        "ZE2 濾波": "開" if st.session_state.get("apply_bandpass_ze2", True) else "關",
     }
     if st.session_state.feat_delsys:
         meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""

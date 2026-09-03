@@ -163,9 +163,15 @@ def build_waveform_overlay(
     align_by_start: bool = True,
     ze2_sample_rate: float | None = None,
     ze2_mv_per_count: float | None = None,
-    apply_bandpass: bool = True,
+    apply_bandpass_ze1: bool = True,
+    apply_bandpass_ze2: bool = True,
+    apply_bandpass: bool | None = None,
 ) -> dict[str, Any]:
     """Overlay one Delsys file with ZE1 TXT and/or ZE2 files, optionally aligned by start time."""
+    # Backward compatible: single apply_bandpass applies to both when provided.
+    if apply_bandpass is not None:
+        apply_bandpass_ze1 = apply_bandpass
+        apply_bandpass_ze2 = apply_bandpass
     txt_names = list(txt_names or [])
     ze2_names = list(ze2_names or [])
     if not txt_names and not ze2_names:
@@ -181,7 +187,7 @@ def build_waveform_overlay(
     traces: list[dict[str, Any]] = [_trace_from_raw(left, left_n, source="delsys")]
 
     for name in txt_names:
-        right = load_txt_emg(name, for_plot=True, year=year, apply_bandpass=apply_bandpass)
+        right = load_txt_emg(name, for_plot=True, year=year, apply_bandpass=apply_bandpass_ze1)
         right_n = normalize_trace(right, method=norm_method)
         traces.append(_trace_from_raw(right, right_n, source="txt"))
 
@@ -192,7 +198,7 @@ def build_waveform_overlay(
             year=year,
             sample_rate=ze2_sample_rate,
             mv_per_count=ze2_mv_per_count,
-            apply_bandpass=apply_bandpass,
+            apply_bandpass=apply_bandpass_ze2,
         )
         right_n = normalize_trace(right, method=norm_method)
         traces.append(_trace_from_raw(right, right_n, source="ze2"))
@@ -214,10 +220,15 @@ def build_waveform_overlay(
         )
     else:
         note_parts.append("多來源單位已換算後再正規化疊圖。")
-    if apply_bandpass:
-        note_parts.append("ZE1 / ZE2 已套用 20–400 Hz 帶通濾波。")
+    if apply_bandpass_ze1 or apply_bandpass_ze2:
+        parts = []
+        if txt_names:
+            parts.append("ZE1 " + ("開" if apply_bandpass_ze1 else "關"))
+        if ze2_names:
+            parts.append("ZE2 " + ("開" if apply_bandpass_ze2 else "關"))
+        note_parts.append("帶通濾波（20–400 Hz）：" + "、".join(parts) + "。")
     else:
-        note_parts.append("ZE1 / ZE2 未套用帶通濾波。")
+        note_parts.append("ZE1 / ZE2 皆未套用帶通濾波。")
     if align_by_start and align_info.get("aligned"):
         note_parts.append(
             f"已依起始時間對齊（參考點 {align_info.get('reference_label')}）。"

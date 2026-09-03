@@ -14,8 +14,8 @@ BPM_RE = re.compile(r"(?P<bpm>\d+(?:\.\d+)?)\s*bpm", re.IGNORECASE)
 CHANNEL_RE = re.compile(r"(?:^|_)Ch(?P<ch>[12])(?:_|\.|$)", re.IGNORECASE)
 
 DEFAULT_SAMPLE_RATE = 1000.0
-# Provisional ADC count → mV (same order as ZE1); calibrate against Delsys later.
-ZE2_MV_PER_COUNT = 0.00026
+# ADC count → mV (provisional; calibrate against Delsys as needed).
+ZE2_MV_PER_COUNT = 0.000048
 ZE2_BANDPASS_HZ = BANDPASS_HZ
 ZE2_BANDPASS_ORDER = BANDPASS_ORDER
 
