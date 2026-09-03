@@ -137,11 +137,32 @@ st.markdown(
         gap: 0.35rem;
         border-bottom: 1px solid var(--line);
         margin-bottom: 0.8rem;
+        flex-wrap: wrap;
+        overflow-x: auto;
+        row-gap: 0.25rem;
       }
       div[data-testid="stTabs"] button[data-baseweb="tab"] {
         background: transparent;
         color: var(--muted);
         border-radius: 8px 8px 0 0;
+        white-space: normal !important;
+        height: auto !important;
+        min-height: 2.4rem;
+        max-width: none !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        line-height: 1.25;
+        padding-top: 0.45rem;
+        padding-bottom: 0.45rem;
+        align-items: flex-start;
+      }
+      div[data-testid="stTabs"] button[data-baseweb="tab"] > div,
+      div[data-testid="stTabs"] button[data-baseweb="tab"] p,
+      div[data-testid="stTabs"] button[data-baseweb="tab"] span {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: unset !important;
+        word-break: break-all;
       }
       div[data-testid="stTabs"] button[aria-selected="true"] {
         color: var(--text);
@@ -277,9 +298,10 @@ def empty_slot(text: str = "尚未執行") -> None:
     st.markdown(f'<p class="empty-slot">{text}</p>', unsafe_allow_html=True)
 
 
-def _short_tab_label(prefix: str, filename: str | None, *, max_len: int = 32) -> str:
+def _short_tab_label(prefix: str, filename: str | None, *, max_len: int | None = None) -> str:
+    """Tab label with full basename (max_len kept for compatibility; unused)."""
     name = Path(str(filename or "未命名")).name
-    if len(name) > max_len:
+    if max_len is not None and len(name) > max_len:
         name = name[: max_len - 1] + "…"
     return f"{prefix} · {name}"
 
@@ -619,8 +641,6 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
         return None
 
     short_name = Path(str(title)).name
-    if len(short_name) > 42:
-        short_name = short_name[:39] + "..."
     aemg = series.get("aemg")
     subtitle = f"{short_name}  ·  AEMG={aemg}" if aemg is not None else short_name
 
