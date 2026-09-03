@@ -204,6 +204,7 @@ def init_state() -> None:
         "feat_ze2_tables": None,
         "feat_delta": None,
         "file_nonce": 0,
+        "hidden_files": [],
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -371,17 +372,43 @@ def clear_all_results_for_files(filenames: set[str]) -> None:
     st.session_state.feat_delta = None
 
 
-def delete_local_data_file(source: str, filename: str) -> bool:
-    """Delete a file only from this project's data folders (not sibling fallbacks)."""
-    name = Path(filename).name
-    root = {"delsys": DATA_DELSYS, "txt": DATA_TXT, "ze2": DATA_ZE2}.get(source)
-    if root is None:
-        return False
-    path = root / name
-    if path.exists() and path.is_file():
-        path.unlink()
-        return True
-    return False
+def hidden_file_set() -> set[str]:
+    return set(st.session_state.get("hidden_files") or [])
+
+
+def hide_files_from_picker(names: Sequence[str]) -> int:
+    """Remove filenames from selectable lists only (disk files stay)."""
+    nameset = {str(name) for name in names if name}
+    if not nameset:
+        return 0
+    hidden = hidden_file_set() | nameset
+    st.session_state.hidden_files = sorted(hidden)
+    if st.session_state.selected_delsys in nameset:
+        st.session_state.selected_delsys = None
+    st.session_state.selected_txt = [
+        name for name in (st.session_state.selected_txt or []) if name not in nameset
+    ]
+    st.session_state.selected_ze2 = [
+        name for name in (st.session_state.selected_ze2 or []) if name not in nameset
+    ]
+    clear_all_results_for_files(nameset)
+    return len(nameset)
+
+
+def restore_files_to_picker(names: Sequence[str] | None = None) -> int:
+    """Put previously hidden names back into selectable lists."""
+    hidden = hidden_file_set()
+    if not hidden:
+        return 0
+    if names is None:
+        restored = len(hidden)
+        st.session_state.hidden_files = []
+        return restored
+    nameset = {str(name) for name in names if name}
+    keep = sorted(hidden - nameset)
+    restored = len(hidden) - len(keep)
+    st.session_state.hidden_files = keep
+    return restored
 
 
 def render_result_pages(
@@ -511,7 +538,7 @@ def fig_contractions(result: dict[str, Any], *, color: str, title: str, height: 
             }
         )
     fig.update_layout(
-        **plot_layout(title=title, y_title="Norm (robust z)", height=height),
+        **plot_layout(title=title, y_title=str(result.get("unit") or "mV"), height=height),
         shapes=shapes,
     )
     # Keep rare spikes from dominating the visible scale.
@@ -519,7 +546,7 @@ def fig_contractions(result: dict[str, Any], *, color: str, title: str, height: 
     if ys:
         lo = float(np.percentile(ys, 0.5))
         hi = float(np.percentile(ys, 99.5))
-        pad = max(0.5, 0.08 * (hi - lo))
+        pad = max(0.02, 0.08 * (hi - lo))
         fig.update_yaxes(range=[lo - pad, hi + pad])
     return fig
 
@@ -748,13 +775,21 @@ def render_sidebar() -> None:
         st.session_state.file_nonce += 1
 
     delsys_files, txt_files, ze2_files = refresh_file_lists()
-    delsys_names = [item["name"] for item in delsys_files]
-    txt_names = [item["name"] for item in txt_files]
-    ze2_names = [item["name"] for item in ze2_files]
+    hidden = hidden_file_set()
+    delsys_names_all = [item["name"] for item in delsys_files]
+    txt_names_all = [item["name"] for item in txt_files]
+    ze2_names_all = [item["name"] for item in ze2_files]
+    delsys_names = [name for name in delsys_names_all if name not in hidden]
+    txt_names = [name for name in txt_names_all if name not in hidden]
+    ze2_names = [name for name in ze2_names_all if name not in hidden]
+    hidden_delsys = [name for name in delsys_names_all if name in hidden]
+    hidden_txt = [name for name in txt_names_all if name in hidden]
+    hidden_ze2 = [name for name in ze2_names_all if name in hidden]
+    hidden_total = len(hidden_delsys) + len(hidden_txt) + len(hidden_ze2)
 
     st.sidebar.markdown(f"##### Delsys CSV（{len(delsys_names)}）")
     if not delsys_names:
-        st.sidebar.info("尚無 CSV")
+        st.sidebar.info("尚無可選 CSV" if delsys_names_all else "尚無 CSV")
         st.session_state.selected_delsys = None
     else:
         if st.session_state.selected_delsys not in delsys_names:
@@ -768,7 +803,7 @@ def render_sidebar() -> None:
 
     st.sidebar.markdown(f"##### 自研 ZE1 TXT（{len(txt_names)}，可多選）")
     if not txt_names:
-        st.sidebar.info("尚無 ZE1 TXT")
+        st.sidebar.info("尚無可選 ZE1 TXT" if txt_names_all else "尚無 ZE1 TXT")
         st.session_state.selected_txt = []
     else:
         st.session_state.selected_txt = [
@@ -791,7 +826,7 @@ def render_sidebar() -> None:
 
     st.sidebar.markdown(f"##### ZE2 TXT（{len(ze2_names)}，可多選）")
     if not ze2_names:
-        st.sidebar.info("尚無 ZE2 TXT")
+        st.sidebar.info("尚無可選 ZE2 TXT" if ze2_names_all else "尚無 ZE2 TXT")
         st.session_state.selected_ze2 = []
     else:
         st.session_state.selected_ze2 = [
@@ -812,43 +847,60 @@ def render_sidebar() -> None:
             )
             st.rerun()
 
-    with st.sidebar.expander("刪除資料檔", expanded=False):
-        st.caption("從本機 data 資料夾刪除檔案（不可復原）。")
-        del_delsys = st.multiselect("刪除 Delsys", options=delsys_names, key="delete_delsys_files")
-        del_txt = st.multiselect("刪除 ZE1 TXT", options=txt_names, key="delete_txt_files")
-        del_ze2 = st.multiselect("刪除 ZE2 TXT", options=ze2_names, key="delete_ze2_files")
-        confirm = st.checkbox("我確認要刪除勾選的檔案", key="delete_confirm")
-        if st.button("刪除勾選檔案", type="primary", use_container_width=True, disabled=not confirm):
-            deleted: list[str] = []
-            for name in del_delsys:
-                if delete_local_data_file("delsys", name):
-                    deleted.append(name)
-            for name in del_txt:
-                if delete_local_data_file("txt", name):
-                    deleted.append(name)
-            for name in del_ze2:
-                if delete_local_data_file("ze2", name):
-                    deleted.append(name)
-            if deleted:
-                nameset = set(deleted)
-                if st.session_state.selected_delsys in nameset:
-                    st.session_state.selected_delsys = None
-                st.session_state.selected_txt = [
-                    name for name in (st.session_state.selected_txt or []) if name not in nameset
-                ]
-                st.session_state.selected_ze2 = [
-                    name for name in (st.session_state.selected_ze2 or []) if name not in nameset
-                ]
-                clear_all_results_for_files(nameset)
-                st.session_state.file_nonce += 1
-                st.session_state.delete_delsys_files = []
-                st.session_state.delete_txt_files = []
-                st.session_state.delete_ze2_files = []
-                st.session_state.delete_confirm = False
-                st.success(f"已刪除 {len(deleted)} 個檔案")
+    with st.sidebar.expander(
+        f"整理可選檔案（已隱藏 {hidden_total}）",
+        expanded=False,
+    ):
+        st.caption("只從選單移出，不刪除 data 資料夾內的實體檔。")
+        hide_delsys = st.multiselect(
+            "移出 Delsys",
+            options=delsys_names,
+            key="hide_delsys_files",
+        )
+        hide_txt = st.multiselect(
+            "移出 ZE1 TXT",
+            options=txt_names,
+            key="hide_txt_files",
+        )
+        hide_ze2 = st.multiselect(
+            "移出 ZE2 TXT",
+            options=ze2_names,
+            key="hide_ze2_files",
+        )
+        if st.button("從選單移出", use_container_width=True):
+            n = hide_files_from_picker([*hide_delsys, *hide_txt, *hide_ze2])
+            st.session_state.hide_delsys_files = []
+            st.session_state.hide_txt_files = []
+            st.session_state.hide_ze2_files = []
+            if n:
+                st.success(f"已移出 {n} 個檔案")
                 st.rerun()
             else:
-                st.warning("沒有刪除任何檔案（可能不在本機 data 資料夾）")
+                st.info("請先勾選要移出的檔案")
+
+        restore_options = [*hidden_delsys, *hidden_txt, *hidden_ze2]
+        if restore_options:
+            restore_pick = st.multiselect(
+                "恢復到選單",
+                options=restore_options,
+                key="restore_hidden_files",
+            )
+            c_restore, c_all = st.columns(2)
+            with c_restore:
+                if st.button("恢復勾選", use_container_width=True):
+                    n = restore_files_to_picker(restore_pick)
+                    st.session_state.restore_hidden_files = []
+                    if n:
+                        st.success(f"已恢復 {n} 個")
+                        st.rerun()
+                    else:
+                        st.info("請先勾選要恢復的檔案")
+            with c_all:
+                if st.button("全部恢復", use_container_width=True):
+                    n = restore_files_to_picker(None)
+                    st.session_state.restore_hidden_files = []
+                    st.success(f"已恢復 {n} 個")
+                    st.rerun()
 
     with st.sidebar.expander("濾波 / ZE2 參數", expanded=False):
         st.selectbox(

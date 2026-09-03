@@ -288,7 +288,7 @@ def build_contraction_single(
             ze2_mv_per_count=ze2_mv_per_count,
             apply_bandpass=apply_bandpass,
         ),
-        method="robust_zscore",
+        method="none",
     )
     return {
         "mode": "contractions_single",
@@ -299,6 +299,7 @@ def build_contraction_single(
             "filename": full["filename"],
             "signal_name": full["signal_name"],
             "sample_rate": full["sample_rate"],
+            "unit": plot.get("unit") or full.get("unit") or "mV",
             "contractions": contractions,
             "times": plot["times"],
             "values": plot["values"],
@@ -380,8 +381,8 @@ def build_contraction_compare(
         sample_rate=right["sample_rate"],
         source="txt",
     )
-    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="robust_zscore")
-    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="robust_zscore")
+    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="none")
+    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="none")
     return {
         "mode": "contractions",
         "expected_count": expected_count,
@@ -390,6 +391,7 @@ def build_contraction_compare(
             "filename": left["filename"],
             "signal_name": left["signal_name"],
             "sample_rate": left["sample_rate"],
+            "unit": left_plot.get("unit") or left.get("unit") or "mV",
             "contractions": left_c,
             "times": left_plot["times"],
             "values": left_plot["values"],
@@ -398,6 +400,7 @@ def build_contraction_compare(
             "filename": right["filename"],
             "signal_name": right["signal_name"],
             "sample_rate": right["sample_rate"],
+            "unit": right_plot.get("unit") or right.get("unit") or "mV",
             "contractions": right_c,
             "times": right_plot["times"],
             "values": right_plot["values"],
