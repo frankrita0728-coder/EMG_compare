@@ -922,21 +922,7 @@ def render_sidebar() -> None:
                     st.success(f"已恢復 {n} 個")
                     st.rerun()
 
-    with st.sidebar.expander("濾波 / ZE2 參數", expanded=False):
-        st.selectbox(
-            "ZE1 數位濾波",
-            options=[True, False],
-            format_func=lambda on: "開啟（20–400 Hz）" if on else "關閉（原始）",
-            key="apply_bandpass_ze1",
-            help="僅套用在 ZE1 TXT。",
-        )
-        st.selectbox(
-            "ZE2 數位濾波",
-            options=[True, False],
-            format_func=lambda on: "開啟（20–400 Hz）" if on else "關閉（原始）",
-            key="apply_bandpass_ze2",
-            help="僅套用在 ZE2 TXT。",
-        )
+    with st.sidebar.expander("ZE2 參數", expanded=False):
         st.number_input(
             "ZE2 採樣率 Hz",
             min_value=1.0,
@@ -956,6 +942,75 @@ def render_sidebar() -> None:
         )
 
 
+def refresh_existing_waveforms(*, norm_method: str, align_by_start: bool) -> None:
+    """Recompute any cached ZE1/ZE2/overlay waves when filter toggles change."""
+    opts = device_load_kwargs()
+    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze2_kwargs = ze2_run_kwargs()
+
+    txt_names = [
+        str(item.get("filename"))
+        for item in (st.session_state.wave_txt or [])
+        if item.get("filename")
+    ]
+    ze2_names = [
+        str(item.get("filename"))
+        for item in (st.session_state.wave_ze2 or [])
+        if item.get("filename")
+    ]
+    overlay = st.session_state.wave_overlay
+    delsys_name = None
+    if overlay and overlay.get("delsys"):
+        delsys_name = overlay["delsys"].get("filename")
+    elif st.session_state.wave_delsys:
+        delsys_name = st.session_state.wave_delsys.get("filename")
+
+    try:
+        if overlay and delsys_name and (txt_names or ze2_names):
+            data = build_waveform_overlay(
+                delsys_name,
+                txt_names,
+                ze2_names,
+                norm_method=norm_method,
+                align_by_start=align_by_start,
+                ze2_sample_rate=opts["ze2_sample_rate"],
+                ze2_mv_per_count=opts["ze2_mv_per_count"],
+                apply_bandpass_ze1=opts["apply_bandpass_ze1"],
+                apply_bandpass_ze2=opts["apply_bandpass_ze2"],
+            )
+            st.session_state.wave_delsys = data["delsys"]
+            st.session_state.wave_txt = data.get("txt_list") or []
+            st.session_state.wave_ze2 = data.get("ze2_list") or []
+            st.session_state.wave_overlay = data
+            return
+
+        if txt_names:
+            traces = []
+            for name in txt_names:
+                data = build_waveform_single(
+                    "txt",
+                    name,
+                    norm_method=norm_method,
+                    apply_bandpass=apply_bandpass_ze1,
+                )
+                traces.append(data["trace"])
+            st.session_state.wave_txt = traces
+
+        if ze2_names:
+            traces = []
+            for name in ze2_names:
+                data = build_waveform_single(
+                    "ze2",
+                    name,
+                    norm_method=norm_method,
+                    **ze2_kwargs,
+                )
+                traces.append(data["trace"])
+            st.session_state.wave_ze2 = traces
+    except (FileNotFoundError, ValueError) as exc:
+        st.warning(f"濾波切換重算失敗：{exc}")
+
+
 def tab_waveform() -> None:
     c1, c2 = st.columns([1.2, 1.2])
     with c1:
@@ -967,9 +1022,24 @@ def tab_waveform() -> None:
                 "maxabs": "Max-abs",
                 "none": "原始值（不正規化）",
             }[x],
+            key="wave_norm_method",
         )
     with c2:
-        align_by_start = st.checkbox("依起始時間對齊", value=True)
+        align_by_start = st.checkbox("依起始時間對齊", value=True, key="wave_align_by_start")
+
+    f1, f2 = st.columns(2)
+    with f1:
+        st.toggle(
+            "ZE1 數位濾波（20–400 Hz）",
+            key="apply_bandpass_ze1",
+            help="切換後會立即重繪已顯示的 ZE1／疊圖。",
+        )
+    with f2:
+        st.toggle(
+            "ZE2 數位濾波（20–400 Hz）",
+            key="apply_bandpass_ze2",
+            help="切換後會立即重繪已顯示的 ZE2／疊圖。",
+        )
 
     b1, b2, b3, b4 = st.columns([1, 1, 1, 1.3])
     run_d = b1.button("Delsys", use_container_width=True)
@@ -981,6 +1051,22 @@ def tab_waveform() -> None:
     opts = device_load_kwargs()
     apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
     ze2_kwargs = ze2_run_kwargs()
+
+    wave_fp = (
+        bool(opts["apply_bandpass_ze1"]),
+        bool(opts["apply_bandpass_ze2"]),
+        norm_method,
+        bool(align_by_start),
+    )
+    prev_fp = st.session_state.get("_wave_display_fp")
+    has_device_wave = bool(
+        st.session_state.wave_txt or st.session_state.wave_ze2 or st.session_state.wave_overlay
+    )
+    if prev_fp is not None and prev_fp != wave_fp and has_device_wave and not (
+        run_d or run_t or run_z or run_both
+    ):
+        refresh_existing_waveforms(norm_method=norm_method, align_by_start=align_by_start)
+    st.session_state._wave_display_fp = wave_fp
 
     if run_d:
         name = require_delsys()
