@@ -113,6 +113,7 @@ def load_txt_emg(
     for_plot: bool = False,
     year: int | None = None,
     apply_bandpass: bool = True,
+    mv_per_count: float | None = None,
 ) -> dict[str, Any]:
     path = find_txt_path(filename)
     if path is None:
@@ -125,7 +126,8 @@ def load_txt_emg(
 
     samples = load_column(path)
     sample_rate = parse_sample_rate(path)
-    values = [float(v) * TXT_MV_PER_COUNT for v in samples]
+    scale = float(mv_per_count) if mv_per_count and mv_per_count > 0 else TXT_MV_PER_COUNT
+    values = [float(v) * scale for v in samples]
     filter_info: dict[str, Any] = {"applied": False}
     if apply_bandpass:
         values, filter_info = bandpass_filter(values, sample_rate)
@@ -142,7 +144,7 @@ def load_txt_emg(
     metadata: dict[str, Any] = {
         "ExgSampleRate": f"{sample_rate} Hz",
         "Start time": start_info.get("start_label") or "",
-        "Scale": f"{TXT_MV_PER_COUNT} mV/count",
+        "Scale": f"{scale} mV/count",
     }
     filter_label = filter_metadata_label(filter_info)
     if filter_label:

@@ -20,7 +20,7 @@ from compare import (
     build_waveform_single,
 )
 from parsers.delsys import list_delsys_files
-from parsers.txt_device import list_txt_files
+from parsers.txt_device import TXT_MV_PER_COUNT, list_txt_files
 from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
 from parsers.ze2_txt import ZE2_MV_PER_COUNT, list_ze2_files
 from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2, ensure_data_dirs
@@ -211,6 +211,7 @@ def init_state() -> None:
         "selected_ze2": [],
         "ze2_fs": float(ZE2_DEFAULT_FS),
         "ze2_mv": float(ZE2_MV_PER_COUNT),
+        "ze1_mv": float(TXT_MV_PER_COUNT),
         "apply_bandpass_ze1": True,
         "apply_bandpass_ze2": True,
         "wave_delsys": None,
@@ -243,10 +244,20 @@ def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]], li
 
 def device_load_kwargs() -> dict[str, Any]:
     return {
+        "ze1_mv_per_count": float(st.session_state.get("ze1_mv") or TXT_MV_PER_COUNT),
         "ze2_sample_rate": float(st.session_state.get("ze2_fs") or ZE2_DEFAULT_FS),
         "ze2_mv_per_count": float(st.session_state.get("ze2_mv") or ZE2_MV_PER_COUNT),
         "apply_bandpass_ze1": bool(st.session_state.get("apply_bandpass_ze1", True)),
         "apply_bandpass_ze2": bool(st.session_state.get("apply_bandpass_ze2", True)),
+    }
+
+
+def ze1_run_kwargs() -> dict[str, Any]:
+    """Kwargs for ZE1 loaders that take apply_bandpass + scale."""
+    opts = device_load_kwargs()
+    return {
+        "ze1_mv_per_count": opts["ze1_mv_per_count"],
+        "apply_bandpass": opts["apply_bandpass_ze1"],
     }
 
 
@@ -922,7 +933,16 @@ def render_sidebar() -> None:
                     st.success(f"已恢復 {n} 個")
                     st.rerun()
 
-    with st.sidebar.expander("ZE2 參數", expanded=False):
+    with st.sidebar.expander("ZE1 / ZE2 參數", expanded=False):
+        st.number_input(
+            "ZE1 mV / count",
+            min_value=1e-9,
+            max_value=1.0,
+            step=0.000001,
+            format="%.6f",
+            key="ze1_mv",
+            help=f"預設 {TXT_MV_PER_COUNT}",
+        )
         st.number_input(
             "ZE2 採樣率 Hz",
             min_value=1.0,
@@ -943,9 +963,9 @@ def render_sidebar() -> None:
 
 
 def refresh_existing_waveforms(*, norm_method: str, align_by_start: bool) -> None:
-    """Recompute any cached ZE1/ZE2/overlay waves when filter toggles change."""
+    """Recompute any cached ZE1/ZE2/overlay waves when filter/scale toggles change."""
     opts = device_load_kwargs()
-    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze1_kwargs = ze1_run_kwargs()
     ze2_kwargs = ze2_run_kwargs()
 
     txt_names = [
@@ -973,6 +993,7 @@ def refresh_existing_waveforms(*, norm_method: str, align_by_start: bool) -> Non
                 ze2_names,
                 norm_method=norm_method,
                 align_by_start=align_by_start,
+                ze1_mv_per_count=opts["ze1_mv_per_count"],
                 ze2_sample_rate=opts["ze2_sample_rate"],
                 ze2_mv_per_count=opts["ze2_mv_per_count"],
                 apply_bandpass_ze1=opts["apply_bandpass_ze1"],
@@ -991,7 +1012,7 @@ def refresh_existing_waveforms(*, norm_method: str, align_by_start: bool) -> Non
                     "txt",
                     name,
                     norm_method=norm_method,
-                    apply_bandpass=apply_bandpass_ze1,
+                    **ze1_kwargs,
                 )
                 traces.append(data["trace"])
             st.session_state.wave_txt = traces
@@ -1008,7 +1029,7 @@ def refresh_existing_waveforms(*, norm_method: str, align_by_start: bool) -> Non
                 traces.append(data["trace"])
             st.session_state.wave_ze2 = traces
     except (FileNotFoundError, ValueError) as exc:
-        st.warning(f"濾波切換重算失敗：{exc}")
+        st.warning(f"參數切換重算失敗：{exc}")
 
 
 def tab_waveform() -> None:
@@ -1049,10 +1070,13 @@ def tab_waveform() -> None:
 
     y_title = y_title_for_norm(norm_method)
     opts = device_load_kwargs()
-    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze1_kwargs = ze1_run_kwargs()
     ze2_kwargs = ze2_run_kwargs()
 
     wave_fp = (
+        float(opts["ze1_mv_per_count"]),
+        float(opts["ze2_mv_per_count"]),
+        float(opts["ze2_sample_rate"]),
         bool(opts["apply_bandpass_ze1"]),
         bool(opts["apply_bandpass_ze2"]),
         norm_method,
@@ -1088,7 +1112,7 @@ def tab_waveform() -> None:
                         "txt",
                         name,
                         norm_method=norm_method,
-                        apply_bandpass=apply_bandpass_ze1,
+                        **ze1_kwargs,
                     )
                     traces.append(data["trace"])
                 st.session_state.wave_txt = traces
@@ -1125,6 +1149,7 @@ def tab_waveform() -> None:
                     ze2_names,
                     norm_method=norm_method,
                     align_by_start=align_by_start,
+                    ze1_mv_per_count=opts["ze1_mv_per_count"],
                     ze2_sample_rate=opts["ze2_sample_rate"],
                     ze2_mv_per_count=opts["ze2_mv_per_count"],
                     apply_bandpass_ze1=opts["apply_bandpass_ze1"],
@@ -1266,7 +1291,7 @@ def tab_contractions() -> None:
     run_both = b4.button("一起", key="contr_both", type="primary", use_container_width=True)
 
     opts = device_load_kwargs()
-    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze1_kwargs = ze1_run_kwargs()
     ze2_kwargs = ze2_run_kwargs()
 
     if run_d or run_both:
@@ -1296,7 +1321,7 @@ def tab_contractions() -> None:
                         name,
                         expected_count=int(expected),
                         contraction_method=contraction_method,
-                        apply_bandpass=apply_bandpass_ze1,
+                        **ze1_kwargs,
                     )
                     results.append(data["result"])
                 st.session_state.contr_txt = results
@@ -1435,7 +1460,7 @@ def tab_features() -> None:
     run_both = b4.button("一起（含 Δ）", key="feat_both", type="primary", use_container_width=True)
 
     opts = device_load_kwargs()
-    apply_bandpass_ze1 = bool(opts["apply_bandpass_ze1"])
+    ze1_kwargs = ze1_run_kwargs()
     ze2_kwargs = ze2_run_kwargs()
 
     if run_d:
@@ -1466,7 +1491,7 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
-                        apply_bandpass=apply_bandpass_ze1,
+                        **ze1_kwargs,
                     )
                     tables.append(data)
                 st.session_state.feat_txt_tables = tables
@@ -1506,7 +1531,7 @@ def tab_features() -> None:
                         expected_count=int(expected),
                         contraction_method=contraction_method,
                         feature_method=feature_method,
-                        apply_bandpass=apply_bandpass_ze1,
+                        **ze1_kwargs,
                     )
                     st.session_state.feat_delsys = {
                         "feature_method": feature_method,
@@ -1536,7 +1561,7 @@ def tab_features() -> None:
                                 expected_count=int(expected),
                                 contraction_method=contraction_method,
                                 feature_method=feature_method,
-                                apply_bandpass=apply_bandpass_ze1,
+                                **ze1_kwargs,
                             )
                         )
                     st.session_state.feat_txt_tables = tables
@@ -1696,6 +1721,7 @@ def render_export_panel(*, context: str) -> None:
         "Delsys": st.session_state.selected_delsys or "（未選）",
         "ZE1": ", ".join(st.session_state.selected_txt or []) or "（未選）",
         "ZE2": ", ".join(st.session_state.selected_ze2 or []) or "（未選）",
+        "ZE1 mV/count": st.session_state.get("ze1_mv"),
         "ZE2 fs": st.session_state.get("ze2_fs"),
         "ZE2 mV/count": st.session_state.get("ze2_mv"),
         "ZE1 濾波": "開" if st.session_state.get("apply_bandpass_ze1", True) else "關",
