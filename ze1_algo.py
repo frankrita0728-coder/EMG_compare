@@ -417,15 +417,21 @@ def detect_contractions_ze1(
         # Sliding 32-bin overlap window (same as original: del first sample)
         del emg128_raw_data[0]
 
-    # Flush open segment at EOF
+    # Flush open segment at EOF — prefer last above-threshold activity, not file end.
     if up_trigger and moving_avg_list:
         end_bin = len(moving_avg_list) - 1
+        down_thr = float(threshold) * 0.55
+        while end_bin > 0 and float(moving_avg_list[end_bin]) <= down_thr:
+            end_bin -= 1
+        # Small pad past last active bin (mirrors DOWN confirmation delay).
+        end_bin = min(len(moving_avg_list) - 1, end_bin + max(1, int(down_n) // 4))
         start_bin = (
             current_start_bin
             if current_start_bin is not None
             else max(0, end_bin)
         )
-        segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
+        if end_bin >= int(start_bin):
+            segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
 
     contractions: list[dict[str, Any]] = []
     for index, seg in enumerate(segments, start=1):
@@ -464,10 +470,10 @@ def detect_contractions_ze1(
         merge_gap_seconds=1.2,
         min_peak_ratio=0.35,
         min_duration_seconds=0.5,
-        # Pull back quiet tails left by Schmitt DOWN/MERGE
-        tail_trim_seconds=2.0,
-        tail_rms_ratio=0.18,
-        tail_pad_seconds=0.12,
+        # Pull back quiet tails left by Schmitt DOWN/MERGE / EOF flush
+        tail_trim_seconds=12.0,
+        tail_rms_ratio=0.20,
+        tail_pad_seconds=0.15,
     )
 
     return {
@@ -502,6 +508,9 @@ def _trim_ze1_tail(
     """
     Shorten interval end by removing a quiet trailing region.
     Walk backward with a short RMS window until activity reappears, then add a small pad.
+
+    Uses local sliding-window peak (not whole-interval mean RMS) so EOF-flushed
+    segments with long quiet tails still trim correctly.
     """
     fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
     s0 = max(0, int(start_sample))
@@ -510,8 +519,19 @@ def _trim_ze1_tail(
         return s0, e0
 
     win = max(3, int(round(fs * window_seconds)))
-    max_trim = max(win, int(round(fs * max_trim_seconds)))
-    floor = max(float(peak_rms) * float(rms_ratio), 1e-9)
+    hop = max(1, win // 2)
+    win_rms: list[float] = []
+    for j in range(s0, max(s0 + 1, e0 - win + 1), hop):
+        chunk = emg[j : j + win]
+        if chunk.size:
+            win_rms.append(float(np.sqrt(np.mean(chunk * chunk))))
+    act_peak = float(np.percentile(win_rms, 95)) if win_rms else float(peak_rms or 0.0)
+    if act_peak <= 0:
+        act_peak = float(peak_rms or 0.0)
+
+    # Allow trimming nearly the whole quiet tail; keep at least ~0.8 s of content.
+    max_trim = max(win, int(round(fs * max_trim_seconds)), (e0 - s0) - int(fs * 0.8))
+    floor = max(act_peak * float(rms_ratio), 1e-9)
     pad = max(0, int(round(fs * pad_seconds)))
 
     new_end = e0
@@ -523,7 +543,7 @@ def _trim_ze1_tail(
         if rms >= floor:
             new_end = min(e0, i + pad)
             break
-        i -= max(1, win // 2)
+        i -= hop
         trimmed = e0 - i
     else:
         # Entire searchable tail was quiet; pull back by max_trim but keep min duration.
