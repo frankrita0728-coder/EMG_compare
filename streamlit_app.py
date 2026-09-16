@@ -227,6 +227,7 @@ def init_state() -> None:
         "feat_delta": None,
         "file_nonce": 0,
         "hidden_files": [],
+        "hide_rest_freq": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -626,9 +627,19 @@ def feature_rows(features: list[dict[str, Any]], method: str) -> list[dict[str, 
     return rows
 
 
-def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure | None:
+def plot_ttri_series(
+    series: dict[str, Any] | None,
+    *,
+    title: str,
+    hide_rest_freq: bool = False,
+) -> go.Figure | None:
     if not series:
         return None
+
+    if hide_rest_freq:
+        from ze1_algo import mask_rest_frequency_series
+
+        series = mask_rest_frequency_series(series) or series
 
     # Split amplitude vs frequency so small mV-scale RMS/iEMG stay visible.
     from pathlib import Path
@@ -673,6 +684,8 @@ def plot_ttri_series(series: dict[str, Any] | None, *, title: str) -> go.Figure 
     short_name = Path(str(title)).name
     aemg = series.get("aemg")
     subtitle = f"{short_name}  ·  AEMG={aemg}" if aemg is not None else short_name
+    if hide_rest_freq:
+        subtitle += "  ·  休息段隱藏 MPF/MDF"
 
     fig.update_layout(
         title={"text": subtitle, "font": {"size": 13}, "x": 0.0, "xanchor": "left", "y": 0.995, "yanchor": "top"},
@@ -1476,6 +1489,13 @@ def tab_features() -> None:
     with c3:
         expected = st.number_input("預期次數", min_value=1, max_value=10, value=3, key="feat_expected")
 
+    st.toggle(
+        "休息段不顯示 MPF／MDF",
+        key="hide_rest_freq",
+        help="開啟後，頻率圖在低 RMS（休息）區間不畫 MPF／MDF；表格數值不變。切換後立即重繪已有結果。",
+    )
+    hide_rest_freq = bool(st.session_state.get("hide_rest_freq", False))
+
     b1, b2, b3, b4 = st.columns([1, 1, 1, 1.4])
     run_d = b1.button("Delsys", key="feat_d", use_container_width=True)
     run_t = b2.button("ZE1", key="feat_t", use_container_width=True)
@@ -1640,6 +1660,7 @@ def tab_features() -> None:
             series_fig = plot_ttri_series(
                 payload["result"].get("series"),
                 title=payload["result"].get("filename", "Delsys"),
+                hide_rest_freq=hide_rest_freq,
             )
             if series_fig:
                 st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
@@ -1661,6 +1682,7 @@ def tab_features() -> None:
             series_fig = plot_ttri_series(
                 payload["result"].get("series"),
                 title=payload["result"].get("filename", "ZE1"),
+                hide_rest_freq=hide_rest_freq,
             )
             if series_fig:
                 st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
@@ -1682,6 +1704,7 @@ def tab_features() -> None:
             series_fig = plot_ttri_series(
                 payload["result"].get("series"),
                 title=payload["result"].get("filename", "ZE2"),
+                hide_rest_freq=hide_rest_freq,
             )
             if series_fig:
                 st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
@@ -1759,6 +1782,8 @@ def render_export_panel(*, context: str) -> None:
             else ("開" if st.session_state.get("apply_bandpass_ze2", True) else "關")
         ),
     }
+    if context == "features":
+        meta["休息段隱藏MPF/MDF"] = "開" if st.session_state.get("hide_rest_freq") else "關"
     if st.session_state.feat_delsys:
         meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""
     if st.session_state.feat_delta:
@@ -1774,6 +1799,7 @@ def render_export_panel(*, context: str) -> None:
             contr_delsys=st.session_state.contr_delsys,
             contr_txt=st.session_state.contr_txt,
             contr_ze2=st.session_state.contr_ze2,
+            hide_rest_freq=bool(st.session_state.get("hide_rest_freq", False)),
         )
         csv_zip = build_results_csv_zip(
             feat_delsys=st.session_state.feat_delsys,

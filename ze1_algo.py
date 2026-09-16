@@ -814,3 +814,38 @@ def compute_ttri_feature_series(
         "overlap": overlap,
         "sample_rate": fs,
     }
+
+
+def mask_rest_frequency_series(
+    series: dict[str, Any] | None,
+    *,
+    rms_ratio: float = 0.08,
+) -> dict[str, Any] | None:
+    """
+    Copy TTRI series with MPF/MDF blanked where sliding RMS is below
+    ``rms_ratio * p95(RMS)`` (rest / quiet windows).
+    """
+    if not series:
+        return series
+    rms_block = series.get("rms") or {}
+    rms_vals = np.asarray(rms_block.get("values") or [], dtype=float)
+    if rms_vals.size == 0:
+        return series
+
+    peak = float(np.percentile(rms_vals[np.isfinite(rms_vals)], 95)) if np.isfinite(rms_vals).any() else 0.0
+    thr = max(peak * float(rms_ratio), 1e-12)
+    out = dict(series)
+    for key in ("mpf", "mdf"):
+        block = dict(series.get(key) or {})
+        times = list(block.get("times") or [])
+        values = np.asarray(block.get("values") or [], dtype=float)
+        n = int(min(len(rms_vals), len(values), len(times)))
+        if n <= 0:
+            out[key] = block
+            continue
+        ys = values[:n].astype(float, copy=True)
+        ys[rms_vals[:n] < thr] = np.nan
+        block["times"] = times[:n]
+        block["values"] = [float(v) if np.isfinite(v) else float("nan") for v in ys.tolist()]
+        out[key] = block
+    return out

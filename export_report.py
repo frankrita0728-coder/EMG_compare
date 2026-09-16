@@ -161,13 +161,23 @@ def _make_table(data: list[list[str]], font_name: str) -> Table:
     return table
 
 
-def _series_chart_png(series: dict[str, Any] | None, *, title: str) -> bytes | None:
+def _series_chart_png(
+    series: dict[str, Any] | None,
+    *,
+    title: str,
+    hide_rest_freq: bool = False,
+) -> bytes | None:
     """
     Render TTRI feature curves for PDF.
     Amplitude (RMS/iEMG) and frequency (MPF/MDF) use separate panels so scales stay readable.
     """
     if not series:
         return None
+
+    if hide_rest_freq:
+        from ze1_algo import mask_rest_frequency_series
+
+        series = mask_rest_frequency_series(series) or series
 
     try:
         import matplotlib
@@ -245,8 +255,14 @@ def _series_chart_png(series: dict[str, Any] | None, *, title: str) -> bytes | N
     return buf.getvalue()
 
 
-def _add_series_image(story: list[Any], series: dict[str, Any] | None, title: str) -> None:
-    png = _series_chart_png(series, title=title)
+def _add_series_image(
+    story: list[Any],
+    series: dict[str, Any] | None,
+    title: str,
+    *,
+    hide_rest_freq: bool = False,
+) -> None:
+    png = _series_chart_png(series, title=title, hide_rest_freq=hide_rest_freq)
     if not png:
         return
     img = Image(io.BytesIO(png), width=24 * cm, height=11.8 * cm)
@@ -265,6 +281,7 @@ def build_results_pdf(
     contr_delsys: dict[str, Any] | None = None,
     contr_txt: list[dict[str, Any]] | None = None,
     contr_ze2: list[dict[str, Any]] | None = None,
+    hide_rest_freq: bool = False,
 ) -> bytes:
     """Build a PDF report bytes for feature / contraction results (tables + charts)."""
     font_name = _register_fonts()
@@ -321,7 +338,12 @@ def build_results_pdf(
         filename = feat_delsys["result"].get("filename") or "Delsys"
         story.append(Paragraph(_escape(f"Delsys 特徵 — {filename}（{method}）"), h_style))
         story.append(_make_table(_rows_from_features(feat_delsys["result"].get("features") or [], method), font_name))
-        _add_series_image(story, feat_delsys["result"].get("series"), str(filename))
+        _add_series_image(
+            story,
+            feat_delsys["result"].get("series"),
+            str(filename),
+            hide_rest_freq=hide_rest_freq,
+        )
 
     for item in feat_txt_tables or []:
         result = item.get("result") or {}
@@ -329,7 +351,12 @@ def build_results_pdf(
         filename = result.get("filename") or "TXT"
         story.append(Paragraph(_escape(f"TXT 特徵 — {filename}（{method}）"), h_style))
         story.append(_make_table(_rows_from_features(result.get("features") or [], method), font_name))
-        _add_series_image(story, result.get("series"), str(filename))
+        _add_series_image(
+            story,
+            result.get("series"),
+            str(filename),
+            hide_rest_freq=hide_rest_freq,
+        )
 
     for item in feat_ze2_tables or []:
         result = item.get("result") or {}
@@ -337,7 +364,12 @@ def build_results_pdf(
         filename = result.get("filename") or "ZE2"
         story.append(Paragraph(_escape(f"ZE2 特徵 — {filename}（{method}）"), h_style))
         story.append(_make_table(_rows_from_features(result.get("features") or [], method), font_name))
-        _add_series_image(story, result.get("series"), str(filename))
+        _add_series_image(
+            story,
+            result.get("series"),
+            str(filename),
+            hide_rest_freq=hide_rest_freq,
+        )
 
     if feat_delta and feat_delta.get("pairs"):
         story.append(Paragraph(_escape("差異對照（Delsys − 對照來源）"), h_style))
