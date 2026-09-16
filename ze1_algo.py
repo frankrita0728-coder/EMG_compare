@@ -755,7 +755,7 @@ def _series_time_axis(n: int, sample_rate: float, window_l: float, overlap: floa
 
 
 def _downsample_xy(xs: list[float], ys: list[float], max_points: int = 2500) -> tuple[list[float], list[float]]:
-    if len(xs) <= max_points:
+    if max_points <= 0 or len(xs) <= max_points:
         return xs, ys
     step = max(1, len(xs) // max_points)
     out_x = xs[::step]
@@ -772,11 +772,11 @@ def compute_ttri_feature_series(
     sample_rate: float,
     window_l: float = 157,
     overlap: float = 79,
-    max_points: int = 2500,
+    max_points: int | None = 2500,
 ) -> dict[str, Any]:
     """
     Full-signal TTRI feature curves (same kernels as muscleCaptureForZE1 plots).
-    Returns downsampled x/y series for web plotting.
+    Returns x/y series; set max_points=None to keep full resolution (for correlation).
     """
     arr = np.asarray(values, dtype=float)
     fs = float(sample_rate) if sample_rate > 0 else 1024.0
@@ -790,7 +790,8 @@ def compute_ttri_feature_series(
     def pack(series: np.ndarray, ov: float) -> dict[str, list[float]]:
         ys = [float(v) for v in series.tolist()]
         xs = _series_time_axis(len(ys), fs, window_l, ov)
-        xs, ys = _downsample_xy(xs, ys, max_points=max_points)
+        if max_points is not None:
+            xs, ys = _downsample_xy(xs, ys, max_points=max_points)
         return {"times": xs, "values": ys}
 
     return {

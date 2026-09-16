@@ -958,12 +958,16 @@ def tab_features() -> None:
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
         corr = delta.get("correlation") or {}
         if corr:
-            n_pairs = min(
-                int((delta.get("delsys") or {}).get("count") or 0),
-                int((delta.get("txt") or {}).get("count") or 0),
-            )
+            window = delta.get("correlation_window") or {}
+            w_l = window.get("window_l", 157)
+            ov = window.get("overlap", 79)
+            n_intervals = int((delta.get("delsys") or {}).get("count") or 0)
             st.markdown("**相關係數（Pearson r）**")
-            st.caption(f"r = 1 完全同向；跨 {n_pairs} 段收縮對齊計算（樣本少時僅供參考）。")
+            st.caption(
+                f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
+                f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"
+                "r = 1 表示完全同向。"
+            )
             st.dataframe(correlation_rows(corr), use_container_width=True)
     else:
         st.info("執行「兩邊一起」後顯示")

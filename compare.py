@@ -4,10 +4,11 @@ from typing import Any
 
 from align import align_traces_by_start, parse_delsys_start
 from detector import detect_contractions_dispatch
-from features import analyze_signal_features, compare_feature_rows, feature_correlations
+from features import analyze_signal_features, compare_feature_rows, series_correlations
 from normalize import normalize_trace
 from parsers.delsys import load_delsys_emg
 from parsers.txt_device import TXT_MV_PER_COUNT, load_txt_emg
+from ze1_algo import compute_ttri_feature_series
 
 
 def load_signal(
@@ -382,12 +383,28 @@ def build_feature_compare(
         right_feat["features"],
         metrics=left_feat["metrics"],
     )
-    correlation = feature_correlations(
-        left_feat["features"],
-        right_feat["features"],
-        metrics=left_feat["metrics"],
+    # Full-resolution TTRI curves; Pearson r only on Delsys contraction windows.
+    left_series_corr = compute_ttri_feature_series(
+        left["values"], sample_rate=left["sample_rate"], max_points=None
     )
-    n_pairs = min(left_feat["count"], right_feat["count"])
+    right_series_corr = compute_ttri_feature_series(
+        right["values"], sample_rate=right["sample_rate"], max_points=None
+    )
+    corr_intervals = left_feat.get("features") or left_feat.get("contractions") or []
+    correlation = series_correlations(
+        left_series_corr,
+        right_series_corr,
+        intervals=corr_intervals,
+    )
+    window_l = left_series_corr.get("window_l", 157)
+    overlap = left_series_corr.get("overlap", 79)
+    n_intervals = len(corr_intervals)
+    plot_series_left = left_feat.get("series") or compute_ttri_feature_series(
+        left["values"], sample_rate=left["sample_rate"]
+    )
+    plot_series_right = right_feat.get("series") or compute_ttri_feature_series(
+        right["values"], sample_rate=right["sample_rate"]
+    )
     return {
         "mode": "features",
         "expected_count": expected_count,
@@ -401,7 +418,7 @@ def build_feature_compare(
             "unit": left["unit"],
             "features": left_feat["features"],
             "count": left_feat["count"],
-            "series": left_feat.get("series"),
+            "series": plot_series_left,
         },
         "txt": {
             "filename": right["filename"],
@@ -410,12 +427,15 @@ def build_feature_compare(
             "unit": right["unit"],
             "features": right_feat["features"],
             "count": right_feat["count"],
-            "series": right_feat.get("series"),
+            "series": plot_series_right,
         },
         "pairs": pairs,
         "correlation": correlation,
+        "correlation_method": "ttri_series_pearson_contraction_only",
+        "correlation_window": {"window_l": window_l, "overlap": overlap},
         "note": (
             f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
-            f" 相關係數為跨 {n_pairs} 段收縮對齊的 Pearson r。"
+            f" 相關係數為 TTRI 滑動窗曲線（window_l={window_l}, overlap={overlap}），"
+            f"僅使用 Delsys 共 {n_intervals} 段收縮區間內的點（休息段排除）後算 Pearson r。"
         ),
     }
