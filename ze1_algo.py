@@ -314,12 +314,13 @@ def detect_contractions_ze1(
             if mode in {"raw", "raw_std", "std"}:
                 threshold = emg_base + std_online * 4.0
             elif mode in {"legacy_mv", "mv_old", "txt"}:
+                # Original script: base + (0.1 - base) * 4/100. On mV-scaled
+                # TXT that formula is ~0.005 and sits inside rest noise, so
+                # Schmitt arms early in inter-burst quiet and cuts mid-burst.
+                # Floor with rest mean+k*std (same idea as Delsys adaptive).
                 legacy = emg_base + (0.1 - emg_base) * 4 / 100
-                if emg_base < 0.5 and std_online < 0.2:
-                    threshold = legacy
-                else:
-                    # Settled rest: mean + 2*std of rest-calibration envelope
-                    threshold = emg_base + 2.0 * max(std_online, 1e-6)
+                adaptive = emg_base + 3.5 * max(std_online, 1e-6)
+                threshold = max(legacy, adaptive)
             else:
                 # Delsys capture script (active formula), mV-scaled dataMax.
                 # After baseline subtraction, emg_base is often ~0 so the formula
@@ -470,10 +471,10 @@ def detect_contractions_ze1(
         merge_gap_seconds=1.2,
         min_peak_ratio=0.35,
         min_duration_seconds=0.5,
-        # Pull back quiet tails left by Schmitt DOWN/MERGE / EOF flush
-        tail_trim_seconds=12.0,
-        tail_rms_ratio=0.20,
-        tail_pad_seconds=0.15,
+        # Pull back quiet heads/tails left by early UP / DOWN/MERGE / EOF flush
+        edge_trim_seconds=12.0,
+        edge_rms_ratio=0.20,
+        edge_pad_seconds=0.15,
     )
 
     return {
@@ -491,6 +492,32 @@ def detect_contractions_ze1(
         "window_size": window_size,
         "data_max": float(data_max),
     }
+
+
+def _ze1_activity_peak(
+    emg: np.ndarray,
+    *,
+    start_sample: int,
+    end_sample: int,
+    peak_rms: float,
+    sample_rate_hz: float,
+    window_seconds: float = 0.08,
+) -> float:
+    """95th-percentile short-window RMS inside an interval (robust activity peak)."""
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
+    s0 = max(0, int(start_sample))
+    e0 = max(s0 + 1, min(int(end_sample), len(emg)))
+    win = max(3, int(round(fs * window_seconds)))
+    hop = max(1, win // 2)
+    win_rms: list[float] = []
+    for j in range(s0, max(s0 + 1, e0 - win + 1), hop):
+        chunk = emg[j : j + win]
+        if chunk.size:
+            win_rms.append(float(np.sqrt(np.mean(chunk * chunk))))
+    act_peak = float(np.percentile(win_rms, 95)) if win_rms else float(peak_rms or 0.0)
+    if act_peak <= 0:
+        act_peak = float(peak_rms or 0.0)
+    return act_peak
 
 
 def _trim_ze1_tail(
@@ -520,14 +547,14 @@ def _trim_ze1_tail(
 
     win = max(3, int(round(fs * window_seconds)))
     hop = max(1, win // 2)
-    win_rms: list[float] = []
-    for j in range(s0, max(s0 + 1, e0 - win + 1), hop):
-        chunk = emg[j : j + win]
-        if chunk.size:
-            win_rms.append(float(np.sqrt(np.mean(chunk * chunk))))
-    act_peak = float(np.percentile(win_rms, 95)) if win_rms else float(peak_rms or 0.0)
-    if act_peak <= 0:
-        act_peak = float(peak_rms or 0.0)
+    act_peak = _ze1_activity_peak(
+        emg,
+        start_sample=s0,
+        end_sample=e0,
+        peak_rms=peak_rms,
+        sample_rate_hz=fs,
+        window_seconds=window_seconds,
+    )
 
     # Allow trimming nearly the whole quiet tail; keep at least ~0.8 s of content.
     max_trim = max(win, int(round(fs * max_trim_seconds)), (e0 - s0) - int(fs * 0.8))
@@ -551,6 +578,61 @@ def _trim_ze1_tail(
 
     new_end = max(s0 + 1, min(int(new_end), len(emg)))
     return s0, new_end
+
+
+def _trim_ze1_head(
+    emg: np.ndarray,
+    *,
+    start_sample: int,
+    end_sample: int,
+    peak_rms: float,
+    sample_rate_hz: float,
+    max_trim_seconds: float = 1.0,
+    rms_ratio: float = 0.18,
+    pad_seconds: float = 0.12,
+    window_seconds: float = 0.08,
+) -> tuple[int, int]:
+    """
+    Shorten interval start by removing a quiet leading region.
+    Walk forward until activity appears (fixes early Schmitt UP on rest noise).
+    """
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
+    s0 = max(0, int(start_sample))
+    e0 = max(s0 + 1, min(int(end_sample), len(emg)))
+    if e0 - s0 < int(fs * 0.6):
+        return s0, e0
+
+    win = max(3, int(round(fs * window_seconds)))
+    hop = max(1, win // 2)
+    act_peak = _ze1_activity_peak(
+        emg,
+        start_sample=s0,
+        end_sample=e0,
+        peak_rms=peak_rms,
+        sample_rate_hz=fs,
+        window_seconds=window_seconds,
+    )
+
+    max_trim = max(win, int(round(fs * max_trim_seconds)), (e0 - s0) - int(fs * 0.8))
+    floor = max(act_peak * float(rms_ratio), 1e-9)
+    pad = max(0, int(round(fs * pad_seconds)))
+
+    new_start = s0
+    trimmed = 0
+    i = s0
+    while i + win <= e0 and trimmed < max_trim:
+        chunk = emg[i : i + win]
+        rms = float(np.sqrt(np.mean(chunk * chunk))) if chunk.size else 0.0
+        if rms >= floor:
+            new_start = max(s0, i - pad)
+            break
+        i += hop
+        trimmed = i - s0
+    else:
+        new_start = min(e0 - int(fs * 0.5), s0 + max_trim)
+
+    new_start = max(0, min(int(new_start), e0 - 1))
+    return new_start, e0
 
 
 def _split_ze1_multiburst(
@@ -654,19 +736,30 @@ def _postprocess_ze1_contractions(
     merge_gap_seconds: float = 1.2,
     min_peak_ratio: float = 0.30,
     min_duration_seconds: float = 0.5,
-    tail_trim_seconds: float = 1.0,
-    tail_rms_ratio: float = 0.18,
-    tail_pad_seconds: float = 0.12,
+    edge_trim_seconds: float = 1.0,
+    edge_rms_ratio: float = 0.18,
+    edge_pad_seconds: float = 0.12,
+    # Backward-compatible aliases
+    tail_trim_seconds: float | None = None,
+    tail_rms_ratio: float | None = None,
+    tail_pad_seconds: float | None = None,
 ) -> list[dict[str, Any]]:
     """
     Clean ZE1 segments:
     1) drop weak / short noise fragments
-    2) trim quiet trailing tails (~1 s)
+    2) trim quiet leading heads and trailing tails
     3) split over-merged multi-burst intervals
     4) keep top-N by peak_rms when expected_count is set
     """
     if not contractions:
         return []
+
+    if tail_trim_seconds is not None:
+        edge_trim_seconds = float(tail_trim_seconds)
+    if tail_rms_ratio is not None:
+        edge_rms_ratio = float(tail_rms_ratio)
+    if tail_pad_seconds is not None:
+        edge_pad_seconds = float(tail_pad_seconds)
 
     ordered = [dict(c) for c in sorted(contractions, key=lambda c: float(c["start"]))]
     # Ignore brief contact/cable spikes when setting the weak-peak floor.
@@ -691,18 +784,31 @@ def _postprocess_ze1_contractions(
 
     _ = merge_gap_seconds  # reserved for future neighbor-merge tuning
 
-    # Trim quiet tails left by Schmitt DOWN_N / MERGE_GAP.
+    # Trim quiet heads (early UP) and tails (DOWN_N / MERGE_GAP / EOF).
     fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
     for item in filtered:
+        s0 = int(item["start_sample"])
+        e0 = int(item["end_sample"])
+        peak = float(item.get("peak_rms") or 0.0)
+        s1, e1 = _trim_ze1_head(
+            emg,
+            start_sample=s0,
+            end_sample=e0,
+            peak_rms=peak,
+            sample_rate_hz=fs,
+            max_trim_seconds=edge_trim_seconds,
+            rms_ratio=edge_rms_ratio,
+            pad_seconds=edge_pad_seconds,
+        )
         s1, e1 = _trim_ze1_tail(
             emg,
-            start_sample=int(item["start_sample"]),
-            end_sample=int(item["end_sample"]),
-            peak_rms=float(item.get("peak_rms") or 0.0),
+            start_sample=s1,
+            end_sample=e1,
+            peak_rms=peak,
             sample_rate_hz=fs,
-            max_trim_seconds=tail_trim_seconds,
-            rms_ratio=tail_rms_ratio,
-            pad_seconds=tail_pad_seconds,
+            max_trim_seconds=edge_trim_seconds,
+            rms_ratio=edge_rms_ratio,
+            pad_seconds=edge_pad_seconds,
         )
         item["start_sample"] = s1
         item["end_sample"] = e1
