@@ -245,6 +245,7 @@ def detect_contractions_ze1(
 
     emg_raw_data: list[float] = []
     emg128_raw_data: list[float] = []
+    rest_envelope: list[float] = []
     baseline_acc: list[float] = []
     base_check = False
     emg_base_check = False
@@ -263,8 +264,11 @@ def detect_contractions_ze1(
     segments: list[dict[str, Any]] = []
 
     mode = (threshold_mode or "delsys").strip().lower()
-    # TXT×mV: wait a bit after 3 s so the post-baseline envelope settles before arming.
-    threshold_ready_s = 4.0 if mode in {"legacy_mv", "mv_old", "txt"} else 3.0
+    # Calibrate threshold only on quiet rest after baseline (2.0–2.5 s).
+    # Do NOT wait until 3–4 s with a short recent window — an early first
+    # contraction (common ~3 s) would pollute the threshold and get missed.
+    rest_cal_end_s = 2.5
+    threshold_ready_s = 2.5
 
     for i in range(len(emg)):
         start = max(0, i - window_size + 1)
@@ -292,14 +296,21 @@ def detect_contractions_ze1(
         emg128_raw_data.append(emg_128mean)
         emg_raw_data = []
 
+        # Keep rest-only envelope for threshold (baseline-ready → rest_cal_end).
+        if base_check and (not emg_base_check) and i < int(fs * rest_cal_end_s):
+            rest_envelope.append(emg_128mean)
+
         if len(emg128_raw_data) < smooth_bins:
             continue
 
-        # Threshold after warm-up (TXT uses 4 s to avoid baseline-settling transient)
+        # Arm Schmitt once the rest calibration window closes.
         if base_check and (not emg_base_check) and (i >= int(fs * threshold_ready_s)):
-            recent = np.asarray(emg128_raw_data[-smooth_bins:], dtype=float)
-            emg_base = float(np.mean(recent))
-            std_online = float(np.std(recent))
+            if len(rest_envelope) >= 8:
+                cal = np.asarray(rest_envelope, dtype=float)
+            else:
+                cal = np.asarray(emg128_raw_data[-smooth_bins:], dtype=float)
+            emg_base = float(np.mean(cal))
+            std_online = float(np.std(cal))
             if mode in {"raw", "raw_std", "std"}:
                 threshold = emg_base + std_online * 4.0
             elif mode in {"legacy_mv", "mv_old", "txt"}:
@@ -307,13 +318,13 @@ def detect_contractions_ze1(
                 if emg_base < 0.5 and std_online < 0.2:
                     threshold = legacy
                 else:
-                    # Settled rest: mean + 2*std of last 32 bins (~0.25 s)
+                    # Settled rest: mean + 2*std of rest-calibration envelope
                     threshold = emg_base + 2.0 * max(std_online, 1e-6)
             else:
                 # Delsys capture script (active formula), mV-scaled dataMax.
                 # After baseline subtraction, emg_base is often ~0 so the formula
                 # alone yields ~0.003 and keeps inter-burst rest "active".
-                # Floor with mean+4*std of the warm-up envelope window.
+                # Floor with mean+4*std of the rest-calibration envelope.
                 formula = emg_base + (float(data_max) - emg_base) * 3 / 100
                 adaptive = emg_base + 4.0 * max(std_online, 1e-6)
                 threshold = max(formula, adaptive)
