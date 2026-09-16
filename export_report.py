@@ -120,11 +120,22 @@ def _rows_from_delta(pairs: list[dict[str, Any]]) -> list[list[str]]:
         for key in (item.get("delta") or {}):
             if key not in keys:
                 keys.append(key)
-    header = ["index", *[f"d_{k}" for k in keys]]
+        for key in (item.get("pct") or {}):
+            if key not in keys:
+                keys.append(key)
+    header = ["index"]
+    for key in keys:
+        header.append(f"d_{key}")
+        header.append(f"pct_{key}")
     body = []
     for item in pairs:
         delta = item.get("delta") or {}
-        body.append([_fmt(item.get("index")), *[_fmt(delta.get(k)) for k in keys]])
+        pct = item.get("pct") or {}
+        cells = [_fmt(item.get("index"))]
+        for key in keys:
+            cells.append(_fmt(delta.get(key)))
+            cells.append(_fmt(pct.get(key)))
+        body.append(cells)
     return [header, *body]
 
 

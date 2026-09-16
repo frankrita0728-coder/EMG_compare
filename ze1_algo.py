@@ -784,10 +784,15 @@ def compute_ttri_feature_series(
     window_l: float = 157,
     overlap: float = 79,
     max_points: int = 2500,
+    freq_rms_ratio: float = 0.08,
 ) -> dict[str, Any]:
     """
     Full-signal TTRI feature curves (same kernels as muscleCaptureForZE1 plots).
     Returns downsampled x/y series for web plotting.
+
+    MPF/MDF are blanked (NaN) where sliding-window RMS is below
+    ``freq_rms_ratio * p95(RMS)`` so rest-noise spectra (esp. quiet ZE2)
+    do not fill the frequency panel.
     """
     arr = np.asarray(values, dtype=float)
     fs = float(sample_rate) if sample_rate > 0 else 1024.0
@@ -798,8 +803,20 @@ def compute_ttri_feature_series(
     mdf = np.asarray(emg_mdf_ttri(arr, window_l, overlap, fs), dtype=float)
     aemg = emg_aemg_ttri(arr)
 
+    n = int(min(len(rms), len(mpf), len(mdf)))
+    if n > 0:
+        rms_n = rms[:n]
+        mpf = mpf[:n].astype(float, copy=True)
+        mdf = mdf[:n].astype(float, copy=True)
+        peak = float(np.percentile(rms_n, 95)) if rms_n.size else 0.0
+        thr = max(peak * float(freq_rms_ratio), 1e-12)
+        quiet = rms_n < thr
+        mpf[quiet] = np.nan
+        mdf[quiet] = np.nan
+        rms = rms_n
+
     def pack(series: np.ndarray, ov: float) -> dict[str, list[float]]:
-        ys = [float(v) for v in series.tolist()]
+        ys = [float(v) if np.isfinite(v) else float("nan") for v in series.tolist()]
         xs = _series_time_axis(len(ys), fs, window_l, ov)
         xs, ys = _downsample_xy(xs, ys, max_points=max_points)
         return {"times": xs, "values": ys}
@@ -813,4 +830,5 @@ def compute_ttri_feature_series(
         "window_l": window_l,
         "overlap": overlap,
         "sample_rate": fs,
+        "freq_mask_rms_ratio": float(freq_rms_ratio),
     }

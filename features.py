@@ -183,16 +183,25 @@ def compare_feature_rows(
     count = max(len(left_rows), len(right_rows))
     pairs: list[dict[str, Any]] = []
     keys = tuple(metrics) if metrics else SPECTRAL_METRICS
+    eps = 1e-12
     for i in range(count):
         left = left_rows[i] if i < len(left_rows) else None
         right = right_rows[i] if i < len(right_rows) else None
         delta: dict[str, Any] = {}
+        pct: dict[str, Any] = {}
         for key in keys:
             lv = None if left is None else left.get(key)
             rv = None if right is None else right.get(key)
             if isinstance(lv, (int, float)) and isinstance(rv, (int, float)):
-                delta[key] = round(float(lv) - float(rv), 6)
+                left_v = float(lv)
+                right_v = float(rv)
+                delta[key] = round(left_v - right_v, 6)
+                if abs(left_v) > eps:
+                    pct[key] = round((right_v / left_v) * 100.0, 2)
+                else:
+                    pct[key] = None
             else:
                 delta[key] = None
-        pairs.append({"index": i + 1, "delsys": left, "txt": right, "delta": delta})
+                pct[key] = None
+        pairs.append({"index": i + 1, "delsys": left, "txt": right, "delta": delta, "pct": pct})
     return pairs

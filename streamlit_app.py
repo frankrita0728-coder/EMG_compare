@@ -271,6 +271,25 @@ def ze2_run_kwargs() -> dict[str, Any]:
     }
 
 
+def ze1_feature_kwargs() -> dict[str, Any]:
+    """Feature analysis always uses digitally filtered ZE1 data."""
+    opts = device_load_kwargs()
+    return {
+        "ze1_mv_per_count": opts["ze1_mv_per_count"],
+        "apply_bandpass": True,
+    }
+
+
+def ze2_feature_kwargs() -> dict[str, Any]:
+    """Feature analysis always uses digitally filtered ZE2 data."""
+    opts = device_load_kwargs()
+    return {
+        "ze2_sample_rate": opts["ze2_sample_rate"],
+        "ze2_mv_per_count": opts["ze2_mv_per_count"],
+        "apply_bandpass": True,
+    }
+
+
 def save_uploads(uploaded_files, dest: Path) -> list[str]:
     ensure_data_dirs()
     dest.mkdir(parents=True, exist_ok=True)
@@ -685,8 +704,12 @@ def delta_rows(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     rows = []
     for item in pairs:
         row = {"index": item.get("index")}
-        for key, value in (item.get("delta") or {}).items():
-            row[f"Δ {key}"] = value
+        delta = item.get("delta") or {}
+        pct = item.get("pct") or {}
+        keys = list(delta.keys()) or list(pct.keys())
+        for key in keys:
+            row[f"Δ {key}"] = delta.get(key)
+            row[f"% {key}"] = pct.get(key)
         for key, value in (item.get("delsys") or {}).items():
             if key not in {"index"}:
                 row[f"D {key}"] = value
@@ -1459,9 +1482,9 @@ def tab_features() -> None:
     run_z = b3.button("ZE2", key="feat_z", use_container_width=True)
     run_both = b4.button("一起（含 Δ）", key="feat_both", type="primary", use_container_width=True)
 
-    opts = device_load_kwargs()
-    ze1_kwargs = ze1_run_kwargs()
-    ze2_kwargs = ze2_run_kwargs()
+    ze1_kwargs = ze1_feature_kwargs()
+    ze2_kwargs = ze2_feature_kwargs()
+    st.caption("ZE1／ZE2 特徵分析固定使用 20–400 Hz 數位濾波後的資料（與波形頁開關無關）。")
 
     if run_d:
         name = require_delsys()
@@ -1690,6 +1713,7 @@ def tab_features() -> None:
     if delta:
         if delta.get("note"):
             st.caption(delta["note"])
+        st.caption("相似度 % =（裝置 / Delsys）× 100；100% 表示與 Delsys 一樣大。")
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
         if st.button("清除 Δ 對照", key="clear_feat_delta"):
             st.session_state.feat_delta = None
@@ -1724,8 +1748,16 @@ def render_export_panel(*, context: str) -> None:
         "ZE1 mV/count": st.session_state.get("ze1_mv"),
         "ZE2 fs": st.session_state.get("ze2_fs"),
         "ZE2 mV/count": st.session_state.get("ze2_mv"),
-        "ZE1 濾波": "開" if st.session_state.get("apply_bandpass_ze1", True) else "關",
-        "ZE2 濾波": "開" if st.session_state.get("apply_bandpass_ze2", True) else "關",
+        "ZE1 濾波": (
+            "開（特徵固定）"
+            if context == "features"
+            else ("開" if st.session_state.get("apply_bandpass_ze1", True) else "關")
+        ),
+        "ZE2 濾波": (
+            "開（特徵固定）"
+            if context == "features"
+            else ("開" if st.session_state.get("apply_bandpass_ze2", True) else "關")
+        ),
     }
     if st.session_state.feat_delsys:
         meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""
