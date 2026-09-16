@@ -423,6 +423,12 @@ def delta_rows(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return rows
 
 
+def correlation_rows(correlation: dict[str, Any] | None) -> list[dict[str, Any]]:
+    if not correlation:
+        return []
+    return [{"metric": key, "r": value} for key, value in correlation.items()]
+
+
 def require_delsys() -> str | None:
     name = st.session_state.selected_delsys
     if not name:
@@ -950,6 +956,15 @@ def tab_features() -> None:
         if delta.get("note"):
             st.caption(delta["note"])
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
+        corr = delta.get("correlation") or {}
+        if corr:
+            n_pairs = min(
+                int((delta.get("delsys") or {}).get("count") or 0),
+                int((delta.get("txt") or {}).get("count") or 0),
+            )
+            st.markdown("**相關係數（Pearson r）**")
+            st.caption(f"r = 1 完全同向；跨 {n_pairs} 段收縮對齊計算（樣本少時僅供參考）。")
+            st.dataframe(correlation_rows(corr), use_container_width=True)
     else:
         st.info("執行「兩邊一起」後顯示")
 

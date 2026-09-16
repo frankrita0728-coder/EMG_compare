@@ -128,6 +128,13 @@ def _rows_from_delta(pairs: list[dict[str, Any]]) -> list[list[str]]:
     return [header, *body]
 
 
+def _rows_from_correlation(correlation: dict[str, Any] | None) -> list[list[str]]:
+    if not correlation:
+        return [["metric", "r"], ["", "no correlation"]]
+    body = [[str(key), _fmt(value)] for key, value in correlation.items()]
+    return [["metric", "r"], *body]
+
+
 def _make_table(data: list[list[str]], font_name: str) -> Table:
     table = Table(data, repeatRows=1)
     table.setStyle(
@@ -323,6 +330,11 @@ def build_results_pdf(
         if feat_delta.get("note"):
             story.append(Paragraph(_escape(str(feat_delta["note"])), body_style))
         story.append(_make_table(_rows_from_delta(feat_delta.get("pairs") or []), font_name))
+        if feat_delta.get("correlation"):
+            story.append(Paragraph(_escape("相關係數（Pearson r）"), h_style))
+            story.append(
+                _make_table(_rows_from_correlation(feat_delta.get("correlation") or {}), font_name)
+            )
 
     if contr_delsys:
         filename = contr_delsys.get("filename") or "Delsys"
@@ -382,6 +394,12 @@ def build_results_csv_zip(
             text.write("\ufeff")
             _write_csv(text, rows)
             zf.writestr("features_delta.csv", text.getvalue().encode("utf-8"))
+            if feat_delta.get("correlation"):
+                corr_rows = _rows_from_correlation(feat_delta.get("correlation") or {})
+                corr_text = io.StringIO()
+                corr_text.write("\ufeff")
+                _write_csv(corr_text, corr_rows)
+                zf.writestr("features_correlation.csv", corr_text.getvalue().encode("utf-8"))
 
         if contr_delsys:
             rows = _rows_from_contractions(contr_delsys.get("contractions") or [])

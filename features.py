@@ -196,3 +196,46 @@ def compare_feature_rows(
                 delta[key] = None
         pairs.append({"index": i + 1, "delsys": left, "txt": right, "delta": delta})
     return pairs
+
+
+def pearson_corr(xs: list[float], ys: list[float]) -> float | None:
+    """Pearson r for paired samples; None if fewer than 2 pairs or zero variance."""
+    if len(xs) != len(ys) or len(xs) < 2:
+        return None
+    x = np.asarray(xs, dtype=float)
+    y = np.asarray(ys, dtype=float)
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        return None
+    x_std = float(np.std(x))
+    y_std = float(np.std(y))
+    if x_std <= 0.0 or y_std <= 0.0:
+        return None
+    r = float(np.corrcoef(x, y)[0, 1])
+    if not np.isfinite(r):
+        return None
+    return round(r, 4)
+
+
+def feature_correlations(
+    left_rows: list[dict[str, Any]],
+    right_rows: list[dict[str, Any]],
+    metrics: tuple[str, ...] | list[str] | None = None,
+) -> dict[str, float | None]:
+    """
+    Pearson r per metric across paired contraction intervals (same index).
+    Requires at least 2 valid numeric pairs for a metric.
+    """
+    keys = tuple(metrics) if metrics else SPECTRAL_METRICS
+    count = min(len(left_rows), len(right_rows))
+    out: dict[str, float | None] = {}
+    for key in keys:
+        xs: list[float] = []
+        ys: list[float] = []
+        for i in range(count):
+            lv = left_rows[i].get(key)
+            rv = right_rows[i].get(key)
+            if isinstance(lv, (int, float)) and isinstance(rv, (int, float)):
+                xs.append(float(lv))
+                ys.append(float(rv))
+        out[key] = pearson_corr(xs, ys)
+    return out

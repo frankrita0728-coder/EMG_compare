@@ -4,7 +4,7 @@ from typing import Any
 
 from align import align_traces_by_start, parse_delsys_start
 from detector import detect_contractions_dispatch
-from features import analyze_signal_features, compare_feature_rows
+from features import analyze_signal_features, compare_feature_rows, feature_correlations
 from normalize import normalize_trace
 from parsers.delsys import load_delsys_emg
 from parsers.txt_device import TXT_MV_PER_COUNT, load_txt_emg
@@ -382,6 +382,12 @@ def build_feature_compare(
         right_feat["features"],
         metrics=left_feat["metrics"],
     )
+    correlation = feature_correlations(
+        left_feat["features"],
+        right_feat["features"],
+        metrics=left_feat["metrics"],
+    )
+    n_pairs = min(left_feat["count"], right_feat["count"])
     return {
         "mode": "features",
         "expected_count": expected_count,
@@ -407,5 +413,9 @@ def build_feature_compare(
             "series": right_feat.get("series"),
         },
         "pairs": pairs,
-        "note": f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
+        "correlation": correlation,
+        "note": (
+            f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
+            f" 相關係數為跨 {n_pairs} 段收縮對齊的 Pearson r。"
+        ),
     }
