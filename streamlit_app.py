@@ -169,6 +169,7 @@ def init_state() -> None:
         "feat_delsys": None,
         "feat_txt_tables": None,
         "feat_delta": None,
+        "corr_result": None,
         "file_nonce": 0,
     }
     for key, value in defaults.items():
@@ -972,41 +973,127 @@ def tab_features() -> None:
         if delta.get("note"):
             st.caption(delta["note"])
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
-        agreement = delta.get("interval_agreement") or []
-        if agreement:
-            n_intervals = min(
-                int((delta.get("delsys") or {}).get("count") or 0),
-                int((delta.get("txt") or {}).get("count") or 0),
-            )
-            st.markdown("**收縮區間一致性（Pearson r / ICC）**")
-            st.caption(
-                f"以成對收縮區間特徵跨 {n_intervals} 段計算："
-                "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
-                "樣本少時僅供參考。"
-            )
-            st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
-        corr = delta.get("correlation") or {}
-        if corr:
-            window = delta.get("correlation_window") or {}
-            w_l = window.get("window_l", 157)
-            ov = window.get("overlap", 79)
-            n_intervals = int((delta.get("delsys") or {}).get("count") or 0)
-            st.markdown("**TTRI 滑動窗相關係數（Pearson r）**")
-            st.caption(
-                f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
-                f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"
-                "r = 1 表示完全同向。"
-            )
-            st.dataframe(correlation_rows(corr), use_container_width=True)
+        st.caption("相關係數／ICC 請到「相關係數」分頁執行與查看。")
     else:
         st.info("執行「兩邊一起」後顯示")
 
     render_export_panel(context="features")
 
 
+def tab_correlation() -> None:
+    st.caption(
+        "以 Delsys 與第一個 TXT 做一致性分析："
+        "收縮區間特徵的 Pearson r／ICC(A,1)，以及收縮區間內 TTRI 滑動窗曲線的 Pearson r。"
+    )
+    c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.4])
+    with c1:
+        contraction_method = st.selectbox(
+            "收縮判斷",
+            options=["rms_peak", "ze1_schmitt"],
+            format_func=lambda x: {
+                "rms_peak": "RMS 峰值法（現有）",
+                "ze1_schmitt": "ZE1 施密特觸發",
+            }[x],
+            key="corr_contr_method",
+        )
+    with c2:
+        feature_method = st.selectbox(
+            "特徵計算",
+            options=["spectral", "ttri"],
+            format_func=lambda x: {
+                "spectral": "Spectral（iEMG/RMS/MDF/MPF）",
+                "ttri": "TTRI / ZE1（AEMG + 滑動窗）",
+            }[x],
+            key="corr_feat_method",
+        )
+    with c3:
+        expected = st.number_input("預期次數", min_value=1, max_value=10, value=3, key="corr_expected")
+    with c4:
+        b_run, b_clear = st.columns(2)
+        run_corr = b_run.button("執行相關分析", key="corr_run", type="primary", use_container_width=True)
+        clear_corr = b_clear.button("清除結果", key="corr_clear", use_container_width=True)
+
+    if clear_corr:
+        st.session_state.corr_result = None
+        st.rerun()
+
+    if run_corr:
+        pair = require_pair()
+        if pair:
+            delsys_name, txt_names = pair
+            try:
+                compare = build_feature_compare(
+                    delsys_name,
+                    txt_names[0],
+                    expected_count=int(expected),
+                    contraction_method=contraction_method,
+                    feature_method=feature_method,
+                )
+                st.session_state.corr_result = compare
+                st.success(
+                    f"相關分析完成：Delsys「{delsys_name}」× TXT「{txt_names[0]}」"
+                    + (f"（另選 {len(txt_names) - 1} 個 TXT 未納入本次相關）" if len(txt_names) > 1 else "")
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                st.error(str(exc))
+
+    result = st.session_state.corr_result
+    if not result:
+        st.info("選擇 Delsys 與 TXT 後，按「執行相關分析」。")
+        return
+
+    delsys_name = (result.get("delsys") or {}).get("filename") or ""
+    txt_name = (result.get("txt") or {}).get("filename") or ""
+    n_intervals = min(
+        int((result.get("delsys") or {}).get("count") or 0),
+        int((result.get("txt") or {}).get("count") or 0),
+    )
+    st.markdown(f"**對照：** Delsys `{delsys_name}` × TXT `{txt_name}`")
+    if result.get("note"):
+        st.caption(result["note"])
+
+    agreement = result.get("interval_agreement") or []
+    if agreement:
+        st.subheader("收縮區間一致性（Pearson r / ICC）")
+        st.caption(
+            f"以成對收縮區間特徵跨 {n_intervals} 段計算："
+            "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
+            "樣本少時僅供參考。"
+        )
+        st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
+    else:
+        st.warning("沒有收縮區間一致性結果。")
+
+    corr = result.get("correlation") or {}
+    if corr:
+        window = result.get("correlation_window") or {}
+        w_l = window.get("window_l", 157)
+        ov = window.get("overlap", 79)
+        st.subheader("TTRI 滑動窗相關係數（Pearson r）")
+        st.caption(
+            f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
+            f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"
+            "r = 1 表示完全同向。"
+        )
+        st.dataframe(correlation_rows(corr), use_container_width=True)
+    else:
+        st.warning("沒有 TTRI 滑動窗相關係數結果。")
+
+    with st.expander("對照用特徵表（Δ）", expanded=False):
+        st.dataframe(delta_rows(result.get("pairs") or []), use_container_width=True)
+
+    render_export_panel(context="correlation")
+
+
 def render_export_panel(*, context: str) -> None:
     """Download PDF / CSV exports from current session results."""
-    has_feat = bool(st.session_state.feat_delsys or st.session_state.feat_txt_tables or st.session_state.feat_delta)
+    corr = st.session_state.get("corr_result")
+    has_feat = bool(
+        st.session_state.feat_delsys
+        or st.session_state.feat_txt_tables
+        or st.session_state.feat_delta
+        or corr
+    )
     has_contr = bool(st.session_state.contr_delsys or st.session_state.contr_txt)
     if not has_feat and not has_contr:
         return
@@ -1015,29 +1102,40 @@ def render_export_panel(*, context: str) -> None:
     st.subheader("匯出結果")
     st.caption("可下載 PDF 報告，或 CSV 壓縮檔（可用 Excel 開啟）。")
 
+    page_label = {
+        "features": "特徵",
+        "contractions": "收縮區間",
+        "correlation": "相關係數",
+    }.get(context, context)
     meta = {
-        "頁籤": "特徵" if context == "features" else "收縮區間",
+        "頁籤": page_label,
         "Delsys": st.session_state.selected_delsys or "（未選）",
         "TXT": ", ".join(st.session_state.selected_txt or []) or "（未選）",
     }
     if st.session_state.feat_delsys:
         meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""
-    if st.session_state.feat_delta:
+    if corr:
+        meta["相關特徵方法"] = corr.get("feature_method") or ""
+        meta["相關收縮判斷"] = corr.get("contraction_method") or ""
+    elif st.session_state.feat_delta:
         meta["收縮判斷"] = st.session_state.feat_delta.get("contraction_method") or ""
+
+    # Prefer dedicated correlation result for export when on that tab.
+    feat_delta = corr if context == "correlation" and corr else st.session_state.feat_delta
 
     try:
         pdf_bytes = build_results_pdf(
             meta=meta,
             feat_delsys=st.session_state.feat_delsys,
             feat_txt_tables=st.session_state.feat_txt_tables,
-            feat_delta=st.session_state.feat_delta,
+            feat_delta=feat_delta,
             contr_delsys=st.session_state.contr_delsys,
             contr_txt=st.session_state.contr_txt,
         )
         csv_zip = build_results_csv_zip(
             feat_delsys=st.session_state.feat_delsys,
             feat_txt_tables=st.session_state.feat_txt_tables,
-            feat_delta=st.session_state.feat_delta,
+            feat_delta=feat_delta,
             contr_delsys=st.session_state.contr_delsys,
             contr_txt=st.session_state.contr_txt,
         )
@@ -1070,13 +1168,15 @@ def render_export_panel(*, context: str) -> None:
 def main() -> None:
     init_state()
     render_sidebar()
-    tab1, tab2, tab3 = st.tabs(["波形", "收縮區間", "特徵"])
+    tab1, tab2, tab3, tab4 = st.tabs(["波形", "收縮區間", "特徵", "相關係數"])
     with tab1:
         tab_waveform()
     with tab2:
         tab_contractions()
     with tab3:
         tab_features()
+    with tab4:
+        tab_correlation()
 
 
 main()
