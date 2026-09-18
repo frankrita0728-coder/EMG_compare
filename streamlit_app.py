@@ -16,7 +16,7 @@ from compare import (
     build_waveform_overlay,
     build_waveform_single,
 )
-from pairing import suggest_for_selection, suggest_pairs
+from pairing import scan_tag_groups, suggest_for_selection, suggest_pairs, suggest_triple_pairs
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
 from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
@@ -1085,6 +1085,7 @@ def tab_correlation() -> None:
         "依側邊欄選取的檔案，分別做 **Delsys × ZE1** 與 **Delsys × ZE2** 相關／ICC 分析。"
     )
 
+    delsys_files, ze1_files, ze2_files = refresh_file_lists()
     selected_delsys = st.session_state.selected_delsys
     selected_ze1 = list(st.session_state.selected_txt or [])
     selected_ze2 = list(st.session_state.selected_ze2 or [])
@@ -1093,6 +1094,63 @@ def tab_correlation() -> None:
         f"**ZE1：** {', '.join(f'`{n}`' for n in selected_ze1) if selected_ze1 else '（未選）'}　｜　"
         f"**ZE2：** {', '.join(f'`{n}`' for n in selected_ze2) if selected_ze2 else '（未選）'}"
     )
+
+    with st.expander("自動掃描可配對組合（Delsys / ZE1 / ZE2）", expanded=True):
+        triples = suggest_triple_pairs(delsys_files, ze1_files, ze2_files, limit=50)
+        groups = scan_tag_groups(delsys_files, ze1_files, ze2_files)
+        st.caption(
+            f"資料庫目前：Delsys {len(delsys_files)}、ZE1 {len(ze1_files)}、ZE2 {len(ze2_files)}。"
+            " 完整三方優先；也可先套用兩方配對。"
+        )
+        if groups:
+            st.markdown("**依標籤分組（受試者／肌肉／側／日期）**")
+            group_rows = [
+                {
+                    "完整度": g["completeness"],
+                    "受試者": g["subject"],
+                    "肌肉": g["muscle"],
+                    "側": g["side"],
+                    "日期": g["date"],
+                    "Delsys數": g["n_delsys"],
+                    "ZE1數": g["n_ze1"],
+                    "ZE2數": g["n_ze2"],
+                }
+                for g in groups[:30]
+            ]
+            st.dataframe(group_rows, use_container_width=True)
+            st.markdown("**一鍵套用分組選取**")
+            for idx, g in enumerate(groups[:12]):
+                label = (
+                    f"[{g['completeness']}] {g['subject']}/{g['muscle']}/{g['side']}/{g['date'] or '—'} "
+                    f"(D{g['n_delsys']} Z1:{g['n_ze1']} Z2:{g['n_ze2']})"
+                )
+                if st.button(label, key=f"corr_group_{idx}", use_container_width=True):
+                    if g["delsys"]:
+                        st.session_state.selected_delsys = g["delsys"][0]
+                    if g["ze1"]:
+                        st.session_state.selected_txt = list(g["ze1"])
+                    if g["ze2"]:
+                        st.session_state.selected_ze2 = list(g["ze2"])
+                    st.rerun()
+        if triples:
+            st.markdown("**建議配對（可一鍵套用選取）**")
+            for idx, item in enumerate(triples[:20]):
+                label = (
+                    f"[{item['completeness']}] score={item['score']}｜"
+                    f"D:{item.get('delsys') or '—'} × "
+                    f"ZE1:{item.get('ze1') or '—'} × "
+                    f"ZE2:{item.get('ze2') or '—'}｜{item.get('reason') or ''}"
+                )
+                if st.button(label, key=f"corr_triple_{idx}", use_container_width=True):
+                    if item.get("delsys"):
+                        st.session_state.selected_delsys = item["delsys"]
+                    if item.get("ze1"):
+                        st.session_state.selected_txt = [item["ze1"]]
+                    if item.get("ze2"):
+                        st.session_state.selected_ze2 = [item["ze2"]]
+                    st.rerun()
+        else:
+            st.warning("目前掃不到可配對組合。請確認 data/delsys、data/txt、data/ZE2_txt 已放檔。")
 
     c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.4])
     with c1:
@@ -1173,7 +1231,7 @@ def tab_correlation() -> None:
     ze1_results = list(st.session_state.corr_results_ze1 or [])
     ze2_results = list(st.session_state.corr_results_ze2 or [])
     if not ze1_results and not ze2_results:
-        st.info("請選取 Delsys，並至少選 ZE1 或 ZE2，再按「執行相關分析」。")
+        st.info("請選取 Delsys，並至少選 ZE1 或 ZE2，再按「執行相關分析」。也可先用上方自動配對一鍵套用。")
         return
 
     st.subheader("Delsys（參考）")
