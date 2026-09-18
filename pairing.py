@@ -621,6 +621,67 @@ def match_devices_for_delsys(
     }
 
 
+def enumerate_muscle_sites(
+    delsys_files: list[dict[str, Any]],
+    ze1_files: list[dict[str, Any]],
+    ze2_files: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """
+    One row per subject/muscle/side site across all sources.
+
+    Sites without Delsys stay listed so other muscle groups are still processed.
+    """
+    buckets: dict[tuple[str, str, str], dict[str, list[str]]] = {}
+    for source, files in (
+        ("delsys", delsys_files),
+        ("ze1", ze1_files),
+        ("ze2", ze2_files),
+    ):
+        for item in files:
+            tags = extract_tags(item["name"])
+            key = _site_key(tags)
+            if key[0] == "?" or key[1] == "?" or key[2] == "?":
+                continue
+            bucket = buckets.setdefault(key, {"delsys": [], "ze1": [], "ze2": []})
+            bucket[source].append(item["name"])
+
+    rows: list[dict[str, Any]] = []
+    for key, bucket in sorted(buckets.items()):
+        subject, muscle, side = key
+        ze1_pref = prefer_recommended_files(bucket["ze1"], "ze1")
+        ze2_pref = prefer_recommended_files(bucket["ze2"], "ze2")
+        has_delsys = bool(bucket["delsys"])
+        has_device = bool(bucket["ze1"] or bucket["ze2"])
+        if has_delsys and has_device:
+            status = "可比對"
+        elif has_delsys:
+            status = "僅 Delsys"
+        elif has_device:
+            status = "待補 Delsys"
+        else:
+            status = "不足"
+        rows.append(
+            {
+                "status": status,
+                "subject": subject,
+                "muscle": muscle,
+                "side": side,
+                "channel_hint": channel_hint_label(side, muscle),
+                "ze1_channel_hint": recommended_channel("ze1", side=side, muscle=muscle),
+                "ze2_channel_hint": recommended_channel("ze2", side=side, muscle=muscle),
+                "delsys": bucket["delsys"],
+                "ze1": bucket["ze1"],
+                "ze2": bucket["ze2"],
+                "ze1_preferred": ze1_pref,
+                "ze2_preferred": ze2_pref,
+                "n_delsys": len(bucket["delsys"]),
+                "n_ze1": len(bucket["ze1"]),
+                "n_ze2": len(bucket["ze2"]),
+            }
+        )
+    return rows
+
+
 def build_name_consistency_inventory(
     delsys_files: list[dict[str, Any]],
     ze1_files: list[dict[str, Any]],
@@ -636,6 +697,7 @@ def build_name_consistency_inventory(
     groups = scan_tag_groups(delsys_files, ze1_files, ze2_files)
     triples = suggest_triple_pairs(delsys_files, ze1_files, ze2_files, limit=100)
     delsys_ze1 = suggest_pairs(delsys_files, ze1_files, limit=50)
+    sites = enumerate_muscle_sites(delsys_files, ze1_files, ze2_files)
 
     comparable: list[dict[str, Any]] = []
     for item in delsys_files:
@@ -669,6 +731,10 @@ def build_name_consistency_inventory(
             for name in (row.get(field) or "").split("; "):
                 if name:
                     matched_names.add(name)
+    for site in sites:
+        for field in ("delsys", "ze1", "ze2"):
+            for name in site.get(field) or []:
+                matched_names.add(name)
 
     unmatched = {
         "delsys": [f["name"] for f in delsys_files if f["name"] not in matched_names],
@@ -682,6 +748,7 @@ def build_name_consistency_inventory(
 
     return {
         "groups": groups,
+        "sites": sites,
         "comparable": comparable,
         "triples": triples,
         "delsys_ze1": delsys_ze1,
@@ -691,5 +758,6 @@ def build_name_consistency_inventory(
             "ze1": len(ze1_files),
             "ze2": len(ze2_files),
             "comparable_groups": len(comparable),
+            "muscle_sites": len(sites),
         },
     }
