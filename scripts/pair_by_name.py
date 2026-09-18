@@ -1,21 +1,23 @@
 #!/usr/bin/env python3
-"""Scan data/ by name consistency; compare all muscle sites (ZE1/ZE2 vs Delsys when available)."""
+"""Scan data/ by name consistency; compare muscle sites (optionally one session folder)."""
 
 from __future__ import annotations
 
+import argparse
 import csv
 import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from compare import build_feature_compare, build_feature_compare_ze2
-from features import analyze_signal_features
-from pairing import build_name_consistency_inventory, extract_tags
+from features import analyze_signal_features, compare_feature_rows, feature_correlations, interval_agreement
+from pairing import build_name_consistency_inventory
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
 from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
@@ -30,11 +32,57 @@ def _slug(*parts: str) -> str:
     return text.strip("_") or "site"
 
 
-def write_inventory(inv: dict) -> tuple[Path, Path, Path]:
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-    md_path = OUT_DIR / "name_consistency_inventory.md"
-    csv_path = OUT_DIR / "name_consistency_pairs.csv"
-    sites_csv = OUT_DIR / "muscle_sites.csv"
+def _filter_by_session(files: list[dict[str, Any]], session: str | None) -> list[dict[str, Any]]:
+    """Keep files under a session folder (e.g. 2609-09) or whose name starts with it."""
+    if not session:
+        return files
+    key = session.strip()
+    out: list[dict[str, Any]] = []
+    for item in files:
+        path = str(item.get("path") or "").replace("\\", "/")
+        name = str(item.get("name") or "")
+        if f"/{key}/" in f"/{path}" or path.endswith(f"/{key}") or name.startswith(key):
+            out.append(item)
+    return out
+
+
+def _list_session_files(session: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    """
+    Prefer files physically inside */{session}/ folders.
+
+    Global list_* helpers dedupe by filename, so session copies can be skipped;
+    this rescans the session directories directly.
+    """
+    from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2
+
+    def _scan(root: Path, pattern: str, source: str) -> list[dict[str, Any]]:
+        folder = root / session
+        if not folder.is_dir():
+            return []
+        files: list[dict[str, Any]] = []
+        for path in sorted(folder.rglob(pattern), key=lambda p: p.name.lower()):
+            files.append(
+                {
+                    "name": path.name,
+                    "path": str(path),
+                    "source": source,
+                    "label": path.stem,
+                }
+            )
+        return files
+
+    return (
+        _scan(DATA_DELSYS, "*.csv", "delsys"),
+        _scan(DATA_TXT, "*.txt", "txt"),
+        _scan(DATA_ZE2, "*.txt", "ze2"),
+    )
+
+
+def write_inventory(inv: dict, out_dir: Path) -> tuple[Path, Path, Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    md_path = out_dir / "name_consistency_inventory.md"
+    csv_path = out_dir / "name_consistency_pairs.csv"
+    sites_csv = out_dir / "muscle_sites.csv"
 
     lines = [
         "# 名稱一致性配對清單（全肌群）",
@@ -222,13 +270,11 @@ def _analyze_ze2_solo(filename: str) -> dict:
     }
 
 
-def run_all_site_analyses(inv: dict) -> list[Path]:
-    """Compare every muscle site: vs Delsys when possible, else ZE2 solo features."""
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
+def run_all_site_analyses(inv: dict, out_dir: Path) -> list[Path]:
+    out_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
     summary_rows: list[dict] = []
 
-    # 1) Full Delsys comparisons
     for idx, row in enumerate(inv["comparable"], start=1):
         delsys = (row.get("delsys") or "").split("; ")[0].strip()
         if not delsys:
@@ -253,7 +299,7 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
                 contraction_method="ze1_schmitt",
                 feature_method="ttri",
             )
-            out = OUT_DIR / f"compare_{idx:02d}_{stem}_ze1.json"
+            out = out_dir / f"compare_{idx:02d}_{stem}_ze1.json"
             out.write_text(
                 json.dumps(_slim_result(result, device="ze1", device_name=ze1, meta=meta), ensure_ascii=False, indent=2, default=str),
                 encoding="utf-8",
@@ -285,7 +331,7 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
                 ze2_mv_per_count=float(ZE2_MV_PER_COUNT),
                 apply_bandpass=True,
             )
-            out = OUT_DIR / f"compare_{idx:02d}_{stem}_ze2.json"
+            out = out_dir / f"compare_{idx:02d}_{stem}_ze2.json"
             out.write_text(
                 json.dumps(_slim_result(result, device="ze2", device_name=ze2, meta=meta), ensure_ascii=False, indent=2, default=str),
                 encoding="utf-8",
@@ -305,11 +351,10 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
                 }
             )
 
-    # 2) Other muscle sites: ZE2 preferred-channel solo (+ multi-session if several)
     site_idx = 0
     for site in inv.get("sites") or []:
         if site["status"] == "可比對":
-            continue  # already handled via Delsys pairs
+            continue
         prefs = list(site.get("ze2_preferred") or [])
         if not prefs:
             continue
@@ -326,7 +371,7 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
                 "channel_hint": site.get("channel_hint"),
                 "match_note": "無對應 Delsys；先輸出 ZE2 單獨特徵",
             }
-            out = OUT_DIR / f"site_{site_idx:02d}_{stem}_ze2_{j:02d}.json"
+            out = out_dir / f"site_{site_idx:02d}_{stem}_ze2_{j:02d}.json"
             payload = {**meta, **solo, "device": "ze2", "device_file": ze2_name}
             out.write_text(json.dumps(payload, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
             written.append(out)
@@ -354,10 +399,15 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
                 }
             )
 
-        # If multiple preferred ZE2 recordings at same site, compare first two as session check
         if len(prefs) >= 2:
-            left = load_ze2_emg(prefs[0], for_plot=False, sample_rate=float(ZE2_DEFAULT_FS), mv_per_count=float(ZE2_MV_PER_COUNT), apply_bandpass=True)
-            right = load_ze2_emg(prefs[1], for_plot=False, sample_rate=float(ZE2_DEFAULT_FS), mv_per_count=float(ZE2_MV_PER_COUNT), apply_bandpass=True)
+            left = load_ze2_emg(
+                prefs[0], for_plot=False, sample_rate=float(ZE2_DEFAULT_FS),
+                mv_per_count=float(ZE2_MV_PER_COUNT), apply_bandpass=True,
+            )
+            right = load_ze2_emg(
+                prefs[1], for_plot=False, sample_rate=float(ZE2_DEFAULT_FS),
+                mv_per_count=float(ZE2_MV_PER_COUNT), apply_bandpass=True,
+            )
             left_feat = analyze_signal_features(
                 left["times"], left["values"], sample_rate=left["sample_rate"],
                 expected_count=3, contraction_method="ze1_schmitt", feature_method="ttri", source="ze2",
@@ -366,12 +416,10 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
                 right["times"], right["values"], sample_rate=right["sample_rate"],
                 expected_count=3, contraction_method="ze1_schmitt", feature_method="ttri", source="ze2",
             )
-            from features import compare_feature_rows, feature_correlations, interval_agreement
-
             pairs = compare_feature_rows(left_feat["features"], right_feat["features"], metrics=left_feat["metrics"])
             corr = feature_correlations(left_feat["features"], right_feat["features"], metrics=left_feat["metrics"])
             agree = interval_agreement(left_feat["features"], right_feat["features"], metrics=left_feat["metrics"])
-            out = OUT_DIR / f"site_{site_idx:02d}_{stem}_ze2_session_compare.json"
+            out = out_dir / f"site_{site_idx:02d}_{stem}_ze2_session_compare.json"
             out.write_text(
                 json.dumps(
                     {
@@ -395,19 +443,10 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
             )
             written.append(out)
 
-    summary_path = OUT_DIR / "all_muscles_summary.csv"
+    summary_path = out_dir / "all_muscles_summary.csv"
     fieldnames = [
-        "status",
-        "subject",
-        "muscle",
-        "side",
-        "device",
-        "file",
-        "correlation_iemg",
-        "correlation_rms",
-        "n_pairs",
-        "mean_aemg",
-        "mean_rms",
+        "status", "subject", "muscle", "side", "device", "file",
+        "correlation_iemg", "correlation_rms", "n_pairs", "mean_aemg", "mean_rms",
     ]
     with summary_path.open("w", newline="", encoding="utf-8") as fh:
         writer = csv.DictWriter(fh, fieldnames=fieldnames)
@@ -418,26 +457,53 @@ def run_all_site_analyses(inv: dict) -> list[Path]:
     return written
 
 
-def main() -> None:
-    delsys = list_delsys_files()
-    ze1 = list_txt_files()
-    ze2 = list_ze2_files()
+def run_session(session: str | None) -> None:
+    if session:
+        delsys, ze1, ze2 = _list_session_files(session)
+        # Fallback: also include name-prefix matches from global lists (e.g. flat files).
+        if not delsys:
+            delsys = _filter_by_session(list_delsys_files(), session)
+        if not ze1:
+            ze1 = _filter_by_session(list_txt_files(), session)
+        if not ze2:
+            ze2 = _filter_by_session(list_ze2_files(), session)
+        out_dir = OUT_DIR / session
+    else:
+        delsys = list_delsys_files()
+        ze1 = list_txt_files()
+        ze2 = list_ze2_files()
+        out_dir = OUT_DIR
     inv = build_name_consistency_inventory(delsys, ze1, ze2)
-    md_path, csv_path, sites_csv = write_inventory(inv)
-    compare_paths = run_all_site_analyses(inv)
-    print(f"inventory: {md_path}")
-    print(f"pairs csv: {csv_path}")
-    print(f"sites csv: {sites_csv}")
-    print(f"muscle sites: {inv['counts'].get('muscle_sites')}")
-    print(f"comparable with Delsys: {inv['counts']['comparable_groups']}")
+    md_path, csv_path, sites_csv = write_inventory(inv, out_dir)
+    compare_paths = run_all_site_analyses(inv, out_dir)
+    label = session or "ALL"
+    print(f"[{label}] files D={len(delsys)} Z1={len(ze1)} Z2={len(ze2)}")
+    print(f"[{label}] inventory: {md_path}")
+    print(f"[{label}] pairs csv: {csv_path}")
+    print(f"[{label}] sites csv: {sites_csv}")
+    print(f"[{label}] muscle sites: {inv['counts'].get('muscle_sites')} comparable: {inv['counts']['comparable_groups']}")
     for site in inv.get("sites") or []:
         print(
-            f"site [{site['status']}] {site['subject']} {site['side']}{site['muscle']} "
+            f"[{label}] site [{site['status']}] {site['subject']} {site['side']}{site['muscle']} "
             f"D={len(site.get('delsys') or [])} Z1={len(site.get('ze1_preferred') or [])} "
             f"Z2={len(site.get('ze2_preferred') or [])}"
         )
     for p in compare_paths:
-        print(f"out: {p}")
+        print(f"[{label}] out: {p}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Pair and compare EMG files by name consistency")
+    parser.add_argument(
+        "--session",
+        action="append",
+        default=[],
+        help="Session folder name to analyze (e.g. 2609-09). Repeatable. Default: all files.",
+    )
+    args = parser.parse_args()
+    sessions = args.session or [None]
+    for session in sessions:
+        run_session(session)
 
 
 if __name__ == "__main__":
