@@ -1212,6 +1212,24 @@ def tab_waveform() -> None:
 
     pages: list[tuple[str, Any, Any]] = []
 
+    overlay = st.session_state.wave_overlay
+    if overlay and overlay.get("overlay"):
+
+        def _render_overlay(ov=overlay) -> None:
+            st.plotly_chart(
+                fig_overlay(
+                    ov["overlay"],
+                    title=f"波形疊圖（{ov.get('norm_method')}）",
+                    y_title=y_title,
+                ),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+            if ov.get("note"):
+                st.caption(ov["note"])
+
+        pages.append(("疊圖", _render_overlay, lambda: clear_wave_result(source="overlay")))
+
     if st.session_state.wave_delsys:
         trace = st.session_state.wave_delsys
 
@@ -1282,24 +1300,6 @@ def tab_waveform() -> None:
                 lambda name=fname: clear_wave_result(source="ze2", filename=name),
             )
         )
-
-    overlay = st.session_state.wave_overlay
-    if overlay and overlay.get("overlay"):
-
-        def _render_overlay(ov=overlay) -> None:
-            st.plotly_chart(
-                fig_overlay(
-                    ov["overlay"],
-                    title=f"波形疊圖（{ov.get('norm_method')}）",
-                    y_title=y_title,
-                ),
-                use_container_width=True,
-                config={"displayModeBar": True},
-            )
-            if ov.get("note"):
-                st.caption(ov["note"])
-
-        pages.append(("疊圖", _render_overlay, lambda: clear_wave_result(source="overlay")))
 
     if pages:
         st.caption("每個檔案一個頁籤；可按「清除此結果」移除圖表。")
