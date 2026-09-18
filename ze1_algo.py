@@ -189,7 +189,7 @@ ZE1_PRESETS: dict[str, dict[str, Any]] = {
 
 def resolve_ze1_preset(source: str | None = None) -> dict[str, Any]:
     key = (source or "delsys").strip().lower()
-    if key in {"txt", "device", "ze1_device"}:
+    if key in {"txt", "device", "ze1_device", "ze2"}:
         return dict(ZE1_PRESETS["txt"])
     return dict(ZE1_PRESETS["delsys"])
 

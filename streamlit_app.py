@@ -10,6 +10,7 @@ import streamlit as st
 
 from compare import (
     build_feature_compare,
+    build_feature_compare_ze2,
     build_feature_single,
     build_contraction_single,
     build_waveform_overlay,
@@ -18,7 +19,9 @@ from compare import (
 from pairing import suggest_for_selection, suggest_pairs
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
-from paths import DATA_DELSYS, DATA_TXT, ensure_data_dirs
+from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
+from parsers.ze2_txt import ZE2_MV_PER_COUNT, list_ze2_files
+from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2, ensure_data_dirs
 from export_report import build_results_csv_zip, build_results_pdf
 
 DELSYS_COLOR = "#5ec8ff"
@@ -161,6 +164,9 @@ def init_state() -> None:
     defaults = {
         "selected_delsys": None,
         "selected_txt": [],
+        "selected_ze2": [],
+        "ze2_fs": float(ZE2_DEFAULT_FS),
+        "ze2_mv": float(ZE2_MV_PER_COUNT),
         "wave_delsys": None,
         "wave_txt": None,
         "wave_overlay": None,
@@ -171,6 +177,8 @@ def init_state() -> None:
         "feat_delta": None,
         "corr_result": None,
         "corr_results": None,
+        "corr_results_ze1": None,
+        "corr_results_ze2": None,
         "file_nonce": 0,
     }
     for key, value in defaults.items():
@@ -178,9 +186,9 @@ def init_state() -> None:
             st.session_state[key] = value
 
 
-def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
     ensure_data_dirs()
-    return list_delsys_files(), list_txt_files()
+    return list_delsys_files(), list_txt_files(), list_ze2_files()
 
 
 def save_uploads(uploaded_files, dest: Path) -> list[str]:
@@ -418,9 +426,11 @@ def delta_rows(pairs: list[dict[str, Any]]) -> list[dict[str, Any]]:
         for key, value in (item.get("delsys") or {}).items():
             if key not in {"index"}:
                 row[f"D {key}"] = value
-        for key, value in (item.get("txt") or {}).items():
+        right = item.get("ze2") or item.get("txt") or item.get("ze1") or {}
+        prefix = "Z2" if item.get("ze2") else "Z1"
+        for key, value in right.items():
             if key not in {"index"}:
-                row[f"T {key}"] = value
+                row[f"{prefix} {key}"] = value
         rows.append(row)
     return rows
 
@@ -458,7 +468,15 @@ def require_delsys() -> str | None:
 def require_txt() -> list[str] | None:
     names = list(st.session_state.selected_txt or [])
     if not names:
-        st.warning("請先選擇至少一個 TXT")
+        st.warning("請先選擇至少一個 ZE1 TXT")
+        return None
+    return names
+
+
+def require_ze2() -> list[str] | None:
+    names = list(st.session_state.selected_ze2 or [])
+    if not names:
+        st.warning("請先選擇至少一個 ZE2 檔案")
         return None
     return names
 
@@ -469,6 +487,19 @@ def require_pair() -> tuple[str, list[str]] | None:
     if not delsys or not txt:
         return None
     return delsys, txt
+
+
+def require_corr_selection() -> tuple[str, list[str], list[str]] | None:
+    """Delsys required; at least one ZE1 or ZE2 selected."""
+    delsys = require_delsys()
+    if not delsys:
+        return None
+    ze1 = list(st.session_state.selected_txt or [])
+    ze2 = list(st.session_state.selected_ze2 or [])
+    if not ze1 and not ze2:
+        st.warning("請至少選擇一個 ZE1 或 ZE2 檔案")
+        return None
+    return delsys, ze1, ze2
 
 
 def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]:
@@ -497,29 +528,32 @@ def render_sidebar() -> None:
         """
         <p class="brand-kicker">Zentan</p>
         <p class="brand-title">emg-compare.app</p>
-        <p class="brand-sub">Delsys CSV × 自研 TXT</p>
+        <p class="brand-sub">Delsys × ZE1 × ZE2</p>
         """,
         unsafe_allow_html=True,
     )
 
     st.sidebar.markdown("##### 上傳檔案")
     up_delsys = st.sidebar.file_uploader("Delsys CSV", type=["csv"], accept_multiple_files=True, key="up_delsys")
-    up_txt = st.sidebar.file_uploader("自研 TXT", type=["txt"], accept_multiple_files=True, key="up_txt")
+    up_txt = st.sidebar.file_uploader("ZE1 TXT", type=["txt"], accept_multiple_files=True, key="up_txt")
+    up_ze2 = st.sidebar.file_uploader("ZE2 TXT", type=["txt"], accept_multiple_files=True, key="up_ze2")
     if st.sidebar.button("儲存上傳檔案", use_container_width=True):
         saved_d = save_uploads(up_delsys, DATA_DELSYS)
         saved_t = save_uploads(up_txt, DATA_TXT)
+        saved_z = save_uploads(up_ze2, DATA_ZE2)
         st.session_state.file_nonce += 1
-        if saved_d or saved_t:
-            st.sidebar.success(f"已存入 {len(saved_d)} CSV、{len(saved_t)} TXT")
+        if saved_d or saved_t or saved_z:
+            st.sidebar.success(f"已存入 {len(saved_d)} CSV、{len(saved_t)} ZE1、{len(saved_z)} ZE2")
         else:
             st.sidebar.info("沒有選到檔案")
 
     if st.sidebar.button("重新整理", use_container_width=True):
         st.session_state.file_nonce += 1
 
-    delsys_files, txt_files = refresh_file_lists()
+    delsys_files, txt_files, ze2_files = refresh_file_lists()
     delsys_names = [item["name"] for item in delsys_files]
     txt_names = [item["name"] for item in txt_files]
+    ze2_names = [item["name"] for item in ze2_files]
 
     st.sidebar.markdown("##### Delsys CSV")
     if not delsys_names:
@@ -535,30 +569,53 @@ def render_sidebar() -> None:
             label_visibility="collapsed",
         )
 
-    st.sidebar.markdown("##### 自研 TXT（可多選）")
+    st.sidebar.markdown("##### ZE1 TXT（可多選）")
     if not txt_names:
-        st.sidebar.info("尚無 TXT")
+        st.sidebar.info("尚無 ZE1")
         st.session_state.selected_txt = []
     else:
-        # Bind via key only — assigning return value + default= breaks multi-select.
         st.session_state.selected_txt = [
             name for name in (st.session_state.selected_txt or []) if name in txt_names
         ]
         st.sidebar.multiselect(
-            "選擇 TXT",
+            "選擇 ZE1",
             options=txt_names,
             key="selected_txt",
             label_visibility="collapsed",
             help="可同時勾選多個，例如 ExgCh1 + ExgCh2",
         )
-        if st.sidebar.button("自動勾選 Ch1+Ch2 配對", use_container_width=True):
+        if st.sidebar.button("自動勾選 ZE1 Ch1+Ch2 配對", use_container_width=True):
             st.session_state.selected_txt = sibling_txt_channels(
                 list(st.session_state.selected_txt or []),
                 txt_names,
             )
             st.rerun()
 
-    st.sidebar.markdown("##### 自動建議")
+    st.sidebar.markdown("##### ZE2 TXT（可多選）")
+    if not ze2_names:
+        st.sidebar.info("尚無 ZE2")
+        st.session_state.selected_ze2 = []
+    else:
+        st.session_state.selected_ze2 = [
+            name for name in (st.session_state.selected_ze2 or []) if name in ze2_names
+        ]
+        st.sidebar.multiselect(
+            "選擇 ZE2",
+            options=ze2_names,
+            key="selected_ze2",
+            label_visibility="collapsed",
+        )
+        st.sidebar.number_input("ZE2 取樣率 (Hz)", min_value=100.0, max_value=5000.0, value=float(st.session_state.ze2_fs), key="ze2_fs")
+        st.sidebar.number_input(
+            "ZE2 mV/count",
+            min_value=1e-8,
+            max_value=1.0,
+            value=float(st.session_state.ze2_mv),
+            format="%.8f",
+            key="ze2_mv",
+        )
+
+    st.sidebar.markdown("##### 自動建議（Delsys ↔ ZE1）")
     if st.session_state.selected_delsys:
         raw_suggestions = suggest_for_selection(st.session_state.selected_delsys, "delsys", txt_files)
         suggestions = [
@@ -598,11 +655,13 @@ def render_sidebar() -> None:
                 st.rerun()
 
     st.sidebar.divider()
-    st.sidebar.caption(f"Delsys 資料夾：{DATA_DELSYS}")
-    st.sidebar.caption(f"TXT 資料夾：{DATA_TXT}")
+    st.sidebar.caption(f"Delsys：{DATA_DELSYS}")
+    st.sidebar.caption(f"ZE1：{DATA_TXT}")
+    st.sidebar.caption(f"ZE2：{DATA_ZE2}")
     st.sidebar.caption(
-        f"已選：{st.session_state.selected_delsys or '（無）'} / "
-        f"{', '.join(st.session_state.selected_txt or []) or '（無）'}"
+        f"已選 Delsys：{st.session_state.selected_delsys or '（無）'} / "
+        f"ZE1：{', '.join(st.session_state.selected_txt or []) or '（無）'} / "
+        f"ZE2：{', '.join(st.session_state.selected_ze2 or []) or '（無）'}"
     )
 
 
@@ -981,18 +1040,58 @@ def tab_features() -> None:
     render_export_panel(context="features")
 
 
+def _render_correlation_block(result: dict[str, Any], *, device_label: str) -> None:
+    delsys_name = (result.get("delsys") or {}).get("filename") or ""
+    device = result.get("ze2") or result.get("ze1") or result.get("txt") or {}
+    device_name = device.get("filename") or ""
+    n_intervals = min(
+        int((result.get("delsys") or {}).get("count") or 0),
+        int(device.get("count") or 0),
+    )
+    st.markdown(f"#### {device_label}：`{device_name}`  vs  Delsys `{delsys_name}`")
+    if result.get("note"):
+        st.caption(result["note"])
+
+    agreement = result.get("interval_agreement") or []
+    if agreement:
+        st.markdown("**收縮區間一致性（Pearson r / ICC）**")
+        st.caption(
+            f"跨 {n_intervals} 段收縮特徵："
+            "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
+        )
+        st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
+    else:
+        st.warning("沒有收縮區間一致性結果。")
+
+    corr = result.get("correlation") or {}
+    if corr:
+        window = result.get("correlation_window") or {}
+        w_l = window.get("window_l", 157)
+        ov = window.get("overlap", 79)
+        st.markdown("**TTRI 滑動窗相關係數（Pearson r）**")
+        st.caption(
+            f"window_l={w_l}, overlap={ov}；僅 Delsys {n_intervals} 段收縮區間內的點。"
+        )
+        st.dataframe(correlation_rows(corr), use_container_width=True)
+    else:
+        st.warning("沒有 TTRI 滑動窗相關係數結果。")
+
+    with st.expander(f"對照用特徵表（Δ）— {device_label} {device_name}", expanded=False):
+        st.dataframe(delta_rows(result.get("pairs") or []), use_container_width=True)
+
+
 def tab_correlation() -> None:
     st.caption(
-        "依側邊欄目前選取的檔案分析："
-        "每個已選 TXT 分別與 Delsys 計算收縮區間 Pearson r／ICC(A,1)，"
-        "以及收縮區間內 TTRI 滑動窗曲線的 Pearson r。"
+        "依側邊欄選取的檔案，分別做 **Delsys × ZE1** 與 **Delsys × ZE2** 相關／ICC 分析。"
     )
 
     selected_delsys = st.session_state.selected_delsys
-    selected_txt = list(st.session_state.selected_txt or [])
+    selected_ze1 = list(st.session_state.selected_txt or [])
+    selected_ze2 = list(st.session_state.selected_ze2 or [])
     st.info(
-        f"目前選取 — Delsys：`{selected_delsys or '（未選）'}`　｜　"
-        f"TXT：{', '.join(f'`{n}`' for n in selected_txt) if selected_txt else '（未選）'}"
+        f"**Delsys：** `{selected_delsys or '（未選）'}`　｜　"
+        f"**ZE1：** {', '.join(f'`{n}`' for n in selected_ze1) if selected_ze1 else '（未選）'}　｜　"
+        f"**ZE2：** {', '.join(f'`{n}`' for n in selected_ze2) if selected_ze2 else '（未選）'}"
     )
 
     c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.4])
@@ -1026,80 +1125,75 @@ def tab_correlation() -> None:
     if clear_corr:
         st.session_state.corr_result = None
         st.session_state.corr_results = None
+        st.session_state.corr_results_ze1 = None
+        st.session_state.corr_results_ze2 = None
         st.rerun()
 
     if run_corr:
-        pair = require_pair()
-        if pair:
-            delsys_name, txt_names = pair
+        selection = require_corr_selection()
+        if selection:
+            delsys_name, ze1_names, ze2_names = selection
             try:
-                results = []
-                for txt_name in txt_names:
-                    compare = build_feature_compare(
-                        delsys_name,
-                        txt_name,
-                        expected_count=int(expected),
-                        contraction_method=contraction_method,
-                        feature_method=feature_method,
+                ze1_results = []
+                for name in ze1_names:
+                    ze1_results.append(
+                        build_feature_compare(
+                            delsys_name,
+                            name,
+                            expected_count=int(expected),
+                            contraction_method=contraction_method,
+                            feature_method=feature_method,
+                        )
                     )
-                    results.append(compare)
-                st.session_state.corr_results = results
-                # Keep first result for export compatibility.
-                st.session_state.corr_result = results[0] if results else None
+                ze2_results = []
+                for name in ze2_names:
+                    ze2_results.append(
+                        build_feature_compare_ze2(
+                            delsys_name,
+                            name,
+                            expected_count=int(expected),
+                            contraction_method=contraction_method,
+                            feature_method=feature_method,
+                            ze2_sample_rate=float(st.session_state.get("ze2_fs") or ZE2_DEFAULT_FS),
+                            ze2_mv_per_count=float(st.session_state.get("ze2_mv") or ZE2_MV_PER_COUNT),
+                            apply_bandpass=True,
+                        )
+                    )
+                st.session_state.corr_results_ze1 = ze1_results
+                st.session_state.corr_results_ze2 = ze2_results
+                st.session_state.corr_results = ze1_results + ze2_results
+                st.session_state.corr_result = (ze1_results or ze2_results or [None])[0]
                 st.success(
-                    f"相關分析完成：Delsys「{delsys_name}」× {len(results)} 個已選 TXT"
+                    f"相關分析完成：Delsys「{delsys_name}」× "
+                    f"ZE1 {len(ze1_results)} 個、ZE2 {len(ze2_results)} 個"
                 )
-            except (FileNotFoundError, ValueError) as exc:
+            except (FileNotFoundError, ValueError, ImportError) as exc:
                 st.error(str(exc))
 
-    results = list(st.session_state.corr_results or [])
-    if not results and st.session_state.corr_result:
-        results = [st.session_state.corr_result]
-    if not results:
-        st.info("請先在左側選取 Delsys 與至少一個 TXT，再按「執行相關分析」。")
+    ze1_results = list(st.session_state.corr_results_ze1 or [])
+    ze2_results = list(st.session_state.corr_results_ze2 or [])
+    if not ze1_results and not ze2_results:
+        st.info("請選取 Delsys，並至少選 ZE1 或 ZE2，再按「執行相關分析」。")
         return
 
-    for result in results:
-        delsys_name = (result.get("delsys") or {}).get("filename") or ""
-        txt_name = (result.get("txt") or {}).get("filename") or ""
-        n_intervals = min(
-            int((result.get("delsys") or {}).get("count") or 0),
-            int((result.get("txt") or {}).get("count") or 0),
-        )
-        st.markdown("---")
-        st.markdown(f"### 對照：Delsys `{delsys_name}` × TXT `{txt_name}`")
-        if result.get("note"):
-            st.caption(result["note"])
+    st.subheader("Delsys（參考）")
+    st.caption(f"參考檔：`{selected_delsys or (ze1_results or ze2_results)[0].get('delsys', {}).get('filename', '')}`")
 
-        agreement = result.get("interval_agreement") or []
-        if agreement:
-            st.subheader("收縮區間一致性（Pearson r / ICC）")
-            st.caption(
-                f"以成對收縮區間特徵跨 {n_intervals} 段計算："
-                "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
-                "樣本少時僅供參考。"
-            )
-            st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
-        else:
-            st.warning("沒有收縮區間一致性結果。")
+    st.subheader("ZE1 相關分析")
+    if ze1_results:
+        for result in ze1_results:
+            st.markdown("---")
+            _render_correlation_block(result, device_label="ZE1")
+    else:
+        st.info("這次沒有選 ZE1 檔案。")
 
-        corr = result.get("correlation") or {}
-        if corr:
-            window = result.get("correlation_window") or {}
-            w_l = window.get("window_l", 157)
-            ov = window.get("overlap", 79)
-            st.subheader("TTRI 滑動窗相關係數（Pearson r）")
-            st.caption(
-                f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
-                f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"
-                "r = 1 表示完全同向。"
-            )
-            st.dataframe(correlation_rows(corr), use_container_width=True)
-        else:
-            st.warning("沒有 TTRI 滑動窗相關係數結果。")
-
-        with st.expander(f"對照用特徵表（Δ）— {txt_name}", expanded=False):
-            st.dataframe(delta_rows(result.get("pairs") or []), use_container_width=True)
+    st.subheader("ZE2 相關分析")
+    if ze2_results:
+        for result in ze2_results:
+            st.markdown("---")
+            _render_correlation_block(result, device_label="ZE2")
+    else:
+        st.info("這次沒有選 ZE2 檔案。")
 
     render_export_panel(context="correlation")
 
@@ -1129,7 +1223,8 @@ def render_export_panel(*, context: str) -> None:
     meta = {
         "頁籤": page_label,
         "Delsys": st.session_state.selected_delsys or "（未選）",
-        "TXT": ", ".join(st.session_state.selected_txt or []) or "（未選）",
+        "ZE1": ", ".join(st.session_state.selected_txt or []) or "（未選）",
+        "ZE2": ", ".join(st.session_state.selected_ze2 or []) or "（未選）",
     }
     if st.session_state.feat_delsys:
         meta["特徵方法"] = st.session_state.feat_delsys.get("feature_method") or ""
