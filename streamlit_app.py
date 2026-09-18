@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Sequence
@@ -793,8 +794,12 @@ def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]
     return out
 
 
+_ZE2_CH_SWAP = re.compile(r"(^|_)Ch([12])(?![0-9])", re.IGNORECASE)
+
+
 def sibling_ze2_channels(selected: list[str], available: list[str]) -> list[str]:
-    """If user picks _Ch1/_Ch2, also include the matching pair name when present."""
+    """If user picks Ch1/Ch2 (including `_Ch1(Frank …)`), also include the pair."""
+    available_set = set(available)
     out: list[str] = []
     seen: set[str] = set()
     for name in selected:
@@ -802,13 +807,12 @@ def sibling_ze2_channels(selected: list[str], available: list[str]) -> list[str]
             continue
         out.append(name)
         seen.add(name)
-        if "_Ch1." in name or name.endswith("_Ch1.txt"):
-            alt = name.replace("_Ch1.", "_Ch2.").replace("_Ch1.txt", "_Ch2.txt")
-        elif "_Ch2." in name or name.endswith("_Ch2.txt"):
-            alt = name.replace("_Ch2.", "_Ch1.").replace("_Ch2.txt", "_Ch1.txt")
-        else:
+        match = _ZE2_CH_SWAP.search(name)
+        if not match:
             continue
-        if alt in available and alt not in seen:
+        other = "2" if match.group(2) == "1" else "1"
+        alt = name[: match.start()] + f"{match.group(1)}Ch{other}" + name[match.end() :]
+        if alt in available_set and alt not in seen:
             out.append(alt)
             seen.add(alt)
     return out
@@ -849,6 +853,11 @@ def render_sidebar() -> None:
     delsys_names = [name for name in delsys_names_all if name not in hidden]
     txt_names = [name for name in txt_names_all if name not in hidden]
     ze2_names = [name for name in ze2_names_all if name not in hidden]
+    ze2_label_by_name = {
+        item["name"]: item.get("label") or item["name"]
+        for item in ze2_files
+        if item["name"] not in hidden
+    }
     hidden_delsys = [name for name in delsys_names_all if name in hidden]
     hidden_txt = [name for name in txt_names_all if name in hidden]
     hidden_ze2 = [name for name in ze2_names_all if name in hidden]
@@ -903,6 +912,7 @@ def render_sidebar() -> None:
             "選擇 ZE2",
             options=ze2_names,
             key="selected_ze2",
+            format_func=lambda n: ze2_label_by_name.get(n, n),
             label_visibility="collapsed",
             placeholder="點擊搜尋／選擇檔案…",
             help="24-bit hex；可同時勾選 Ch1 + Ch2",
@@ -933,6 +943,7 @@ def render_sidebar() -> None:
             "移出 ZE2 TXT",
             options=ze2_names,
             key="hide_ze2_files",
+            format_func=lambda n: ze2_label_by_name.get(n, n),
         )
         if st.button("從選單移出", use_container_width=True):
             n = hide_files_from_picker([*hide_delsys, *hide_txt, *hide_ze2])
@@ -1386,6 +1397,10 @@ def tab_contractions() -> None:
 
     if run_both:
         require_pair()
+        if not list(st.session_state.selected_txt or []):
+            st.session_state.contr_txt = None
+        if not list(st.session_state.selected_ze2 or []):
+            st.session_state.contr_ze2 = None
 
     pages: list[tuple[str, Any, Any]] = []
 
@@ -1628,6 +1643,7 @@ def tab_features() -> None:
                             "series": compare["delsys"].get("series"),
                         },
                     }
+                    st.session_state.feat_txt_tables = None
                     st.session_state.feat_delta = compare
                     delta_label = f"ZE2：{ze2_names[0]}"
 
@@ -1645,6 +1661,8 @@ def tab_features() -> None:
                             )
                         )
                     st.session_state.feat_ze2_tables = z_tables
+                else:
+                    st.session_state.feat_ze2_tables = None
                 st.success(f"特徵比對完成（Δ 以 {delta_label}）")
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))

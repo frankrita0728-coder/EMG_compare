@@ -11,7 +11,8 @@ from paths import MAX_PLOT_POINTS, resolve_ze2_dirs
 HEX_VALUE = re.compile(r"^[0-9A-Fa-f]+$")
 MV_RE = re.compile(r"(?P<mv>\d+(?:\.\d+)?)\s*mV", re.IGNORECASE)
 BPM_RE = re.compile(r"(?P<bpm>\d+(?:\.\d+)?)\s*bpm", re.IGNORECASE)
-CHANNEL_RE = re.compile(r"(?:^|_)Ch(?P<ch>[12])(?:_|\.|$)", re.IGNORECASE)
+# `_Ch1.txt`, `_Ch1(Frank …)`, `_Ch2_…` — not only `_Ch1.` / end-of-stem.
+CHANNEL_RE = re.compile(r"(?:^|_)Ch(?P<ch>[12])(?![0-9])", re.IGNORECASE)
 
 DEFAULT_SAMPLE_RATE = 1000.0
 # ADC count → mV (provisional; calibrate against Delsys as needed).
@@ -20,11 +21,28 @@ ZE2_BANDPASS_HZ = BANDPASS_HZ
 ZE2_BANDPASS_ORDER = BANDPASS_ORDER
 
 
+def _iter_ze2_txt_paths(folder: Path) -> list[Path]:
+    return sorted(
+        (path for path in folder.rglob("*.txt") if path.is_file()),
+        key=lambda p: str(p.relative_to(folder)).lower(),
+    )
+
+
+def _ze2_label(folder: Path, path: Path) -> str:
+    try:
+        rel = path.relative_to(folder)
+    except ValueError:
+        return path.name
+    if rel.parent == Path("."):
+        return path.name
+    return f"{rel.parent.as_posix()} / {path.name}"
+
+
 def list_ze2_files() -> list[dict[str, str]]:
     seen: set[str] = set()
     files: list[dict[str, str]] = []
     for folder in resolve_ze2_dirs():
-        for path in sorted(folder.glob("*.txt"), key=lambda p: p.name.lower()):
+        for path in _iter_ze2_txt_paths(folder):
             if path.name in seen:
                 continue
             seen.add(path.name)
@@ -33,7 +51,7 @@ def list_ze2_files() -> list[dict[str, str]]:
                     "name": path.name,
                     "path": str(path),
                     "source": "ze2",
-                    "label": path.stem,
+                    "label": _ze2_label(folder, path),
                 }
             )
     return files
@@ -42,9 +60,12 @@ def list_ze2_files() -> list[dict[str, str]]:
 def find_ze2_path(filename: str) -> Path | None:
     name = Path(filename).name
     for folder in resolve_ze2_dirs():
-        path = folder / name
-        if path.exists():
-            return path
+        direct = folder / name
+        if direct.is_file():
+            return direct
+        for path in _iter_ze2_txt_paths(folder):
+            if path.name == name:
+                return path
     return None
 
 

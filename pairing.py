@@ -34,6 +34,17 @@ SIDE_PATTERNS = (
     (" ra", "RA"),
     ("_ra", "RA"),
     ("-ra", "RA"),
+    (" rc", "RC"),
+    ("_rc", "RC"),
+    ("-rc", "RC"),
+)
+
+# ZE2 Chinese laterality + muscle in one token, e.g. 左脛前肌 / 右腓腸肌.
+CN_SIDE_MUSCLE = (
+    ("左脛前", "LA", "脛前肌"),
+    ("右脛前", "RA", "脛前肌"),
+    ("左腓腸", "LC", "腓腸肌"),
+    ("右腓腸", "RC", "腓腸肌"),
 )
 
 LOAD_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|KG|Kg)", re.IGNORECASE)
@@ -131,6 +142,17 @@ def extract_tags(filename: str) -> FileTags:
             side = "LA"
         elif re.search(r"(^|[^a-z])ra([^a-z]|$)", lowered):
             side = "RA"
+        elif re.search(r"(^|[^a-z])rc([^a-z]|$)", lowered):
+            side = "RC"
+
+    for key, side_label, muscle_label in CN_SIDE_MUSCLE:
+        if key not in stem:
+            continue
+        if not side:
+            side = side_label
+        if not muscle:
+            muscle = muscle_label
+        break
 
     load = ""
     load_match = LOAD_RE.search(stem)
