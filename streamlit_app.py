@@ -170,6 +170,7 @@ def init_state() -> None:
         "feat_txt_tables": None,
         "feat_delta": None,
         "corr_result": None,
+        "corr_results": None,
         "file_nonce": 0,
     }
     for key, value in defaults.items():
@@ -982,9 +983,18 @@ def tab_features() -> None:
 
 def tab_correlation() -> None:
     st.caption(
-        "以 Delsys 與第一個 TXT 做一致性分析："
-        "收縮區間特徵的 Pearson r／ICC(A,1)，以及收縮區間內 TTRI 滑動窗曲線的 Pearson r。"
+        "依側邊欄目前選取的檔案分析："
+        "每個已選 TXT 分別與 Delsys 計算收縮區間 Pearson r／ICC(A,1)，"
+        "以及收縮區間內 TTRI 滑動窗曲線的 Pearson r。"
     )
+
+    selected_delsys = st.session_state.selected_delsys
+    selected_txt = list(st.session_state.selected_txt or [])
+    st.info(
+        f"目前選取 — Delsys：`{selected_delsys or '（未選）'}`　｜　"
+        f"TXT：{', '.join(f'`{n}`' for n in selected_txt) if selected_txt else '（未選）'}"
+    )
+
     c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.4])
     with c1:
         contraction_method = st.selectbox(
@@ -1015,6 +1025,7 @@ def tab_correlation() -> None:
 
     if clear_corr:
         st.session_state.corr_result = None
+        st.session_state.corr_results = None
         st.rerun()
 
     if run_corr:
@@ -1022,65 +1033,73 @@ def tab_correlation() -> None:
         if pair:
             delsys_name, txt_names = pair
             try:
-                compare = build_feature_compare(
-                    delsys_name,
-                    txt_names[0],
-                    expected_count=int(expected),
-                    contraction_method=contraction_method,
-                    feature_method=feature_method,
-                )
-                st.session_state.corr_result = compare
+                results = []
+                for txt_name in txt_names:
+                    compare = build_feature_compare(
+                        delsys_name,
+                        txt_name,
+                        expected_count=int(expected),
+                        contraction_method=contraction_method,
+                        feature_method=feature_method,
+                    )
+                    results.append(compare)
+                st.session_state.corr_results = results
+                # Keep first result for export compatibility.
+                st.session_state.corr_result = results[0] if results else None
                 st.success(
-                    f"相關分析完成：Delsys「{delsys_name}」× TXT「{txt_names[0]}」"
-                    + (f"（另選 {len(txt_names) - 1} 個 TXT 未納入本次相關）" if len(txt_names) > 1 else "")
+                    f"相關分析完成：Delsys「{delsys_name}」× {len(results)} 個已選 TXT"
                 )
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    result = st.session_state.corr_result
-    if not result:
-        st.info("選擇 Delsys 與 TXT 後，按「執行相關分析」。")
+    results = list(st.session_state.corr_results or [])
+    if not results and st.session_state.corr_result:
+        results = [st.session_state.corr_result]
+    if not results:
+        st.info("請先在左側選取 Delsys 與至少一個 TXT，再按「執行相關分析」。")
         return
 
-    delsys_name = (result.get("delsys") or {}).get("filename") or ""
-    txt_name = (result.get("txt") or {}).get("filename") or ""
-    n_intervals = min(
-        int((result.get("delsys") or {}).get("count") or 0),
-        int((result.get("txt") or {}).get("count") or 0),
-    )
-    st.markdown(f"**對照：** Delsys `{delsys_name}` × TXT `{txt_name}`")
-    if result.get("note"):
-        st.caption(result["note"])
-
-    agreement = result.get("interval_agreement") or []
-    if agreement:
-        st.subheader("收縮區間一致性（Pearson r / ICC）")
-        st.caption(
-            f"以成對收縮區間特徵跨 {n_intervals} 段計算："
-            "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
-            "樣本少時僅供參考。"
+    for result in results:
+        delsys_name = (result.get("delsys") or {}).get("filename") or ""
+        txt_name = (result.get("txt") or {}).get("filename") or ""
+        n_intervals = min(
+            int((result.get("delsys") or {}).get("count") or 0),
+            int((result.get("txt") or {}).get("count") or 0),
         )
-        st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
-    else:
-        st.warning("沒有收縮區間一致性結果。")
+        st.markdown("---")
+        st.markdown(f"### 對照：Delsys `{delsys_name}` × TXT `{txt_name}`")
+        if result.get("note"):
+            st.caption(result["note"])
 
-    corr = result.get("correlation") or {}
-    if corr:
-        window = result.get("correlation_window") or {}
-        w_l = window.get("window_l", 157)
-        ov = window.get("overlap", 79)
-        st.subheader("TTRI 滑動窗相關係數（Pearson r）")
-        st.caption(
-            f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
-            f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"
-            "r = 1 表示完全同向。"
-        )
-        st.dataframe(correlation_rows(corr), use_container_width=True)
-    else:
-        st.warning("沒有 TTRI 滑動窗相關係數結果。")
+        agreement = result.get("interval_agreement") or []
+        if agreement:
+            st.subheader("收縮區間一致性（Pearson r / ICC）")
+            st.caption(
+                f"以成對收縮區間特徵跨 {n_intervals} 段計算："
+                "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
+                "樣本少時僅供參考。"
+            )
+            st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
+        else:
+            st.warning("沒有收縮區間一致性結果。")
 
-    with st.expander("對照用特徵表（Δ）", expanded=False):
-        st.dataframe(delta_rows(result.get("pairs") or []), use_container_width=True)
+        corr = result.get("correlation") or {}
+        if corr:
+            window = result.get("correlation_window") or {}
+            w_l = window.get("window_l", 157)
+            ov = window.get("overlap", 79)
+            st.subheader("TTRI 滑動窗相關係數（Pearson r）")
+            st.caption(
+                f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
+                f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"
+                "r = 1 表示完全同向。"
+            )
+            st.dataframe(correlation_rows(corr), use_container_width=True)
+        else:
+            st.warning("沒有 TTRI 滑動窗相關係數結果。")
+
+        with st.expander(f"對照用特徵表（Δ）— {txt_name}", expanded=False):
+            st.dataframe(delta_rows(result.get("pairs") or []), use_container_width=True)
 
     render_export_panel(context="correlation")
 
