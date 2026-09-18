@@ -16,7 +16,16 @@ from compare import (
     build_waveform_overlay,
     build_waveform_single,
 )
-from pairing import scan_tag_groups, suggest_for_selection, suggest_pairs, suggest_triple_pairs
+from pairing import (
+    CHANNEL_HINT_ROWS,
+    channel_hint_label,
+    extract_tags,
+    prefer_recommended_files,
+    scan_tag_groups,
+    suggest_for_selection,
+    suggest_pairs,
+    suggest_triple_pairs,
+)
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
 from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
@@ -615,6 +624,43 @@ def render_sidebar() -> None:
             key="ze2_mv",
         )
 
+    st.sidebar.markdown("##### 通道建議（依部位）")
+    st.sidebar.caption("ZE2 與 ZE1 相反")
+    st.sidebar.dataframe(list(CHANNEL_HINT_ROWS), hide_index=True, use_container_width=True)
+
+    # If current ZE1/ZE2 picks carry site tags, remind which channel to keep.
+    hint_sources: list[str] = []
+    for name in list(st.session_state.selected_txt or [])[:1]:
+        tags = extract_tags(name)
+        label = channel_hint_label(tags.side, tags.muscle)
+        if label:
+            hint_sources.append(f"依目前 ZE1：{label}")
+    for name in list(st.session_state.selected_ze2 or [])[:1]:
+        tags = extract_tags(name)
+        label = channel_hint_label(tags.side, tags.muscle)
+        if label:
+            hint_sources.append(f"依目前 ZE2：{label}")
+    if st.session_state.selected_delsys:
+        tags = extract_tags(st.session_state.selected_delsys)
+        label = channel_hint_label(tags.side, tags.muscle)
+        if label:
+            hint_sources.append(f"依目前 Delsys：{label}")
+    for line in hint_sources[:2]:
+        st.sidebar.info(line)
+
+    if (st.session_state.selected_txt or st.session_state.selected_ze2) and (
+        st.sidebar.button("依通道建議篩選目前選取", use_container_width=True)
+    ):
+        if st.session_state.selected_txt:
+            st.session_state.selected_txt = prefer_recommended_files(
+                list(st.session_state.selected_txt), "ze1"
+            )
+        if st.session_state.selected_ze2:
+            st.session_state.selected_ze2 = prefer_recommended_files(
+                list(st.session_state.selected_ze2), "ze2"
+            )
+        st.rerun()
+
     st.sidebar.markdown("##### 自動建議（Delsys ↔ ZE1）")
     if st.session_state.selected_delsys:
         raw_suggestions = suggest_for_selection(st.session_state.selected_delsys, "delsys", txt_files)
@@ -1102,6 +1148,8 @@ def tab_correlation() -> None:
             f"資料庫目前：Delsys {len(delsys_files)}、ZE1 {len(ze1_files)}、ZE2 {len(ze2_files)}。"
             " 完整三方優先；也可先套用兩方配對。"
         )
+        st.markdown("**通道建議（ZE2 與 ZE1 相反）**")
+        st.dataframe(list(CHANNEL_HINT_ROWS), hide_index=True, use_container_width=True)
         if groups:
             st.markdown("**依標籤分組（受試者／肌肉／側／日期）**")
             group_rows = [
@@ -1114,40 +1162,54 @@ def tab_correlation() -> None:
                     "Delsys數": g["n_delsys"],
                     "ZE1數": g["n_ze1"],
                     "ZE2數": g["n_ze2"],
+                    "ZE1建議Ch": g.get("ze1_channel_hint") or "—",
+                    "ZE2建議Ch": g.get("ze2_channel_hint") or "—",
                 }
                 for g in groups[:30]
             ]
             st.dataframe(group_rows, use_container_width=True)
-            st.markdown("**一鍵套用分組選取**")
+            st.markdown("**一鍵套用分組選取（優先建議通道）**")
             for idx, g in enumerate(groups[:12]):
+                hint = g.get("channel_hint") or ""
                 label = (
                     f"[{g['completeness']}] {g['subject']}/{g['muscle']}/{g['side']}/{g['date'] or '—'} "
                     f"(D{g['n_delsys']} Z1:{g['n_ze1']} Z2:{g['n_ze2']})"
+                    + (f"｜{hint}" if hint else "")
                 )
                 if st.button(label, key=f"corr_group_{idx}", use_container_width=True):
                     if g["delsys"]:
                         st.session_state.selected_delsys = g["delsys"][0]
                     if g["ze1"]:
-                        st.session_state.selected_txt = list(g["ze1"])
+                        st.session_state.selected_txt = list(
+                            g.get("ze1_preferred") or prefer_recommended_files(g["ze1"], "ze1")
+                        )
                     if g["ze2"]:
-                        st.session_state.selected_ze2 = list(g["ze2"])
+                        st.session_state.selected_ze2 = list(
+                            g.get("ze2_preferred") or prefer_recommended_files(g["ze2"], "ze2")
+                        )
                     st.rerun()
         if triples:
             st.markdown("**建議配對（可一鍵套用選取）**")
             for idx, item in enumerate(triples[:20]):
+                hint = item.get("channel_hint") or ""
                 label = (
                     f"[{item['completeness']}] score={item['score']}｜"
                     f"D:{item.get('delsys') or '—'} × "
                     f"ZE1:{item.get('ze1') or '—'} × "
-                    f"ZE2:{item.get('ze2') or '—'}｜{item.get('reason') or ''}"
+                    f"ZE2:{item.get('ze2') or '—'}"
+                    + (f"｜{hint}" if hint else f"｜{item.get('reason') or ''}")
                 )
                 if st.button(label, key=f"corr_triple_{idx}", use_container_width=True):
                     if item.get("delsys"):
                         st.session_state.selected_delsys = item["delsys"]
                     if item.get("ze1"):
-                        st.session_state.selected_txt = [item["ze1"]]
+                        st.session_state.selected_txt = prefer_recommended_files(
+                            [item["ze1"]], "ze1"
+                        )
                     if item.get("ze2"):
-                        st.session_state.selected_ze2 = [item["ze2"]]
+                        st.session_state.selected_ze2 = prefer_recommended_files(
+                            [item["ze2"]], "ze2"
+                        )
                     st.rerun()
         else:
             st.warning("目前掃不到可配對組合。請確認 data/delsys、data/txt、data/ZE2_txt 已放檔。")

@@ -36,6 +36,83 @@ LOAD_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|KG|Kg)", re.IGNORECASE)
 CHANNEL_RE = re.compile(r"(?:Exg)?Ch([12])(?:Data)?", re.IGNORECASE)
 DATE_RE = re.compile(r"(?<!\d)(\d{1,2}-\d{1,2})(?!\d)")
 
+# Clinical channel hints (ZE2 is the inverse of ZE1).
+# Keys: (side_norm, muscle) → ZE1 recommended channel.
+ZE1_CHANNEL_HINTS: dict[tuple[str, str], str] = {
+    ("左", "脛前肌"): "Ch1",
+    ("左", "腓腸肌"): "Ch2",
+    ("右", "脛前肌"): "Ch2",
+    ("右", "腓腸肌"): "Ch1",
+}
+
+CHANNEL_HINT_ROWS: tuple[dict[str, str], ...] = (
+    {"部位": "左脛前肌", "ZE1": "Ch1", "ZE2": "Ch2"},
+    {"部位": "左腓腸肌", "ZE1": "Ch2", "ZE2": "Ch1"},
+    {"部位": "右脛前肌", "ZE1": "Ch2", "ZE2": "Ch1"},
+    {"部位": "右腓腸肌", "ZE1": "Ch1", "ZE2": "Ch2"},
+)
+
+
+def normalize_side(side: str) -> str:
+    """Map filename side tags to 左/右 used by channel hints."""
+    s = (side or "").strip()
+    if s in {"左", "LA", "LC", "L", "left", "Left"}:
+        return "左"
+    if s in {"右", "RA", "RC", "R", "right", "Right"}:
+        return "右"
+    return s
+
+
+def recommended_channel(source: str, *, side: str = "", muscle: str = "") -> str:
+    """
+    Return suggested Ch1/Ch2 for ZE1 or ZE2 given side + muscle.
+
+    ZE1 rules are explicit; ZE2 is the opposite channel.
+    """
+    side_n = normalize_side(side)
+    muscle_n = (muscle or "").strip()
+    if not side_n or not muscle_n:
+        return ""
+    ze1 = ZE1_CHANNEL_HINTS.get((side_n, muscle_n), "")
+    if not ze1:
+        return ""
+    src = (source or "").strip().lower()
+    if src in {"ze1", "txt", "txt_device"}:
+        return ze1
+    if src in {"ze2", "ze2_txt"}:
+        return "Ch2" if ze1 == "Ch1" else "Ch1"
+    return ""
+
+
+def channel_hint_label(side: str = "", muscle: str = "") -> str:
+    """Human-readable ZE1/ZE2 channel suggestion for a site."""
+    side_n = normalize_side(side)
+    muscle_n = (muscle or "").strip()
+    if not side_n or not muscle_n:
+        return ""
+    ze1 = recommended_channel("ze1", side=side_n, muscle=muscle_n)
+    ze2 = recommended_channel("ze2", side=side_n, muscle=muscle_n)
+    if not ze1:
+        return ""
+    return f"{side_n}{muscle_n} → ZE1 {ze1}／ZE2 {ze2}"
+
+
+def prefer_recommended_files(names: list[str], source: str) -> list[str]:
+    """
+    Prefer files whose channel matches the muscle/side hint.
+
+    If none match (or hints cannot be inferred), return the original list.
+    """
+    if not names:
+        return []
+    matched: list[str] = []
+    for name in names:
+        tags = extract_tags(name)
+        hint = recommended_channel(source, side=tags.side, muscle=tags.muscle)
+        if hint and tags.channel == hint:
+            matched.append(name)
+    return matched if matched else list(names)
+
 
 @dataclass(frozen=True)
 class FileTags:
@@ -237,14 +314,26 @@ def _pick_best(
     candidates: list[dict[str, Any]],
     *,
     prefer_channel: bool = True,
+    source: str = "",
 ) -> tuple[dict[str, Any] | None, int]:
     best: dict[str, Any] | None = None
     best_score = -1
+    # Prefer clinical channel for the site (muscle+side), falling back to anchor side/muscle.
     for item in candidates:
         tags: FileTags = item["tags"]
         score = anchor_tags.score_against(tags)
         if prefer_channel and anchor_tags.channel and tags.channel and anchor_tags.channel == tags.channel:
             score += 8
+        if source:
+            hint = recommended_channel(
+                source,
+                side=tags.side or anchor_tags.side,
+                muscle=tags.muscle or anchor_tags.muscle,
+            )
+            if hint and tags.channel == hint:
+                score += 25
+            elif hint and tags.channel and tags.channel != hint:
+                score -= 10
         if score > best_score:
             best_score = score
             best = item
@@ -276,8 +365,8 @@ def suggest_triple_pairs(
     # Anchor on Delsys when available.
     for left in delsys:
         left_tags: FileTags = left["tags"]
-        best_ze1, s1 = _pick_best(left_tags, ze1)
-        best_ze2, s2 = _pick_best(left_tags, ze2)
+        best_ze1, s1 = _pick_best(left_tags, ze1, source="ze1")
+        best_ze2, s2 = _pick_best(left_tags, ze2, source="ze2")
         if not best_ze1 and not best_ze2:
             continue
         score = max(s1, s2)
@@ -288,11 +377,14 @@ def suggest_triple_pairs(
             if not (best_ze1 and best_ze2):
                 continue
         completeness = ("complete" if best_ze1 and best_ze2 else "partial")
+        hint = channel_hint_label(left_tags.side, left_tags.muscle)
         reasons = []
         if best_ze1:
             reasons.append("ZE1:" + _reason(left_tags, best_ze1["tags"]))
         if best_ze2:
             reasons.append("ZE2:" + _reason(left_tags, best_ze2["tags"]))
+        if hint:
+            reasons.append(hint)
         suggestions.append(
             {
                 "score": score,
@@ -303,6 +395,7 @@ def suggest_triple_pairs(
                 "delsys_tags": left_tags.as_dict(),
                 "ze1_tags": best_ze1["tags"].as_dict() if best_ze1 else {},
                 "ze2_tags": best_ze2["tags"].as_dict() if best_ze2 else {},
+                "channel_hint": hint,
                 "reason": " | ".join(reasons),
             }
         )
@@ -311,9 +404,17 @@ def suggest_triple_pairs(
     if not delsys and ze1 and ze2:
         for left in ze1:
             left_tags = left["tags"]
-            best_ze2, s2 = _pick_best(left_tags, ze2)
+            # Prefer ZE1 files that already match the clinical channel hint.
+            ze1_hint = recommended_channel("ze1", side=left_tags.side, muscle=left_tags.muscle)
+            if ze1_hint and left_tags.channel and left_tags.channel != ze1_hint:
+                continue
+            best_ze2, s2 = _pick_best(left_tags, ze2, source="ze2")
             if not best_ze2 or s2 < min_score:
                 continue
+            hint = channel_hint_label(left_tags.side, left_tags.muscle)
+            reason = "ZE1↔ZE2:" + _reason(left_tags, best_ze2["tags"])
+            if hint:
+                reason = f"{reason} | {hint}"
             suggestions.append(
                 {
                     "score": s2,
@@ -324,7 +425,8 @@ def suggest_triple_pairs(
                     "delsys_tags": {},
                     "ze1_tags": left_tags.as_dict(),
                     "ze2_tags": best_ze2["tags"].as_dict(),
-                    "reason": "ZE1↔ZE2:" + _reason(left_tags, best_ze2["tags"]),
+                    "channel_hint": hint,
+                    "reason": reason,
                 }
             )
 
@@ -366,6 +468,10 @@ def scan_tag_groups(
     rows: list[dict[str, Any]] = []
     for key, bucket in buckets.items():
         n_sources = sum(1 for s in ("delsys", "ze1", "ze2") if bucket[s])
+        side, muscle = key[2], key[1]
+        hint = channel_hint_label(side, muscle)
+        ze1_ch = recommended_channel("ze1", side=side, muscle=muscle)
+        ze2_ch = recommended_channel("ze2", side=side, muscle=muscle)
         rows.append(
             {
                 "subject": key[0],
@@ -379,6 +485,11 @@ def scan_tag_groups(
                 "delsys": bucket["delsys"],
                 "ze1": bucket["ze1"],
                 "ze2": bucket["ze2"],
+                "ze1_preferred": prefer_recommended_files(bucket["ze1"], "ze1"),
+                "ze2_preferred": prefer_recommended_files(bucket["ze2"], "ze2"),
+                "ze1_channel_hint": ze1_ch,
+                "ze2_channel_hint": ze2_ch,
+                "channel_hint": hint,
                 "completeness": "complete" if n_sources == 3 else "partial",
             }
         )
