@@ -954,6 +954,7 @@ def tab_features() -> None:
         feature_method = st.selectbox(
             "特徵計算",
             options=["spectral", "ttri"],
+            index=1,
             format_func=lambda x: {
                 "spectral": "Spectral（iEMG/RMS/MDF/MPF）",
                 "ttri": "TTRI / ZE1（AEMG + 滑動窗）",
@@ -1233,6 +1234,7 @@ def tab_correlation() -> None:
         feature_method = st.selectbox(
             "特徵計算",
             options=["spectral", "ttri"],
+            index=1,
             format_func=lambda x: {
                 "spectral": "Spectral（iEMG/RMS/MDF/MPF）",
                 "ttri": "TTRI / ZE1（AEMG + 滑動窗）",
