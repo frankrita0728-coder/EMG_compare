@@ -717,6 +717,7 @@ def tab_waveform() -> None:
         norm_method = st.selectbox(
             "正規化",
             options=["zscore", "maxabs", "none"],
+            index=2,
             format_func=lambda x: {
                 "zscore": "Z-score",
                 "maxabs": "Max-abs",
@@ -836,6 +837,7 @@ def tab_contractions() -> None:
         contraction_method = st.selectbox(
             "收縮判斷",
             options=["rms_peak", "ze1_schmitt"],
+            index=1,
             format_func=lambda x: {
                 "rms_peak": "RMS 峰值法（現有）",
                 "ze1_schmitt": "ZE1 施密特觸發",
@@ -941,6 +943,7 @@ def tab_features() -> None:
         contraction_method = st.selectbox(
             "收縮判斷",
             options=["rms_peak", "ze1_schmitt"],
+            index=1,
             format_func=lambda x: {
                 "rms_peak": "RMS 峰值法（現有）",
                 "ze1_schmitt": "ZE1 施密特觸發",
@@ -1219,6 +1222,7 @@ def tab_correlation() -> None:
         contraction_method = st.selectbox(
             "收縮判斷",
             options=["rms_peak", "ze1_schmitt"],
+            index=1,
             format_func=lambda x: {
                 "rms_peak": "RMS 峰值法（現有）",
                 "ze1_schmitt": "ZE1 施密特觸發",
