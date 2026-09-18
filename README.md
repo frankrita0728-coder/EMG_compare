@@ -15,6 +15,8 @@
 - 依檔名自動建議
 - 上傳 CSV / TXT
 
+討論中已確認的規格與決策見 [`docs/DISCUSSION_NOTES.md`](docs/DISCUSSION_NOTES.md)。
+
 ## 本機快速開始
 
 ```powershell
@@ -58,6 +60,7 @@ EMG_compare/
   features.py         # Spectral / TTRI 特徵
   ze1_algo.py         # ZE1 / TTRI 演算法
   parsers/            # Delsys CSV / TXT 解析
+  docs/               # 討論紀錄與計畫
   data/delsys/        # Delsys CSV
   data/txt/           # 自研 TXT
 ```
