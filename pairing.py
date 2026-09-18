@@ -556,69 +556,175 @@ def _site_key(tags: FileTags) -> tuple[str, str, str]:
     return (tags.subject or "?", tags.muscle or "?", normalize_side(tags.side) or tags.side or "?")
 
 
+def _pair_identity(tags: FileTags) -> tuple[str, str, str, str, str]:
+    """Strict 1:1 identity: subject/muscle/side/session/trial."""
+    return (
+        tags.subject or "?",
+        tags.muscle or "?",
+        normalize_side(tags.side) or tags.side or "?",
+        tags.session or "",
+        tags.trial or "",
+    )
+
+
+def pick_one_by_name(
+    anchor_name: str,
+    candidates: list[dict[str, Any]],
+    source: str,
+    *,
+    used: set[str] | None = None,
+    require_session: bool = True,
+    min_score: int = 90,
+) -> tuple[str, int, str]:
+    """
+    Pick exactly one candidate by filename-tag consistency (1:1).
+
+    Requires matching subject + muscle + side. If the anchor has a session
+    code (e.g. a09) and require_session=True, the candidate must share it —
+    no cross-date fallback.
+    """
+    used = used or set()
+    anchor = extract_tags(anchor_name)
+    if not anchor.subject or not anchor.muscle or not anchor.side:
+        return "", 0, "錨點檔名標籤不足"
+
+    ranked: list[tuple[int, str, str]] = []
+    for item in candidates:
+        name = item["name"]
+        if name in used:
+            continue
+        tags = extract_tags(name)
+        if tags.subject != anchor.subject:
+            continue
+        if tags.muscle != anchor.muscle:
+            continue
+        if normalize_side(tags.side) != normalize_side(anchor.side):
+            continue
+        if require_session and anchor.session:
+            if tags.session != anchor.session:
+                continue
+        if anchor.trial and tags.trial and tags.trial != anchor.trial:
+            # Allow, but penalize — still 1:1 by session/site when trial missing on one side.
+            pass
+
+        score = anchor.score_against(tags)
+        hint = recommended_channel(source, side=tags.side, muscle=tags.muscle)
+        if hint and tags.channel == hint:
+            score += 25
+        elif hint and tags.channel and tags.channel != hint:
+            score -= 8
+        reason = _reason(anchor, tags)
+        if hint:
+            reason = f"{reason}｜建議{source.upper()} {hint}"
+        ranked.append((score, name, reason))
+
+    ranked.sort(key=lambda row: (-row[0], row[1]))
+    if not ranked or ranked[0][0] < min_score:
+        return "", 0, "無符合一對一檔名條件"
+    best_score, best_name, best_reason = ranked[0]
+    return best_name, best_score, best_reason
+
+
 def match_devices_for_delsys(
     delsys_item: dict[str, Any],
     ze1_files: list[dict[str, Any]],
     ze2_files: list[dict[str, Any]],
+    *,
+    used_ze1: set[str] | None = None,
+    used_ze2: set[str] | None = None,
+    require_session: bool = True,
 ) -> dict[str, Any]:
     """
-    Match ZE1/ZE2 to one Delsys CSV by subject/muscle/side.
+    Match at most one ZE1 and one ZE2 to one Delsys CSV by filename tags (1:1).
 
-    Prefer same session, then recommended channel; keep cross-date ZE2 when
-    the site tags still agree (common when ZE2 lacks a09-style session codes).
+    Strict mode: same subject/muscle/side, and same session when Delsys has one.
     """
     left_tags = extract_tags(delsys_item["name"])
-    left_site = _site_key(left_tags)
+    ze1_name, ze1_score, ze1_reason = pick_one_by_name(
+        delsys_item["name"], ze1_files, "ze1", used=used_ze1, require_session=require_session
+    )
+    ze2_name, ze2_score, ze2_reason = pick_one_by_name(
+        delsys_item["name"], ze2_files, "ze2", used=used_ze2, require_session=require_session
+    )
+    if used_ze1 is not None and ze1_name:
+        used_ze1.add(ze1_name)
+    if used_ze2 is not None and ze2_name:
+        used_ze2.add(ze2_name)
 
-    def _collect(candidates: list[dict[str, Any]], source: str) -> tuple[list[str], list[str]]:
-        same_site: list[str] = []
-        for item in candidates:
-            tags = extract_tags(item["name"])
-            if _site_key(tags) != left_site:
-                continue
-            if left_site[0] == "?":
-                continue
-            same_site.append(item["name"])
-        if not same_site:
-            return [], []
-        # Prefer same session when available.
-        if left_tags.session:
-            sess_hits = [
-                name
-                for name in same_site
-                if extract_tags(name).session == left_tags.session
-            ]
-            pool = sess_hits or same_site
-        else:
-            pool = same_site
-        preferred = prefer_recommended_files(pool, source)
-        return preferred, same_site
+    n_sources = 1 + (1 if ze1_name else 0) + (1 if ze2_name else 0)
+    notes = []
+    if ze1_name:
+        notes.append(f"ZE1一對一 score={ze1_score}（{ze1_reason}）")
+    else:
+        notes.append(f"ZE1未配對：{ze1_reason}")
+    if ze2_name:
+        notes.append(f"ZE2一對一 score={ze2_score}（{ze2_reason}）")
+    else:
+        notes.append(f"ZE2未配對：{ze2_reason}")
 
-    ze1_pref, ze1_all = _collect(ze1_files, "ze1")
-    ze2_pref, ze2_all = _collect(ze2_files, "ze2")
-    n_sources = 1 + (1 if ze1_all else 0) + (1 if ze2_all else 0)
     return {
-        "status": "可比對" if (ze1_all or ze2_all) else "不足",
-        "completeness": "complete" if (ze1_all and ze2_all) else ("partial" if (ze1_all or ze2_all) else "none"),
+        "status": "可比對" if (ze1_name or ze2_name) else "不足",
+        "completeness": (
+            "complete"
+            if ze1_name and ze2_name
+            else ("partial" if (ze1_name or ze2_name) else "none")
+        ),
         "subject": left_tags.subject,
         "muscle": left_tags.muscle,
         "side": left_tags.side,
         "session": left_tags.session,
         "date": left_tags.date,
+        "trial": left_tags.trial,
         "channel_hint": channel_hint_label(left_tags.side, left_tags.muscle),
         "delsys": delsys_item["name"],
-        "ze1": "; ".join(ze1_pref),
-        "ze2": "; ".join(ze2_pref),
-        "ze1_all": "; ".join(ze1_all),
-        "ze2_all": "; ".join(ze2_all),
+        "ze1": ze1_name,
+        "ze2": ze2_name,
+        "ze1_all": ze1_name,
+        "ze2_all": ze2_name,
+        "ze1_score": ze1_score,
+        "ze2_score": ze2_score,
         "n_sources": n_sources,
-        "match_note": (
-            "ZE2 依受試者/肌肉/側配對"
-            + ("（跨日期／無場次碼）" if ze2_all and left_tags.session and not any(
-                extract_tags(n).session == left_tags.session for n in ze2_all
-            ) else "")
-        ),
+        "match_note": "；".join(notes),
     }
+
+
+def build_one_to_one_pairs(
+    delsys_files: list[dict[str, Any]],
+    ze1_files: list[dict[str, Any]],
+    ze2_files: list[dict[str, Any]],
+    *,
+    require_session: bool = True,
+) -> list[dict[str, Any]]:
+    """
+    Build exclusive 1:1 Delsys↔ZE1 / Delsys↔ZE2 pairs.
+
+    Higher-scoring Delsys anchors claim device files first so each device
+    file is used at most once.
+    """
+    used_ze1: set[str] = set()
+    used_ze2: set[str] = set()
+    # Rank Delsys by how uniquely tagged they are (session/trial first).
+    ranked_delsys = sorted(
+        delsys_files,
+        key=lambda item: (
+            0 if extract_tags(item["name"]).session else 1,
+            0 if extract_tags(item["name"]).trial else 1,
+            item["name"],
+        ),
+    )
+    pairs: list[dict[str, Any]] = []
+    for item in ranked_delsys:
+        row = match_devices_for_delsys(
+            item,
+            ze1_files,
+            ze2_files,
+            used_ze1=used_ze1,
+            used_ze2=used_ze2,
+            require_session=require_session,
+        )
+        if row["status"] == "可比對":
+            pairs.append(row)
+    return pairs
 
 
 def enumerate_muscle_sites(
@@ -686,51 +792,29 @@ def build_name_consistency_inventory(
     delsys_files: list[dict[str, Any]],
     ze1_files: list[dict[str, Any]],
     ze2_files: list[dict[str, Any]],
+    *,
+    require_session: bool = True,
 ) -> dict[str, Any]:
     """
-    Organize CSV/TXT files by name-tag consistency for comparison.
+    Organize CSV/TXT files by filename-tag consistency for 1:1 comparison.
 
-    Each Delsys CSV gets ZE1/ZE2 matches by subject/muscle/side (session
-    preferred when present). ZE2 may match across dates when session codes
-    are missing from ZE2 filenames.
+    Each Delsys CSV claims at most one ZE1 and one ZE2 (exclusive).
+    When Delsys has a session code (a09), device files must share it.
     """
     groups = scan_tag_groups(delsys_files, ze1_files, ze2_files)
     triples = suggest_triple_pairs(delsys_files, ze1_files, ze2_files, limit=100)
     delsys_ze1 = suggest_pairs(delsys_files, ze1_files, limit=50)
     sites = enumerate_muscle_sites(delsys_files, ze1_files, ze2_files)
-
-    comparable: list[dict[str, Any]] = []
-    for item in delsys_files:
-        row = match_devices_for_delsys(item, ze1_files, ze2_files)
-        if row["status"] == "可比對":
-            comparable.append(row)
-
-    # Also keep pure tag-bucket groups that already include Delsys + device
-    # (useful when multiple Delsys share a bucket).
-    seen_delsys = {row["delsys"] for row in comparable}
-    for g in groups:
-        if not g["n_delsys"] or not (g["n_ze1"] or g["n_ze2"]):
-            continue
-        for dname in g["delsys"]:
-            if dname in seen_delsys:
-                # Enrich existing row with any bucket ZE2 still missing.
-                for row in comparable:
-                    if row["delsys"] != dname:
-                        continue
-                    if not row.get("ze2") and (g.get("ze2_preferred") or g["ze2"]):
-                        row["ze2"] = "; ".join(g.get("ze2_preferred") or g["ze2"])
-                        row["ze2_all"] = "; ".join(g["ze2"])
-                        row["completeness"] = (
-                            "complete" if row.get("ze1") and row.get("ze2") else row["completeness"]
-                        )
-                continue
+    comparable = build_one_to_one_pairs(
+        delsys_files, ze1_files, ze2_files, require_session=require_session
+    )
 
     matched_names: set[str] = set()
     for row in comparable:
         for field in ("delsys", "ze1", "ze2", "ze1_all", "ze2_all"):
-            for name in (row.get(field) or "").split("; "):
-                if name:
-                    matched_names.add(name)
+            name = row.get(field) or ""
+            if name:
+                matched_names.add(name)
     for site in sites:
         for field in ("delsys", "ze1", "ze2"):
             for name in site.get(field) or []:

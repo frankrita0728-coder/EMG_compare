@@ -85,10 +85,12 @@ def write_inventory(inv: dict, out_dir: Path) -> tuple[Path, Path, Path]:
     sites_csv = out_dir / "muscle_sites.csv"
 
     lines = [
-        "# 名稱一致性配對清單（全肌群）",
+        "# 名稱一致性一對一配對清單",
         "",
         f"- Delsys：{inv['counts']['delsys']}　ZE1：{inv['counts']['ze1']}　ZE2：{inv['counts']['ze2']}",
-        f"- 肌群部位：{inv['counts'].get('muscle_sites', 0)}　可比對（有 Delsys）：{inv['counts']['comparable_groups']}",
+        f"- 肌群部位：{inv['counts'].get('muscle_sites', 0)}　一對一可比對：{inv['counts']['comparable_groups']}",
+        "",
+        "> 規則：每個 Delsys CSV 最多配 **1 個 ZE1**、**1 個 ZE2**；需同受試者／肌肉／側；若檔名有場次碼（如 a09）則必須相同。",
         "",
         "## 全肌群部位總表",
         "",
@@ -112,7 +114,7 @@ def write_inventory(inv: dict, out_dir: Path) -> tuple[Path, Path, Path]:
     lines.extend(
         [
             "",
-            "## 有 Delsys 的可比對組合",
+            "## 一對一可比對組合（Delsys ↔ ZE1 / ZE2）",
             "",
             "| 狀態 | 完整度 | 受試者 | 肌肉 | 側 | 場次 | 日期 | Delsys | ZE1 | ZE2 | 備註 |",
             "|------|--------|--------|------|----|------|------|--------|-----|-----|------|",
