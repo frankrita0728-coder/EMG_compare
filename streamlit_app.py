@@ -1174,7 +1174,8 @@ def tab_correlation() -> None:
                     "受試者": g["subject"],
                     "肌肉": g["muscle"],
                     "側": g["side"],
-                    "日期": g["date"],
+                    "場次": g.get("session") or "—",
+                    "日期": g.get("date") or "—",
                     "Delsys數": g["n_delsys"],
                     "ZE1數": g["n_ze1"],
                     "ZE2數": g["n_ze2"],
@@ -1187,8 +1188,9 @@ def tab_correlation() -> None:
             st.markdown("**一鍵套用分組選取（優先建議通道）**")
             for idx, g in enumerate(groups[:12]):
                 hint = g.get("channel_hint") or ""
+                sess = g.get("session") or g.get("date") or "—"
                 label = (
-                    f"[{g['completeness']}] {g['subject']}/{g['muscle']}/{g['side']}/{g['date'] or '—'} "
+                    f"[{g['completeness']}] {g['subject']}/{g['muscle']}/{g['side']}/{sess} "
                     f"(D{g['n_delsys']} Z1:{g['n_ze1']} Z2:{g['n_ze2']})"
                     + (f"｜{hint}" if hint else "")
                 )

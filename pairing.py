@@ -35,6 +35,10 @@ SIDE_PATTERNS = (
 LOAD_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(kg|KG|Kg)", re.IGNORECASE)
 CHANNEL_RE = re.compile(r"(?:Exg)?Ch([12])(?:Data)?", re.IGNORECASE)
 DATE_RE = re.compile(r"(?<!\d)(\d{1,2}-\d{1,2})(?!\d)")
+# Folder/prefix style dates like 2609-10 (YYMM-DD) → MM-DD
+YYMM_DATE_RE = re.compile(r"(?<!\d)\d{2}(\d{2})-(\d{1,2})(?!\d)")
+SESSION_RE = re.compile(r"(?:^|[_\s(\-])a(\d{2})(?:[_\s)\-]|$)", re.IGNORECASE)
+TRIAL_RE = re.compile(r"(?:_with)?(?:_a\d{2})?_(\d+)$", re.IGNORECASE)
 
 # Clinical channel hints (ZE2 is the inverse of ZE1).
 # Keys: (side_norm, muscle) → ZE1 recommended channel.
@@ -122,6 +126,8 @@ class FileTags:
     load: str = ""
     channel: str = ""
     date: str = ""
+    session: str = ""
+    trial: str = ""
 
     def score_against(self, other: FileTags) -> int:
         score = 0
@@ -137,11 +143,21 @@ class FileTags:
             score += 5
         if self.date and other.date and self.date == other.date:
             score += 20
+        if self.session and other.session and self.session == other.session:
+            score += 30
+        if self.trial and other.trial and self.trial == other.trial:
+            score += 8
         return score
 
     def group_key(self) -> tuple[str, str, str, str]:
-        """Coarse key for multi-source grouping (subject/muscle/side/date)."""
-        return (self.subject or "?", self.muscle or "?", self.side or "?", self.date or "")
+        """
+        Coarse key for multi-source grouping.
+
+        Prefer session code (e.g. a09) over calendar date when present, so
+        Delsys/ZE1/ZE2 from the same capture still group across day labels.
+        """
+        bucket = f"sess:{self.session}" if self.session else (self.date or "")
+        return (self.subject or "?", self.muscle or "?", self.side or "?", bucket)
 
     def as_dict(self) -> dict[str, str]:
         return {
@@ -151,6 +167,8 @@ class FileTags:
             "load": self.load,
             "channel": self.channel,
             "date": self.date,
+            "session": self.session,
+            "trial": self.trial,
         }
 
 
@@ -209,6 +227,20 @@ def extract_tags(filename: str) -> FileTags:
     date_match = DATE_RE.search(stem)
     if date_match:
         date = date_match.group(1)
+    else:
+        yymm = YYMM_DATE_RE.search(stem)
+        if yymm:
+            date = f"{int(yymm.group(1)):02d}-{int(yymm.group(2)):02d}"
+
+    session = ""
+    session_match = SESSION_RE.search(lowered)
+    if session_match:
+        session = f"a{session_match.group(1)}"
+
+    trial = ""
+    trial_match = TRIAL_RE.search(stem)
+    if trial_match:
+        trial = trial_match.group(1)
 
     return FileTags(
         subject=subject,
@@ -217,6 +249,8 @@ def extract_tags(filename: str) -> FileTags:
         load=load,
         channel=channel,
         date=date,
+        session=session,
+        trial=trial,
     )
 
 
@@ -290,12 +324,16 @@ def _reason(a: FileTags, b: FileTags) -> str:
         parts.append(a.muscle)
     if a.side and a.side == b.side:
         parts.append(a.side)
+    if a.session and a.session == b.session:
+        parts.append(a.session)
     if a.date and a.date == b.date:
         parts.append(a.date)
     if a.load and a.load == b.load:
         parts.append(a.load)
     if a.channel and a.channel == b.channel:
         parts.append(a.channel)
+    if a.trial and a.trial == b.trial:
+        parts.append(f"#{a.trial}")
     return " / ".join(parts) if parts else "弱相關"
 
 
@@ -469,6 +507,12 @@ def scan_tag_groups(
     for key, bucket in buckets.items():
         n_sources = sum(1 for s in ("delsys", "ze1", "ze2") if bucket[s])
         side, muscle = key[2], key[1]
+        bucket_label = key[3]
+        session = bucket_label[5:] if bucket_label.startswith("sess:") else ""
+        date = "" if session else bucket_label
+        tags_dict = dict(bucket.get("tags") or {})
+        if session:
+            tags_dict["session"] = session
         hint = channel_hint_label(side, muscle)
         ze1_ch = recommended_channel("ze1", side=side, muscle=muscle)
         ze2_ch = recommended_channel("ze2", side=side, muscle=muscle)
@@ -477,7 +521,9 @@ def scan_tag_groups(
                 "subject": key[0],
                 "muscle": key[1],
                 "side": key[2],
-                "date": key[3],
+                "date": date or tags_dict.get("date", ""),
+                "session": session or tags_dict.get("session", ""),
+                "bucket": bucket_label,
                 "n_sources": n_sources,
                 "n_delsys": len(bucket["delsys"]),
                 "n_ze1": len(bucket["ze1"]),
@@ -493,5 +539,81 @@ def scan_tag_groups(
                 "completeness": "complete" if n_sources == 3 else "partial",
             }
         )
-    rows.sort(key=lambda r: (-int(r["n_sources"]), r["subject"], r["muscle"], r["side"], r["date"]))
+    rows.sort(
+        key=lambda r: (
+            -int(r["n_sources"]),
+            r["subject"],
+            r["muscle"],
+            r["side"],
+            r.get("session") or "",
+            r.get("date") or "",
+        )
+    )
     return rows
+
+
+def build_name_consistency_inventory(
+    delsys_files: list[dict[str, Any]],
+    ze1_files: list[dict[str, Any]],
+    ze2_files: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """
+    Organize CSV/TXT files by name-tag consistency for comparison.
+
+    Returns matched pairs/groups plus unmatched leftovers.
+    """
+    groups = scan_tag_groups(delsys_files, ze1_files, ze2_files)
+    triples = suggest_triple_pairs(delsys_files, ze1_files, ze2_files, limit=100)
+    delsys_ze1 = suggest_pairs(delsys_files, ze1_files, limit=50)
+
+    comparable: list[dict[str, Any]] = []
+    for g in groups:
+        if g["n_delsys"] and (g["n_ze1"] or g["n_ze2"]):
+            comparable.append(
+                {
+                    "status": "可比對" if g["n_sources"] >= 2 else "不足",
+                    "completeness": g["completeness"],
+                    "subject": g["subject"],
+                    "muscle": g["muscle"],
+                    "side": g["side"],
+                    "session": g.get("session") or "",
+                    "date": g.get("date") or "",
+                    "channel_hint": g.get("channel_hint") or "",
+                    "delsys": "; ".join(g["delsys"]),
+                    "ze1": "; ".join(g.get("ze1_preferred") or g["ze1"]),
+                    "ze2": "; ".join(g.get("ze2_preferred") or g["ze2"]),
+                    "ze1_all": "; ".join(g["ze1"]),
+                    "ze2_all": "; ".join(g["ze2"]),
+                }
+            )
+
+    matched_names: set[str] = set()
+    for row in comparable:
+        for field in ("delsys", "ze1", "ze2", "ze1_all", "ze2_all"):
+            for name in (row.get(field) or "").split("; "):
+                if name:
+                    matched_names.add(name)
+
+    unmatched = {
+        "delsys": [f["name"] for f in delsys_files if f["name"] not in matched_names],
+        "ze1": [f["name"] for f in ze1_files if f["name"] not in matched_names],
+        "ze2": [
+            f["name"]
+            for f in ze2_files
+            if f["name"] not in matched_names and extract_tags(f["name"]).subject
+        ],
+    }
+
+    return {
+        "groups": groups,
+        "comparable": comparable,
+        "triples": triples,
+        "delsys_ze1": delsys_ze1,
+        "unmatched": unmatched,
+        "counts": {
+            "delsys": len(delsys_files),
+            "ze1": len(ze1_files),
+            "ze2": len(ze2_files),
+            "comparable_groups": len(comparable),
+        },
+    }
