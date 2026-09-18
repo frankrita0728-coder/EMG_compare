@@ -8,6 +8,7 @@ from features import analyze_signal_features, compare_feature_rows
 from normalize import normalize_trace
 from parsers.delsys import load_delsys_emg
 from parsers.txt_device import TXT_MV_PER_COUNT, load_txt_emg
+from parsers.ze2_txt import ZE2_MV_PER_COUNT, load_ze2_emg
 
 
 def load_signal(
@@ -16,11 +17,30 @@ def load_signal(
     *,
     for_plot: bool = False,
     year: int | None = None,
+    ze1_mv_per_count: float | None = None,
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass: bool = True,
 ) -> dict[str, Any]:
     if source == "delsys":
         return load_delsys_emg(filename, for_plot=for_plot)
     if source == "txt":
-        return load_txt_emg(filename, for_plot=for_plot, year=year)
+        return load_txt_emg(
+            filename,
+            for_plot=for_plot,
+            year=year,
+            apply_bandpass=apply_bandpass,
+            mv_per_count=ze1_mv_per_count,
+        )
+    if source == "ze2":
+        return load_ze2_emg(
+            filename,
+            for_plot=for_plot,
+            year=year,
+            sample_rate=ze2_sample_rate,
+            mv_per_count=ze2_mv_per_count,
+            apply_bandpass=apply_bandpass,
+        )
     raise ValueError(f"未知來源：{source}")
 
 
@@ -35,14 +55,44 @@ def _year_from_delsys(delsys_name: str | None) -> int | None:
     return start.year if start else None
 
 
+def _trace_from_raw(raw: dict[str, Any], normalized: dict[str, Any], *, source: str) -> dict[str, Any]:
+    return {
+        "filename": raw["filename"],
+        "signal_name": raw["signal_name"],
+        "sample_rate": raw["sample_rate"],
+        "unit": normalized["unit"],
+        "point_count": raw["point_count"],
+        "times": list(normalized["times"]),
+        "values": list(normalized["values"]),
+        "raw_unit": raw["unit"],
+        "start_time": raw.get("start_time"),
+        "start_epoch": raw.get("start_epoch"),
+        "start_label": raw.get("start_label") or "",
+        "source": source,
+    }
+
+
 def build_waveform_single(
     source: str,
     filename: str,
     *,
     norm_method: str = "zscore",
     year: int | None = None,
+    ze1_mv_per_count: float | None = None,
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass: bool = True,
 ) -> dict[str, Any]:
-    raw = load_signal(source, filename, for_plot=True, year=year)
+    raw = load_signal(
+        source,
+        filename,
+        for_plot=True,
+        year=year,
+        ze1_mv_per_count=ze1_mv_per_count,
+        ze2_sample_rate=ze2_sample_rate,
+        ze2_mv_per_count=ze2_mv_per_count,
+        apply_bandpass=apply_bandpass,
+    )
     normalized = normalize_trace(raw, method=norm_method)
     return {
         "mode": "waveform_single",
@@ -60,6 +110,7 @@ def build_waveform_single(
             "start_time": raw.get("start_time"),
             "start_epoch": raw.get("start_epoch"),
             "start_label": raw.get("start_label") or "",
+            "source": source,
         },
     }
 
@@ -70,44 +121,27 @@ def build_waveform_compare(
     *,
     norm_method: str = "zscore",
     align_by_start: bool = True,
+    apply_bandpass: bool = True,
+    ze1_mv_per_count: float | None = None,
 ) -> dict[str, Any]:
     left = load_delsys_emg(delsys_name, for_plot=True)
     year = None
     start = parse_delsys_start(left.get("metadata"))
     if start:
         year = start.year
-    right = load_txt_emg(txt_name, for_plot=True, year=year)
+    scale = ze1_mv_per_count or TXT_MV_PER_COUNT
+    right = load_txt_emg(
+        txt_name,
+        for_plot=True,
+        year=year,
+        apply_bandpass=apply_bandpass,
+        mv_per_count=ze1_mv_per_count,
+    )
     left_n = normalize_trace(left, method=norm_method)
     right_n = normalize_trace(right, method=norm_method)
 
-    delsys_trace = {
-        "filename": left["filename"],
-        "signal_name": left["signal_name"],
-        "sample_rate": left["sample_rate"],
-        "unit": left_n["unit"],
-        "point_count": left["point_count"],
-        "times": left_n["times"],
-        "values": left_n["values"],
-        "raw_unit": left["unit"],
-        "start_time": left.get("start_time"),
-        "start_epoch": left.get("start_epoch"),
-        "start_label": left.get("start_label") or "",
-        "source": "delsys",
-    }
-    txt_trace = {
-        "filename": right["filename"],
-        "signal_name": right["signal_name"],
-        "sample_rate": right["sample_rate"],
-        "unit": right_n["unit"],
-        "point_count": right["point_count"],
-        "times": right_n["times"],
-        "values": right_n["values"],
-        "raw_unit": right["unit"],
-        "start_time": right.get("start_time"),
-        "start_epoch": right.get("start_epoch"),
-        "start_label": right.get("start_label") or "",
-        "source": "txt",
-    }
+    delsys_trace = _trace_from_raw(left, left_n, source="delsys")
+    txt_trace = _trace_from_raw(right, right_n, source="txt")
 
     align_info: dict[str, Any] = {"aligned": False}
     if align_by_start:
@@ -116,7 +150,7 @@ def build_waveform_compare(
 
     note_parts = []
     if norm_method == "none":
-        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.00026 mV/count）。")
+        note_parts.append(f"顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×{scale} mV/count）。")
     else:
         note_parts.append("兩來源單位已換算後再正規化疊圖。")
     if align_by_start and align_info.get("aligned"):
@@ -139,14 +173,27 @@ def build_waveform_compare(
 
 def build_waveform_overlay(
     delsys_name: str,
-    txt_names: list[str],
+    txt_names: list[str] | None = None,
+    ze2_names: list[str] | None = None,
     *,
     norm_method: str = "zscore",
     align_by_start: bool = True,
+    ze1_mv_per_count: float | None = None,
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass_ze1: bool = True,
+    apply_bandpass_ze2: bool = True,
+    apply_bandpass: bool | None = None,
 ) -> dict[str, Any]:
-    """Overlay one Delsys file with one or more TXT files, optionally aligned by start time."""
-    if not txt_names:
-        raise ValueError("請至少選擇一個 TXT 檔案")
+    """Overlay one Delsys file with ZE1 TXT and/or ZE2 files, optionally aligned by start time."""
+    # Backward compatible: single apply_bandpass applies to both when provided.
+    if apply_bandpass is not None:
+        apply_bandpass_ze1 = apply_bandpass
+        apply_bandpass_ze2 = apply_bandpass
+    txt_names = list(txt_names or [])
+    ze2_names = list(ze2_names or [])
+    if not txt_names and not ze2_names:
+        raise ValueError("請至少選擇一個 ZE1 TXT 或 ZE2 檔案")
 
     left = load_delsys_emg(delsys_name, for_plot=True)
     year = None
@@ -155,46 +202,36 @@ def build_waveform_overlay(
         year = start.year
 
     left_n = normalize_trace(left, method=norm_method)
-    traces: list[dict[str, Any]] = [
-        {
-            "filename": left["filename"],
-            "signal_name": left["signal_name"],
-            "sample_rate": left["sample_rate"],
-            "unit": left_n["unit"],
-            "point_count": left["point_count"],
-            "times": list(left_n["times"]),
-            "values": list(left_n["values"]),
-            "raw_unit": left["unit"],
-            "start_time": left.get("start_time"),
-            "start_epoch": left.get("start_epoch"),
-            "start_label": left.get("start_label") or "",
-            "source": "delsys",
-        }
-    ]
+    traces: list[dict[str, Any]] = [_trace_from_raw(left, left_n, source="delsys")]
+    ze1_scale = ze1_mv_per_count or TXT_MV_PER_COUNT
 
     for name in txt_names:
-        right = load_txt_emg(name, for_plot=True, year=year)
-        right_n = normalize_trace(right, method=norm_method)
-        traces.append(
-            {
-                "filename": right["filename"],
-                "signal_name": right["signal_name"],
-                "sample_rate": right["sample_rate"],
-                "unit": right_n["unit"],
-                "point_count": right["point_count"],
-                "times": list(right_n["times"]),
-                "values": list(right_n["values"]),
-                "raw_unit": right["unit"],
-                "start_time": right.get("start_time"),
-                "start_epoch": right.get("start_epoch"),
-                "start_label": right.get("start_label") or "",
-                "source": "txt",
-            }
+        right = load_txt_emg(
+            name,
+            for_plot=True,
+            year=year,
+            apply_bandpass=apply_bandpass_ze1,
+            mv_per_count=ze1_mv_per_count,
         )
+        right_n = normalize_trace(right, method=norm_method)
+        traces.append(_trace_from_raw(right, right_n, source="txt"))
+
+    for name in ze2_names:
+        right = load_ze2_emg(
+            name,
+            for_plot=True,
+            year=year,
+            sample_rate=ze2_sample_rate,
+            mv_per_count=ze2_mv_per_count,
+            apply_bandpass=apply_bandpass_ze2,
+        )
+        right_n = normalize_trace(right, method=norm_method)
+        traces.append(_trace_from_raw(right, right_n, source="ze2"))
 
     # Keep unaligned copies for side panels (relative t=0).
     side_delsys = dict(traces[0])
-    side_txt = [dict(item) for item in traces[1:]]
+    side_txt = [dict(item) for item in traces if item.get("source") == "txt"]
+    side_ze2 = [dict(item) for item in traces if item.get("source") == "ze2"]
 
     align_info: dict[str, Any] = {"aligned": False}
     overlay_traces = [dict(item) for item in traces]
@@ -203,9 +240,20 @@ def build_waveform_overlay(
 
     note_parts = []
     if norm_method == "none":
-        note_parts.append("顯示原始單位波形（Delsys / TXT 皆為 mV；TXT 已套用 ×0.00026 mV/count）。")
+        note_parts.append(
+            f"顯示原始單位波形（皆為 mV；ZE1 ×{ze1_scale}、ZE2 ×{ze2_mv_per_count or ZE2_MV_PER_COUNT}）。"
+        )
     else:
-        note_parts.append("兩來源單位已換算後再正規化疊圖。")
+        note_parts.append("多來源單位已換算後再正規化疊圖。")
+    if apply_bandpass_ze1 or apply_bandpass_ze2:
+        parts = []
+        if txt_names:
+            parts.append("ZE1 " + ("開" if apply_bandpass_ze1 else "關"))
+        if ze2_names:
+            parts.append("ZE2 " + ("開" if apply_bandpass_ze2 else "關"))
+        note_parts.append("帶通濾波（20–400 Hz）：" + "、".join(parts) + "。")
+    else:
+        note_parts.append("ZE1 / ZE2 皆未套用帶通濾波。")
     if align_by_start and align_info.get("aligned"):
         note_parts.append(
             f"已依起始時間對齊（參考點 {align_info.get('reference_label')}）。"
@@ -224,6 +272,7 @@ def build_waveform_overlay(
         "align": align_info,
         "delsys": side_delsys,
         "txt_list": side_txt,
+        "ze2_list": side_ze2,
         "overlay": overlay_traces,
         "note": " ".join(note_parts),
     }
@@ -235,8 +284,20 @@ def build_contraction_single(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
+    ze1_mv_per_count: float | None = None,
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass: bool = True,
 ) -> dict[str, Any]:
-    full = load_signal(source, filename, for_plot=False)
+    full = load_signal(
+        source,
+        filename,
+        for_plot=False,
+        ze1_mv_per_count=ze1_mv_per_count,
+        ze2_sample_rate=ze2_sample_rate,
+        ze2_mv_per_count=ze2_mv_per_count,
+        apply_bandpass=apply_bandpass,
+    )
     contractions = detect_contractions_dispatch(
         full["times"],
         full["values"],
@@ -245,7 +306,18 @@ def build_contraction_single(
         sample_rate=full["sample_rate"],
         source=source,
     )
-    plot = normalize_trace(load_signal(source, filename, for_plot=True), method="robust_zscore")
+    plot = normalize_trace(
+        load_signal(
+            source,
+            filename,
+            for_plot=True,
+            ze1_mv_per_count=ze1_mv_per_count,
+            ze2_sample_rate=ze2_sample_rate,
+            ze2_mv_per_count=ze2_mv_per_count,
+            apply_bandpass=apply_bandpass,
+        ),
+        method="none",
+    )
     return {
         "mode": "contractions_single",
         "source": source,
@@ -255,9 +327,11 @@ def build_contraction_single(
             "filename": full["filename"],
             "signal_name": full["signal_name"],
             "sample_rate": full["sample_rate"],
+            "unit": plot.get("unit") or full.get("unit") or "mV",
             "contractions": contractions,
             "times": plot["times"],
             "values": plot["values"],
+            "source": source,
         },
     }
 
@@ -269,8 +343,20 @@ def build_feature_single(
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
     feature_method: str = "spectral",
+    ze1_mv_per_count: float | None = None,
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass: bool = True,
 ) -> dict[str, Any]:
-    full = load_signal(source, filename, for_plot=False)
+    full = load_signal(
+        source,
+        filename,
+        for_plot=False,
+        ze1_mv_per_count=ze1_mv_per_count,
+        ze2_sample_rate=ze2_sample_rate,
+        ze2_mv_per_count=ze2_mv_per_count,
+        apply_bandpass=apply_bandpass,
+    )
     feat = analyze_signal_features(
         full["times"],
         full["values"],
@@ -295,6 +381,7 @@ def build_feature_single(
             "count": feat["count"],
             "metrics": feat["metrics"],
             "series": feat.get("series"),
+            "source": source,
         },
     }
 
@@ -305,9 +392,10 @@ def build_contraction_compare(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
+    ze1_mv_per_count: float | None = None,
 ) -> dict[str, Any]:
     left = load_delsys_emg(delsys_name, for_plot=False)
-    right = load_txt_emg(txt_name, for_plot=False)
+    right = load_txt_emg(txt_name, for_plot=False, mv_per_count=ze1_mv_per_count)
     left_c = detect_contractions_dispatch(
         left["times"],
         left["values"],
@@ -324,8 +412,11 @@ def build_contraction_compare(
         sample_rate=right["sample_rate"],
         source="txt",
     )
-    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="robust_zscore")
-    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="robust_zscore")
+    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="none")
+    right_plot = normalize_trace(
+        load_txt_emg(txt_name, for_plot=True, mv_per_count=ze1_mv_per_count),
+        method="none",
+    )
     return {
         "mode": "contractions",
         "expected_count": expected_count,
@@ -334,6 +425,7 @@ def build_contraction_compare(
             "filename": left["filename"],
             "signal_name": left["signal_name"],
             "sample_rate": left["sample_rate"],
+            "unit": left_plot.get("unit") or left.get("unit") or "mV",
             "contractions": left_c,
             "times": left_plot["times"],
             "values": left_plot["values"],
@@ -342,6 +434,7 @@ def build_contraction_compare(
             "filename": right["filename"],
             "signal_name": right["signal_name"],
             "sample_rate": right["sample_rate"],
+            "unit": right_plot.get("unit") or right.get("unit") or "mV",
             "contractions": right_c,
             "times": right_plot["times"],
             "values": right_plot["values"],
@@ -356,9 +449,17 @@ def build_feature_compare(
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
     feature_method: str = "spectral",
+    apply_bandpass: bool = True,
+    ze1_mv_per_count: float | None = None,
 ) -> dict[str, Any]:
     left = load_delsys_emg(delsys_name, for_plot=False)
-    right = load_txt_emg(txt_name, for_plot=False)
+    scale = ze1_mv_per_count or TXT_MV_PER_COUNT
+    right = load_txt_emg(
+        txt_name,
+        for_plot=False,
+        apply_bandpass=apply_bandpass,
+        mv_per_count=ze1_mv_per_count,
+    )
     left_feat = analyze_signal_features(
         left["times"],
         left["values"],
@@ -407,5 +508,89 @@ def build_feature_compare(
             "series": right_feat.get("series"),
         },
         "pairs": pairs,
-        "note": f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
+        "note": (
+            f"TXT 已換算為 mV（×{scale}）"
+            + ("；已套用 20–400 Hz 帶通。" if apply_bandpass else "；未套用帶通濾波。")
+            + " iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
+        ),
+    }
+
+
+def build_feature_compare_ze2(
+    delsys_name: str,
+    ze2_name: str,
+    *,
+    expected_count: int = 3,
+    contraction_method: str = "rms_peak",
+    feature_method: str = "spectral",
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass: bool = True,
+) -> dict[str, Any]:
+    left = load_delsys_emg(delsys_name, for_plot=False)
+    year = _year_from_delsys(delsys_name)
+    right = load_ze2_emg(
+        ze2_name,
+        for_plot=False,
+        year=year,
+        sample_rate=ze2_sample_rate,
+        mv_per_count=ze2_mv_per_count,
+        apply_bandpass=apply_bandpass,
+    )
+    left_feat = analyze_signal_features(
+        left["times"],
+        left["values"],
+        sample_rate=left["sample_rate"],
+        expected_count=expected_count,
+        contraction_method=contraction_method,
+        feature_method=feature_method,
+        source="delsys",
+    )
+    right_feat = analyze_signal_features(
+        right["times"],
+        right["values"],
+        sample_rate=right["sample_rate"],
+        expected_count=expected_count,
+        contraction_method=contraction_method,
+        feature_method=feature_method,
+        source="ze2",
+    )
+    pairs = compare_feature_rows(
+        left_feat["features"],
+        right_feat["features"],
+        metrics=left_feat["metrics"],
+    )
+    for item in pairs:
+        item["ze2"] = item.pop("txt", None)
+    scale = ze2_mv_per_count or ZE2_MV_PER_COUNT
+    return {
+        "mode": "features",
+        "expected_count": expected_count,
+        "contraction_method": contraction_method,
+        "feature_method": feature_method,
+        "metrics": left_feat["metrics"],
+        "delsys": {
+            "filename": left["filename"],
+            "signal_name": left["signal_name"],
+            "sample_rate": left["sample_rate"],
+            "unit": left["unit"],
+            "features": left_feat["features"],
+            "count": left_feat["count"],
+            "series": left_feat.get("series"),
+        },
+        "ze2": {
+            "filename": right["filename"],
+            "signal_name": right["signal_name"],
+            "sample_rate": right["sample_rate"],
+            "unit": right["unit"],
+            "features": right_feat["features"],
+            "count": right_feat["count"],
+            "series": right_feat.get("series"),
+        },
+        "pairs": pairs,
+        "note": (
+            f"ZE2 已換算為 mV（×{scale}）"
+            + ("；已套用 20–400 Hz 帶通。" if apply_bandpass else "；未套用帶通濾波。")
+            + " iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
+        ),
     }

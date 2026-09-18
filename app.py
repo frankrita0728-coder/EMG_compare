@@ -17,7 +17,8 @@ from compare import (
 from pairing import extract_tags, suggest_for_selection, suggest_pairs
 from parsers.delsys import list_delsys_files
 from parsers.txt_device import list_txt_files
-from paths import DATA_DELSYS, DATA_TXT, RESOURCE_DIR, ensure_data_dirs
+from parsers.ze2_txt import list_ze2_files
+from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2, RESOURCE_DIR, ensure_data_dirs
 
 HOST = "127.0.0.1"
 PORT = 8080
@@ -39,13 +40,16 @@ def api_files():
     ensure_data_dirs()
     delsys = list_delsys_files()
     txt = list_txt_files()
+    ze2 = list_ze2_files()
     return jsonify(
         {
             "delsys": delsys,
             "txt": txt,
+            "ze2": ze2,
             "paths": {
                 "delsys": str(DATA_DELSYS),
                 "txt": str(DATA_TXT),
+                "ze2": str(DATA_ZE2),
             },
         }
     )
@@ -53,7 +57,7 @@ def api_files():
 
 @app.route("/api/tags/<source>/<path:filename>")
 def api_tags(source: str, filename: str):
-    if source not in {"delsys", "txt"}:
+    if source not in {"delsys", "txt", "ze2"}:
         return jsonify({"error": "未知來源"}), 400
     return jsonify({"filename": filename, "source": source, "tags": extract_tags(filename).as_dict()})
 
@@ -62,19 +66,26 @@ def api_tags(source: str, filename: str):
 def api_suggest():
     delsys = list_delsys_files()
     txt = list_txt_files()
+    ze2 = list_ze2_files()
     selected_source = (request.args.get("source") or "").strip()
     selected_name = (request.args.get("filename") or "").strip()
 
     if selected_source and selected_name:
         if selected_source == "delsys":
-            items = suggest_for_selection(selected_name, "delsys", txt)
+            items = suggest_for_selection(selected_name, "delsys", txt + ze2)
         elif selected_source == "txt":
             items = suggest_for_selection(selected_name, "txt", delsys)
+        elif selected_source == "ze2":
+            items = suggest_for_selection(selected_name, "ze2", delsys)
         else:
             return jsonify({"error": "未知來源"}), 400
         return jsonify({"suggestions": items, "mode": "for_selection"})
 
-    return jsonify({"suggestions": suggest_pairs(delsys, txt), "mode": "global"})
+    suggestions = suggest_pairs(delsys, txt, right_key="txt") + suggest_pairs(
+        delsys, ze2, right_key="ze2"
+    )
+    suggestions.sort(key=lambda item: (-item.get("score", 0), item.get("delsys") or ""))
+    return jsonify({"suggestions": suggestions, "mode": "global"})
 
 
 @app.route("/api/analyze/waveform", methods=["POST"])
@@ -85,7 +96,7 @@ def api_analyze_waveform():
     method = payload.get("norm_method") or "zscore"
     year = payload.get("year")
     year_i = int(year) if year not in (None, "") else None
-    if source not in {"delsys", "txt"} or not filename:
+    if source not in {"delsys", "txt", "ze2"} or not filename:
         return jsonify({"error": "請指定 source 與 filename"}), 400
     try:
         return jsonify(
@@ -102,7 +113,7 @@ def api_analyze_contractions():
     filename = payload.get("filename")
     expected_count = int(payload.get("expected_count") or 3)
     contraction_method = payload.get("contraction_method") or "rms_peak"
-    if source not in {"delsys", "txt"} or not filename:
+    if source not in {"delsys", "txt", "ze2"} or not filename:
         return jsonify({"error": "請指定 source 與 filename"}), 400
     try:
         return jsonify(
@@ -125,7 +136,7 @@ def api_analyze_features():
     expected_count = int(payload.get("expected_count") or 3)
     contraction_method = payload.get("contraction_method") or "rms_peak"
     feature_method = payload.get("feature_method") or "spectral"
-    if source not in {"delsys", "txt"} or not filename:
+    if source not in {"delsys", "txt", "ze2"} or not filename:
         return jsonify({"error": "請指定 source 與 filename"}), 400
     try:
         return jsonify(
@@ -147,16 +158,17 @@ def api_compare_waveform():
     delsys_name = payload.get("delsys")
     txt_name = payload.get("txt")
     txt_names = payload.get("txt_list") or ([] if not txt_name else [txt_name])
+    ze2_names = list(payload.get("ze2_list") or [])
     method = payload.get("norm_method") or "zscore"
     align_by_start = payload.get("align_by_start")
     if align_by_start is None:
         align_by_start = True
     align_by_start = bool(align_by_start)
 
-    if not delsys_name or not txt_names:
-        return jsonify({"error": "請選擇 Delsys 與至少一個 TXT 檔案"}), 400
+    if not delsys_name or (not txt_names and not ze2_names):
+        return jsonify({"error": "請選擇 Delsys 與至少一個 ZE1 TXT 或 ZE2 檔案"}), 400
     try:
-        if len(txt_names) == 1 and payload.get("txt_list") is None:
+        if len(txt_names) == 1 and not ze2_names and payload.get("txt_list") is None:
             return jsonify(
                 build_waveform_compare(
                     delsys_name,
@@ -169,6 +181,7 @@ def api_compare_waveform():
             build_waveform_overlay(
                 delsys_name,
                 list(txt_names),
+                ze2_names,
                 norm_method=method,
                 align_by_start=align_by_start,
             )
