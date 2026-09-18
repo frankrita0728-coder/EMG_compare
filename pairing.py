@@ -643,8 +643,13 @@ def match_devices_for_delsys(
     ze1_name, ze1_score, ze1_reason = pick_one_by_name(
         delsys_item["name"], ze1_files, "ze1", used=used_ze1, require_session=require_session
     )
+    # ZE2 filenames usually lack session codes like a09 — pair 1:1 by site tags only.
     ze2_name, ze2_score, ze2_reason = pick_one_by_name(
-        delsys_item["name"], ze2_files, "ze2", used=used_ze2, require_session=require_session
+        delsys_item["name"],
+        ze2_files,
+        "ze2",
+        used=used_ze2,
+        require_session=False,
     )
     if used_ze1 is not None and ze1_name:
         used_ze1.add(ze1_name)

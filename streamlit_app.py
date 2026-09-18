@@ -1162,7 +1162,7 @@ def tab_correlation() -> None:
         groups = scan_tag_groups(delsys_files, ze1_files, ze2_files)
         st.caption(
             f"資料庫目前：Delsys {len(delsys_files)}、ZE1 {len(ze1_files)}、ZE2 {len(ze2_files)}。"
-            " 配對採檔名一對一（同受試者／肌肉／側；有場次碼則必須相同）。"
+            " 一對一：ZE1 需同場次碼；ZE2 只要同受試者／肌肉／側即可與 Delsys 比對。"
         )
         st.markdown("**通道建議（ZE2 與 ZE1 相反）**")
         st.dataframe(list(CHANNEL_HINT_ROWS), hide_index=True, use_container_width=True)

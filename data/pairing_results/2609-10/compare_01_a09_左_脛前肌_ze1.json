@@ -5,7 +5,7 @@
   "muscle": "脛前肌",
   "side": "左",
   "channel_hint": "左脛前肌 → ZE1 Ch1／ZE2 Ch2",
-  "match_note": "ZE1一對一 score=120（Frank / 脛前肌 / 左 / a09 / #1｜建議ZE1 Ch1）；ZE2未配對：無符合一對一檔名條件",
+  "match_note": "ZE1一對一 score=120（Frank / 脛前肌 / 左 / a09 / #1｜建議ZE1 Ch1）；ZE2一對一 score=115（Frank / 脛前肌 / 左｜建議ZE2 Ch2）",
   "status": "可比對",
   "device": "ze1",
   "device_file": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",

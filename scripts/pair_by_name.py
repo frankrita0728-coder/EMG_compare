@@ -90,7 +90,9 @@ def write_inventory(inv: dict, out_dir: Path) -> tuple[Path, Path, Path]:
         f"- Delsys：{inv['counts']['delsys']}　ZE1：{inv['counts']['ze1']}　ZE2：{inv['counts']['ze2']}",
         f"- 肌群部位：{inv['counts'].get('muscle_sites', 0)}　一對一可比對：{inv['counts']['comparable_groups']}",
         "",
-        "> 規則：每個 Delsys CSV 最多配 **1 個 ZE1**、**1 個 ZE2**；需同受試者／肌肉／側；若檔名有場次碼（如 a09）則必須相同。",
+        "> 規則：每個 Delsys CSV 最多配 **1 個 ZE1**、**1 個 ZE2**。"
+        " ZE1 需同受試者／肌肉／側，且場次碼（如 a09）相同；"
+        " ZE2 無場次碼時只要同受試者／肌肉／側即可與 Delsys 一對一比對。",
         "",
         "## 全肌群部位總表",
         "",
