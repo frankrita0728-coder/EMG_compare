@@ -98,16 +98,30 @@ def write_inventory(inv: dict, out_dir: Path) -> tuple[Path, Path, Path]:
         "|------|--------|------|----|----------|--------|---------------|---------------|",
     ]
     for site in inv.get("sites") or []:
+        # Prefer exclusive 1:1 pair files when a Delsys compare exists for this site.
+        ze1_show = "; ".join(site.get("ze1_preferred") or []) or "—"
+        ze2_show = "; ".join(site.get("ze2_preferred") or []) or "—"
+        status = site["status"]
+        for row in inv.get("comparable") or []:
+            if (
+                row.get("subject") == site["subject"]
+                and row.get("muscle") == site["muscle"]
+                and row.get("side") == site["side"]
+            ):
+                ze1_show = row.get("ze1") or "—"
+                ze2_show = row.get("ze2") or "—"
+                status = row.get("completeness") or status
+                break
         lines.append(
             "| {status} | {subject} | {muscle} | {side} | {hint} | `{delsys}` | `{ze1}` | `{ze2}` |".format(
-                status=site["status"],
+                status=status,
                 subject=site["subject"],
                 muscle=site["muscle"],
                 side=site["side"],
                 hint=site.get("channel_hint") or "—",
                 delsys="; ".join(site.get("delsys") or []) or "—",
-                ze1="; ".join(site.get("ze1_preferred") or []) or "—",
-                ze2="; ".join(site.get("ze2_preferred") or []) or "—",
+                ze1=ze1_show,
+                ze2=ze2_show,
             )
         )
 
