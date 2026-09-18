@@ -429,6 +429,22 @@ def correlation_rows(correlation: dict[str, Any] | None) -> list[dict[str, Any]]
     return [{"metric": key, "r": value} for key, value in correlation.items()]
 
 
+def interval_agreement_rows(rows: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    if not rows:
+        return []
+    out = []
+    for item in rows:
+        out.append(
+            {
+                "metric": item.get("metric"),
+                "n": item.get("n"),
+                "Pearson r": item.get("pearson_r"),
+                "ICC(A,1)": item.get("icc"),
+            }
+        )
+    return out
+
+
 def require_delsys() -> str | None:
     name = st.session_state.selected_delsys
     if not name:
@@ -956,13 +972,26 @@ def tab_features() -> None:
         if delta.get("note"):
             st.caption(delta["note"])
         st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
+        agreement = delta.get("interval_agreement") or []
+        if agreement:
+            n_intervals = min(
+                int((delta.get("delsys") or {}).get("count") or 0),
+                int((delta.get("txt") or {}).get("count") or 0),
+            )
+            st.markdown("**收縮區間一致性（Pearson r / ICC）**")
+            st.caption(
+                f"以成對收縮區間特徵跨 {n_intervals} 段計算："
+                "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
+                "樣本少時僅供參考。"
+            )
+            st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
         corr = delta.get("correlation") or {}
         if corr:
             window = delta.get("correlation_window") or {}
             w_l = window.get("window_l", 157)
             ov = window.get("overlap", 79)
             n_intervals = int((delta.get("delsys") or {}).get("count") or 0)
-            st.markdown("**相關係數（Pearson r）**")
+            st.markdown("**TTRI 滑動窗相關係數（Pearson r）**")
             st.caption(
                 f"TTRI 滑動窗（window_l={w_l}, overlap={ov}）曲線，"
                 f"僅 Delsys {n_intervals} 段收縮區間內的點（休息段排除）；"

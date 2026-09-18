@@ -4,7 +4,12 @@ from typing import Any
 
 from align import align_traces_by_start, parse_delsys_start
 from detector import detect_contractions_dispatch
-from features import analyze_signal_features, compare_feature_rows, series_correlations
+from features import (
+    analyze_signal_features,
+    compare_feature_rows,
+    interval_agreement,
+    series_correlations,
+)
 from normalize import normalize_trace
 from parsers.delsys import load_delsys_emg
 from parsers.txt_device import TXT_MV_PER_COUNT, load_txt_emg
@@ -383,7 +388,13 @@ def build_feature_compare(
         right_feat["features"],
         metrics=left_feat["metrics"],
     )
-    # Full-resolution TTRI curves; Pearson r only on Delsys contraction windows.
+    # 1) Contraction-interval summary: Pearson r + ICC(A,1) across paired intervals.
+    agreement = interval_agreement(
+        left_feat["features"],
+        right_feat["features"],
+        metrics=left_feat["metrics"],
+    )
+    # 2) Full-resolution TTRI curves; Pearson r only on Delsys contraction windows.
     left_series_corr = compute_ttri_feature_series(
         left["values"], sample_rate=left["sample_rate"], max_points=None
     )
@@ -398,7 +409,7 @@ def build_feature_compare(
     )
     window_l = left_series_corr.get("window_l", 157)
     overlap = left_series_corr.get("overlap", 79)
-    n_intervals = len(corr_intervals)
+    n_intervals = min(left_feat["count"], right_feat["count"])
     plot_series_left = left_feat.get("series") or compute_ttri_feature_series(
         left["values"], sample_rate=left["sample_rate"]
     )
@@ -430,12 +441,14 @@ def build_feature_compare(
             "series": plot_series_right,
         },
         "pairs": pairs,
+        "interval_agreement": agreement,
         "correlation": correlation,
         "correlation_method": "ttri_series_pearson_contraction_only",
         "correlation_window": {"window_l": window_l, "overlap": overlap},
         "note": (
             f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
-            f" 相關係數為 TTRI 滑動窗曲線（window_l={window_l}, overlap={overlap}），"
-            f"僅使用 Delsys 共 {n_intervals} 段收縮區間內的點（休息段排除）後算 Pearson r。"
+            f" 收縮區間一致性：跨 {n_intervals} 段的 Pearson r 與 ICC(A,1)。"
+            f" 另有 TTRI 滑動窗曲線（window_l={window_l}, overlap={overlap}）"
+            " 僅收縮區間內點的 Pearson r。"
         ),
     }

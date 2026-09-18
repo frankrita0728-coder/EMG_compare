@@ -244,6 +244,84 @@ def feature_correlations(
     return out
 
 
+def icc_absolute_agreement(xs: list[float], ys: list[float]) -> float | None:
+    """
+    ICC(A,1) / ICC(2,1) absolute agreement for two raters (Delsys vs device).
+
+    McGraw & Wong two-way random effects, single measurement, absolute agreement.
+    None if fewer than 2 pairs or degenerate mean squares.
+    """
+    if len(xs) != len(ys) or len(xs) < 2:
+        return None
+    x = np.asarray(xs, dtype=float)
+    y = np.asarray(ys, dtype=float)
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        return None
+
+    n = int(x.size)
+    k = 2
+    data = np.column_stack([x, y])
+    grand = float(np.mean(data))
+    row_means = np.mean(data, axis=1)
+    col_means = np.mean(data, axis=0)
+
+    ss_rows = float(k * np.sum((row_means - grand) ** 2))
+    ss_cols = float(n * np.sum((col_means - grand) ** 2))
+    ss_total = float(np.sum((data - grand) ** 2))
+    ss_err = ss_total - ss_rows - ss_cols
+    if ss_err < 0 and abs(ss_err) < 1e-12:
+        ss_err = 0.0
+
+    df_rows = n - 1
+    df_err = (n - 1) * (k - 1)
+    if df_rows <= 0 or df_err <= 0:
+        return None
+
+    msb = ss_rows / df_rows
+    msr = ss_cols / (k - 1)
+    mse = ss_err / df_err
+    denom = msb + (k - 1) * mse + k * (msr - mse) / n
+    if abs(denom) <= 1e-15:
+        return None
+    icc = (msb - mse) / denom
+    if not np.isfinite(icc):
+        return None
+    # ICC can be slightly negative when agreement is worse than chance.
+    return round(float(icc), 4)
+
+
+def interval_agreement(
+    left_rows: list[dict[str, Any]],
+    right_rows: list[dict[str, Any]],
+    metrics: tuple[str, ...] | list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Per-metric Pearson r and ICC(A,1) across paired contraction-interval features.
+    Each row of left/right is one contraction interval (same index).
+    """
+    keys = tuple(metrics) if metrics else SPECTRAL_METRICS
+    count = min(len(left_rows), len(right_rows))
+    rows: list[dict[str, Any]] = []
+    for key in keys:
+        xs: list[float] = []
+        ys: list[float] = []
+        for i in range(count):
+            lv = left_rows[i].get(key)
+            rv = right_rows[i].get(key)
+            if isinstance(lv, (int, float)) and isinstance(rv, (int, float)):
+                xs.append(float(lv))
+                ys.append(float(rv))
+        rows.append(
+            {
+                "metric": key,
+                "n": len(xs),
+                "pearson_r": pearson_corr(xs, ys),
+                "icc": icc_absolute_agreement(xs, ys),
+            }
+        )
+    return rows
+
+
 def _interval_mask(times: np.ndarray, intervals: list[dict[str, Any]] | None) -> np.ndarray:
     """True where time falls inside any [start, end] contraction interval."""
     if times.size == 0:

@@ -135,6 +135,21 @@ def _rows_from_correlation(correlation: dict[str, Any] | None) -> list[list[str]
     return [["metric", "r"], *body]
 
 
+def _rows_from_interval_agreement(rows: list[dict[str, Any]] | None) -> list[list[str]]:
+    if not rows:
+        return [["metric", "n", "pearson_r", "icc"], ["", "", "", "no agreement"]]
+    body = [
+        [
+            str(item.get("metric") or ""),
+            _fmt(item.get("n")),
+            _fmt(item.get("pearson_r")),
+            _fmt(item.get("icc")),
+        ]
+        for item in rows
+    ]
+    return [["metric", "n", "pearson_r", "icc"], *body]
+
+
 def _make_table(data: list[list[str]], font_name: str) -> Table:
     table = Table(data, repeatRows=1)
     table.setStyle(
@@ -330,8 +345,16 @@ def build_results_pdf(
         if feat_delta.get("note"):
             story.append(Paragraph(_escape(str(feat_delta["note"])), body_style))
         story.append(_make_table(_rows_from_delta(feat_delta.get("pairs") or []), font_name))
+        if feat_delta.get("interval_agreement"):
+            story.append(Paragraph(_escape("收縮區間一致性（Pearson r / ICC(A,1)）"), h_style))
+            story.append(
+                _make_table(
+                    _rows_from_interval_agreement(feat_delta.get("interval_agreement") or []),
+                    font_name,
+                )
+            )
         if feat_delta.get("correlation"):
-            story.append(Paragraph(_escape("相關係數（Pearson r）"), h_style))
+            story.append(Paragraph(_escape("TTRI 滑動窗相關係數（Pearson r）"), h_style))
             story.append(
                 _make_table(_rows_from_correlation(feat_delta.get("correlation") or {}), font_name)
             )
@@ -394,6 +417,12 @@ def build_results_csv_zip(
             text.write("\ufeff")
             _write_csv(text, rows)
             zf.writestr("features_delta.csv", text.getvalue().encode("utf-8"))
+            if feat_delta.get("interval_agreement"):
+                agr_rows = _rows_from_interval_agreement(feat_delta.get("interval_agreement") or [])
+                agr_text = io.StringIO()
+                agr_text.write("\ufeff")
+                _write_csv(agr_text, agr_rows)
+                zf.writestr("features_interval_agreement.csv", agr_text.getvalue().encode("utf-8"))
             if feat_delta.get("correlation"):
                 corr_rows = _rows_from_correlation(feat_delta.get("correlation") or {})
                 corr_text = io.StringIO()
