@@ -189,10 +189,23 @@ def init_state() -> None:
         "corr_results_ze1": None,
         "corr_results_ze2": None,
         "file_nonce": 0,
+        "contr_method": "ze1_schmitt",
+        "feat_contr_method": "ze1_schmitt",
+        "corr_contr_method": "ze1_schmitt",
+        "feat_method": "ttri",
+        "corr_feat_method": "ttri",
     }
     for key, value in defaults.items():
         if key not in st.session_state:
             st.session_state[key] = value
+    # One-time migration so existing browser sessions pick up new UI defaults.
+    if not st.session_state.get("_ui_defaults_v2"):
+        st.session_state.feat_method = "ttri"
+        st.session_state.corr_feat_method = "ttri"
+        st.session_state.contr_method = "ze1_schmitt"
+        st.session_state.feat_contr_method = "ze1_schmitt"
+        st.session_state.corr_contr_method = "ze1_schmitt"
+        st.session_state._ui_defaults_v2 = True
 
 
 def refresh_file_lists() -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -953,8 +966,7 @@ def tab_features() -> None:
     with c2:
         feature_method = st.selectbox(
             "特徵計算",
-            options=["spectral", "ttri"],
-            index=1,
+            options=["ttri", "spectral"],
             format_func=lambda x: {
                 "spectral": "Spectral（iEMG/RMS/MDF/MPF）",
                 "ttri": "TTRI / ZE1（AEMG + 滑動窗）",
@@ -1233,8 +1245,7 @@ def tab_correlation() -> None:
     with c2:
         feature_method = st.selectbox(
             "特徵計算",
-            options=["spectral", "ttri"],
-            index=1,
+            options=["ttri", "spectral"],
             format_func=lambda x: {
                 "spectral": "Spectral（iEMG/RMS/MDF/MPF）",
                 "ttri": "TTRI / ZE1（AEMG + 滑動窗）",

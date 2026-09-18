@@ -277,7 +277,7 @@ def build_feature_single(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
-    feature_method: str = "spectral",
+    feature_method: str = "ttri",
 ) -> dict[str, Any]:
     full = load_signal(source, filename, for_plot=False)
     feat = analyze_signal_features(
@@ -364,7 +364,7 @@ def build_feature_compare(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
-    feature_method: str = "spectral",
+    feature_method: str = "ttri",
 ) -> dict[str, Any]:
     left = load_delsys_emg(delsys_name, for_plot=False)
     right = load_txt_emg(txt_name, for_plot=False)
@@ -434,7 +434,7 @@ def build_feature_compare_ze2(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
-    feature_method: str = "spectral",
+    feature_method: str = "ttri",
     ze2_sample_rate: float | None = None,
     ze2_mv_per_count: float | None = None,
     apply_bandpass: bool = True,
