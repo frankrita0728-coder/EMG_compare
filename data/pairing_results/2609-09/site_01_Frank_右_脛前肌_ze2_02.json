@@ -1,0 +1,97 @@
+{
+  "delsys": null,
+  "status": "待補 Delsys",
+  "subject": "Frank",
+  "muscle": "脛前肌",
+  "side": "右",
+  "channel_hint": "右脛前肌 → ZE1 Ch2／ZE2 Ch1",
+  "match_note": "無對應 Delsys；先輸出 ZE2 單獨特徵",
+  "mode": "ze2_solo",
+  "filename": "09-09_11-30-01_689_Ch1(frank右脛前肌).txt",
+  "sample_rate": 1000.0,
+  "unit": "mV",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "features": [
+    {
+      "index": 1,
+      "start": 5.28,
+      "end": 11.688,
+      "duration": 6.408,
+      "aemg": 0.007857,
+      "rms": 0.01026,
+      "iemg": 0.050237,
+      "mpf": 102.12,
+      "mdf": 84.91,
+      "peak_rms": 0.017813,
+      "method": "ttri"
+    },
+    {
+      "index": 2,
+      "start": 15.832,
+      "end": 21.224,
+      "duration": 5.392,
+      "aemg": 0.008227,
+      "rms": 0.010919,
+      "iemg": 0.04425,
+      "mpf": 99.17,
+      "mdf": 82.54,
+      "peak_rms": 0.020392,
+      "method": "ttri"
+    },
+    {
+      "index": 3,
+      "start": 26.016,
+      "end": 32.016,
+      "duration": 6.0,
+      "aemg": 0.008318,
+      "rms": 0.011014,
+      "iemg": 0.049819,
+      "mpf": 94.98,
+      "mdf": 76.74,
+      "peak_rms": 0.022123,
+      "method": "ttri"
+    }
+  ],
+  "count": 3,
+  "contractions": [
+    {
+      "index": 1,
+      "start": 5.28,
+      "end": 11.688,
+      "duration": 6.408,
+      "peak_rms": 0.010614,
+      "start_sample": 5280,
+      "end_sample": 11688
+    },
+    {
+      "index": 2,
+      "start": 15.832,
+      "end": 21.224,
+      "duration": 5.392,
+      "peak_rms": 0.01156,
+      "start_sample": 15832,
+      "end_sample": 21224
+    },
+    {
+      "index": 3,
+      "start": 26.016,
+      "end": 32.016,
+      "duration": 6.0,
+      "peak_rms": 0.011809,
+      "start_sample": 26016,
+      "end_sample": 32016
+    }
+  ],
+  "device": "ze2",
+  "device_file": "09-09_11-30-01_689_Ch1(frank右脛前肌).txt"
+}

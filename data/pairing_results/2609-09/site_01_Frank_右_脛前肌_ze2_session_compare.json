@@ -1,0 +1,179 @@
+{
+  "mode": "ze2_session_compare",
+  "status": "待補 Delsys",
+  "subject": "Frank",
+  "muscle": "脛前肌",
+  "side": "右",
+  "left": "09-09_11-27-57_319_Ch1(frank右脛前肌).txt",
+  "right": "09-09_11-30-01_689_Ch1(frank右脛前肌).txt",
+  "note": "同肌群多筆 ZE2（尚無 Delsys）之場次一致性",
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": {
+        "index": 1,
+        "start": 4.944,
+        "end": 10.008,
+        "duration": 5.064,
+        "aemg": 0.007584,
+        "rms": 0.009852,
+        "iemg": 0.038116,
+        "mpf": 103.3,
+        "mdf": 86.79,
+        "peak_rms": 0.017904,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 1,
+        "start": 5.28,
+        "end": 11.688,
+        "duration": 6.408,
+        "aemg": 0.007857,
+        "rms": 0.01026,
+        "iemg": 0.050237,
+        "mpf": 102.12,
+        "mdf": 84.91,
+        "peak_rms": 0.017813,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -1.344,
+        "aemg": -0.000273,
+        "iemg": -0.012121,
+        "rms": -0.000408,
+        "mdf": 1.88,
+        "mpf": 1.18,
+        "peak_rms": 9.1e-05
+      }
+    },
+    {
+      "index": 2,
+      "delsys": {
+        "index": 2,
+        "start": 14.32,
+        "end": 19.384,
+        "duration": 5.064,
+        "aemg": 0.007277,
+        "rms": 0.009467,
+        "iemg": 0.036622,
+        "mpf": 99.54,
+        "mdf": 83.97,
+        "peak_rms": 0.020161,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 2,
+        "start": 15.832,
+        "end": 21.224,
+        "duration": 5.392,
+        "aemg": 0.008227,
+        "rms": 0.010919,
+        "iemg": 0.04425,
+        "mpf": 99.17,
+        "mdf": 82.54,
+        "peak_rms": 0.020392,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.328,
+        "aemg": -0.00095,
+        "iemg": -0.007628,
+        "rms": -0.001452,
+        "mdf": 1.43,
+        "mpf": 0.37,
+        "peak_rms": -0.000231
+      }
+    },
+    {
+      "index": 3,
+      "delsys": {
+        "index": 3,
+        "start": 23.632,
+        "end": 28.936,
+        "duration": 5.304,
+        "aemg": 0.007736,
+        "rms": 0.010297,
+        "iemg": 0.040807,
+        "mpf": 98.13,
+        "mdf": 81.61,
+        "peak_rms": 0.018776,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 3,
+        "start": 26.016,
+        "end": 32.016,
+        "duration": 6.0,
+        "aemg": 0.008318,
+        "rms": 0.011014,
+        "iemg": 0.049819,
+        "mpf": 94.98,
+        "mdf": 76.74,
+        "peak_rms": 0.022123,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.696,
+        "aemg": -0.000582,
+        "iemg": -0.009012,
+        "rms": -0.000717,
+        "mdf": 4.87,
+        "mpf": 3.15,
+        "peak_rms": -0.003347
+      }
+    }
+  ],
+  "correlation": {
+    "duration": 0.1129,
+    "aemg": -0.0051,
+    "iemg": 0.7318,
+    "rms": 0.157,
+    "mdf": 0.9585,
+    "mpf": 0.9371,
+    "peak_rms": 0.4849
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 3,
+      "pearson_r": 0.1129,
+      "icc": 0.0196
+    },
+    {
+      "metric": "aemg",
+      "n": 3,
+      "pearson_r": -0.0051,
+      "icc": -0.0013
+    },
+    {
+      "metric": "iemg",
+      "n": 3,
+      "pearson_r": 0.7318,
+      "icc": 0.0981
+    },
+    {
+      "metric": "rms",
+      "n": 3,
+      "pearson_r": 0.157,
+      "icc": 0.0545
+    },
+    {
+      "metric": "mdf",
+      "n": 3,
+      "pearson_r": 0.9585,
+      "icc": 0.6815
+    },
+    {
+      "metric": "mpf",
+      "n": 3,
+      "pearson_r": 0.9371,
+      "icc": 0.8248
+    },
+    {
+      "metric": "peak_rms",
+      "n": 3,
+      "pearson_r": 0.4849,
+      "icc": 0.3893
+    }
+  ]
+}

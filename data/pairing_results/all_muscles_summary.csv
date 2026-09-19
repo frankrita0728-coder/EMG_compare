@@ -1,0 +1,8 @@
+status,subject,muscle,side,device,file,correlation_iemg,correlation_rms,n_pairs,mean_aemg,mean_rms
+可比對,Frank,脛前肌,左,ze1,09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt,0.9785,0.5203,3,,
+可比對,Frank,脛前肌,左,ze2,09-03_11-44-33_364_Ch2(Frank 左脛前肌).txt,0.9962,0.4741,3,,
+待補 Delsys,Frank,脛前肌,右,ze2_solo,09-03_14-45-34_825_Ch1(Frank 右脛前肌).txt,,,3,0.007828,0.010483333333333332
+待補 Delsys,Frank,脛前肌,右,ze2_solo,09-09_11-27-57_319_Ch1(frank右脛前肌).txt,,,3,0.007532333333333333,0.009872
+待補 Delsys,Frank,脛前肌,右,ze2_solo,09-09_11-30-01_689_Ch1(frank右脛前肌).txt,,,3,0.008134,0.010731
+待補 Delsys,Frank,腓腸肌,右,ze2_solo,09-03_15-32-47_275_Ch2(Frank 右腓腸肌).txt,,,3,0.011498,0.014845333333333334
+待補 Delsys,Frank,腓腸肌,左,ze2_solo,09-03_12-24-16_163_Ch1(Frank 左腓腸肌).txt,,,3,0.011412333333333335,0.014818999999999999
