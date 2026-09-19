@@ -39,6 +39,15 @@ DATE_RE = re.compile(r"(?<!\d)(\d{1,2}-\d{1,2})(?!\d)")
 YYMM_DATE_RE = re.compile(r"(?<!\d)\d{2}(\d{2})-(\d{1,2})(?!\d)")
 SESSION_RE = re.compile(r"(?:^|[_\s(\-])a(\d{2})(?:[_\s)\-]|$)", re.IGNORECASE)
 TRIAL_RE = re.compile(r"(?:_with)?(?:_a\d{2})?_(\d+)$", re.IGNORECASE)
+# Shaving / hair-removal condition markers in filenames.
+SHAVE_AFTER_RE = re.compile(
+    r"(刮腿毛後|刮毛後|剃毛後|after[_\-]?shave|shaved|post[_\-]?shave)",
+    re.IGNORECASE,
+)
+SHAVE_BEFORE_RE = re.compile(
+    r"(刮腿毛前|刮毛前|剃毛前|before[_\-]?shave|unshaved|pre[_\-]?shave)",
+    re.IGNORECASE,
+)
 
 # Clinical channel hints (ZE2 is the inverse of ZE1).
 # Keys: (side_norm, muscle) → ZE1 recommended channel.
@@ -128,6 +137,7 @@ class FileTags:
     date: str = ""
     session: str = ""
     trial: str = ""
+    condition: str = ""  # "", "unshaved", "shaved"
 
     def score_against(self, other: FileTags) -> int:
         score = 0
@@ -147,6 +157,8 @@ class FileTags:
             score += 30
         if self.trial and other.trial and self.trial == other.trial:
             score += 8
+        if self.condition and other.condition and self.condition == other.condition:
+            score += 12
         return score
 
     def group_key(self) -> tuple[str, str, str, str]:
@@ -169,6 +181,7 @@ class FileTags:
             "date": self.date,
             "session": self.session,
             "trial": self.trial,
+            "condition": self.condition,
         }
 
 
@@ -242,6 +255,15 @@ def extract_tags(filename: str) -> FileTags:
     if trial_match:
         trial = trial_match.group(1)
 
+    condition = ""
+    if SHAVE_AFTER_RE.search(stem) or SHAVE_AFTER_RE.search(lowered):
+        condition = "shaved"
+    elif SHAVE_BEFORE_RE.search(stem) or SHAVE_BEFORE_RE.search(lowered):
+        condition = "unshaved"
+    elif "刮腿毛" in stem or "刮毛" in stem or "剃毛" in stem:
+        # Bare marker without 前/後 → treat as after-shave condition label.
+        condition = "shaved"
+
     return FileTags(
         subject=subject,
         side=side,
@@ -251,6 +273,7 @@ def extract_tags(filename: str) -> FileTags:
         date=date,
         session=session,
         trial=trial,
+        condition=condition,
     )
 
 
@@ -850,3 +873,265 @@ def build_name_consistency_inventory(
             "muscle_sites": len(sites),
         },
     }
+
+
+def files_for_site(
+    files: list[dict[str, Any]],
+    *,
+    subject: str,
+    muscle: str,
+    side: str,
+) -> list[dict[str, Any]]:
+    side_n = normalize_side(side)
+    out: list[dict[str, Any]] = []
+    for item in files:
+        tags = extract_tags(item["name"])
+        if tags.subject != subject:
+            continue
+        if tags.muscle != muscle:
+            continue
+        if normalize_side(tags.side) != side_n:
+            continue
+        out.append(item)
+    return out
+
+
+def pick_delsys_reference(
+    delsys_files: list[dict[str, Any]],
+    *,
+    subject: str,
+    muscle: str,
+    side: str,
+    preferred_session: str = "",
+) -> dict[str, Any] | None:
+    """Pick one Delsys CSV for a muscle site; prefer matching session when present."""
+    candidates = files_for_site(delsys_files, subject=subject, muscle=muscle, side=side)
+    if not candidates:
+        return None
+    if preferred_session:
+        sess = [
+            item
+            for item in candidates
+            if extract_tags(item["name"]).session == preferred_session
+        ]
+        if sess:
+            return sess[0]
+    # Prefer untagged / generic Delsys, else first alphabetical.
+    generic = [item for item in candidates if not extract_tags(item["name"]).session]
+    pool = generic or candidates
+    pool = sorted(pool, key=lambda item: item["name"])
+    return pool[0]
+
+
+def pick_ze1_by_session(
+    ze1_files: list[dict[str, Any]],
+    *,
+    subject: str,
+    muscle: str,
+    side: str,
+    session: str,
+    condition: str = "",
+) -> dict[str, Any] | None:
+    """Pick one ZE1 file for site + session (a09/a10), optional shave condition."""
+    candidates = files_for_site(ze1_files, subject=subject, muscle=muscle, side=side)
+    matched = [
+        item
+        for item in candidates
+        if extract_tags(item["name"]).session == session
+    ]
+    if condition:
+        cond = [
+            item
+            for item in matched
+            if extract_tags(item["name"]).condition == condition
+        ]
+        # If asking unshaved and none tagged, fall back to session files without shaved marker.
+        if cond:
+            matched = cond
+        elif condition == "unshaved":
+            matched = [
+                item
+                for item in matched
+                if extract_tags(item["name"]).condition != "shaved"
+            ]
+        else:
+            matched = cond
+    if not matched:
+        return None
+    preferred = prefer_recommended_files([item["name"] for item in matched], "ze1")
+    preferred_set = set(preferred)
+    ranked = [item for item in matched if item["name"] in preferred_set] or matched
+    return sorted(ranked, key=lambda item: item["name"])[0]
+
+
+def pick_ze2_for_site(
+    ze2_files: list[dict[str, Any]],
+    *,
+    subject: str,
+    muscle: str,
+    side: str,
+) -> dict[str, Any] | None:
+    candidates = files_for_site(ze2_files, subject=subject, muscle=muscle, side=side)
+    if not candidates:
+        return None
+    preferred = prefer_recommended_files([item["name"] for item in candidates], "ze2")
+    preferred_set = set(preferred)
+    ranked = [item for item in candidates if item["name"] in preferred_set] or candidates
+    return sorted(ranked, key=lambda item: item["name"])[0]
+
+
+def plan_device_compares(
+    delsys_files: list[dict[str, Any]],
+    ze1_files: list[dict[str, Any]],
+    ze2_files: list[dict[str, Any]],
+    *,
+    sessions: tuple[str, ...] = ("a09", "a10"),
+) -> list[dict[str, Any]]:
+    """
+    Plan per-muscle device compares: a09 vs Delsys, a10 vs Delsys, ZE2 vs Delsys.
+    """
+    sites = enumerate_muscle_sites(delsys_files, ze1_files, ze2_files)
+    plans: list[dict[str, Any]] = []
+    for site in sites:
+        subject, muscle, side = site["subject"], site["muscle"], site["side"]
+        for session in sessions:
+            delsys = pick_delsys_reference(
+                delsys_files,
+                subject=subject,
+                muscle=muscle,
+                side=side,
+                preferred_session=session,
+            )
+            ze1 = pick_ze1_by_session(
+                ze1_files,
+                subject=subject,
+                muscle=muscle,
+                side=side,
+                session=session,
+                condition="unshaved",  # device arm excludes explicit shaved files when possible
+            )
+            # If no unshaved-tagged file, retry without condition filter.
+            if ze1 is None:
+                ze1 = pick_ze1_by_session(
+                    ze1_files,
+                    subject=subject,
+                    muscle=muscle,
+                    side=side,
+                    session=session,
+                    condition="",
+                )
+            plans.append(
+                {
+                    "analysis": "device_compare",
+                    "compare": f"{session}_vs_delsys",
+                    "subject": subject,
+                    "muscle": muscle,
+                    "side": side,
+                    "session": session,
+                    "delsys": delsys["name"] if delsys else "",
+                    "device": "ze1",
+                    "device_file": ze1["name"] if ze1 else "",
+                    "status": "ready" if (delsys and ze1) else "missing_files",
+                }
+            )
+        delsys = pick_delsys_reference(
+            delsys_files, subject=subject, muscle=muscle, side=side, preferred_session=""
+        )
+        ze2 = pick_ze2_for_site(ze2_files, subject=subject, muscle=muscle, side=side)
+        plans.append(
+            {
+                "analysis": "device_compare",
+                "compare": "ze2_vs_delsys",
+                "subject": subject,
+                "muscle": muscle,
+                "side": side,
+                "session": "",
+                "delsys": delsys["name"] if delsys else "",
+                "device": "ze2",
+                "device_file": ze2["name"] if ze2 else "",
+                "status": "ready" if (delsys and ze2) else "missing_files",
+            }
+        )
+    return plans
+
+
+def plan_shave_compares(
+    delsys_files: list[dict[str, Any]],
+    ze1_files: list[dict[str, Any]],
+    *,
+    session: str = "a09",
+) -> list[dict[str, Any]]:
+    """
+    Plan shaving compares: a09 vs Delsys, and shaved-a09 vs Delsys, per muscle.
+    """
+    sites = enumerate_muscle_sites(delsys_files, ze1_files, [])
+    plans: list[dict[str, Any]] = []
+    for site in sites:
+        subject, muscle, side = site["subject"], site["muscle"], site["side"]
+        delsys = pick_delsys_reference(
+            delsys_files,
+            subject=subject,
+            muscle=muscle,
+            side=side,
+            preferred_session=session,
+        )
+        before = pick_ze1_by_session(
+            ze1_files,
+            subject=subject,
+            muscle=muscle,
+            side=side,
+            session=session,
+            condition="unshaved",
+        )
+        if before is None:
+            before = pick_ze1_by_session(
+                ze1_files,
+                subject=subject,
+                muscle=muscle,
+                side=side,
+                session=session,
+                condition="",
+            )
+            # Avoid using an explicitly shaved file as "before".
+            if before and extract_tags(before["name"]).condition == "shaved":
+                before = None
+        after = pick_ze1_by_session(
+            ze1_files,
+            subject=subject,
+            muscle=muscle,
+            side=side,
+            session=session,
+            condition="shaved",
+        )
+        plans.append(
+            {
+                "analysis": "shave_compare",
+                "compare": f"{session}_before_vs_delsys",
+                "subject": subject,
+                "muscle": muscle,
+                "side": side,
+                "session": session,
+                "condition": "unshaved",
+                "delsys": delsys["name"] if delsys else "",
+                "device": "ze1",
+                "device_file": before["name"] if before else "",
+                "status": "ready" if (delsys and before) else "missing_files",
+            }
+        )
+        plans.append(
+            {
+                "analysis": "shave_compare",
+                "compare": f"{session}_after_shave_vs_delsys",
+                "subject": subject,
+                "muscle": muscle,
+                "side": side,
+                "session": session,
+                "condition": "shaved",
+                "delsys": delsys["name"] if delsys else "",
+                "device": "ze1",
+                "device_file": after["name"] if after else "",
+                "status": "ready" if (delsys and after) else "missing_files",
+            }
+        )
+    return plans
+
