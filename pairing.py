@@ -43,11 +43,11 @@ WITH_DEVICE_RE = re.compile(r"_with[_\-]?(a\d{2}|ze[12])(?:[_\-]|\.|$)", re.IGNO
 TRIAL_RE = re.compile(r"(?:_with)?(?:_a\d{2}|_ze[12])?_(\d+)$", re.IGNORECASE)
 # Shaving / hair-removal condition markers in filenames.
 SHAVE_AFTER_RE = re.compile(
-    r"(刮腿毛後|刮毛後|剃毛後|after[_\-]?shave|shaved|post[_\-]?shave)",
+    r"(刮腿毛後|刮毛後|剃毛後|去腿毛|去毛後|after[_\-]?shave|shaved|post[_\-]?shave)",
     re.IGNORECASE,
 )
 SHAVE_BEFORE_RE = re.compile(
-    r"(刮腿毛前|刮毛前|剃毛前|before[_\-]?shave|unshaved|pre[_\-]?shave)",
+    r"(刮腿毛前|刮毛前|剃毛前|去腿毛前|before[_\-]?shave|unshaved|pre[_\-]?shave)",
     re.IGNORECASE,
 )
 
@@ -292,7 +292,7 @@ def extract_tags(filename: str) -> FileTags:
         condition = "shaved"
     elif SHAVE_BEFORE_RE.search(stem) or SHAVE_BEFORE_RE.search(lowered):
         condition = "unshaved"
-    elif "刮腿毛" in stem or "刮毛" in stem or "剃毛" in stem:
+    elif "刮腿毛" in stem or "刮毛" in stem or "剃毛" in stem or "去腿毛" in stem or "去毛" in stem:
         # Bare marker without 前/後 → treat as after-shave condition label.
         condition = "shaved"
 
@@ -953,6 +953,18 @@ def delsys_device_ref(name: str) -> str:
     return (tags.device_ref or tags.session or "").lower()
 
 
+def _delsys_pick_rank(name: str) -> tuple[int, str]:
+    """Prefer explicit (Delsys)_with_* references over fatigue / loose names."""
+    lower = name.lower()
+    if "(delsys)_with_" in lower or "(delsys)_with" in lower:
+        return (0, name)
+    if "_with_a" in lower or "_with_ze" in lower:
+        return (1, name)
+    if "疲勞" in name:
+        return (3, name)
+    return (2, name)
+
+
 def pick_delsys_reference(
     delsys_files: list[dict[str, Any]],
     *,
@@ -962,6 +974,7 @@ def pick_delsys_reference(
     preferred_session: str = "",
     preferred_device_ref: str = "",
     strict_device_ref: bool = False,
+    preferred_condition: str = "",
 ) -> dict[str, Any] | None:
     """
     Pick one Delsys CSV for a muscle site.
@@ -978,27 +991,44 @@ def pick_delsys_reference(
         return None
 
     want = (preferred_device_ref or preferred_session or "").lower()
+    pool = candidates
     if want:
         matched = [item for item in candidates if delsys_device_ref(item["name"]) == want]
         if matched:
-            return sorted(matched, key=lambda item: item["name"])[0]
-        if strict_device_ref or want == "ze2":
+            pool = matched
+        elif strict_device_ref or want == "ze2":
             return None
-        # Soft fallback for a09/a10: older files may lack _with_ but share session.
-        if preferred_session:
+        elif preferred_session:
             sess = [
                 item
                 for item in candidates
                 if extract_tags(item["name"]).session == preferred_session
             ]
-            if sess:
-                return sorted(sess, key=lambda item: item["name"])[0]
+            if not sess:
+                return None
+            pool = sess
+        else:
             return None
 
-    # Prefer untagged / generic Delsys, else first alphabetical.
-    generic = [item for item in candidates if not delsys_device_ref(item["name"])]
-    pool = generic or candidates
-    return sorted(pool, key=lambda item: item["name"])[0]
+    if preferred_condition:
+        cond = [
+            item
+            for item in pool
+            if extract_tags(item["name"]).condition == preferred_condition
+        ]
+        if preferred_condition == "unshaved":
+            # Prefer not-shaved; fall back to pool if none tagged unshaved.
+            pool = cond or [
+                item
+                for item in pool
+                if extract_tags(item["name"]).condition != "shaved"
+            ] or pool
+        elif cond:
+            pool = cond
+        else:
+            return None
+
+    return sorted(pool, key=lambda item: _delsys_pick_rank(item["name"]))[0]
 
 
 def pick_ze1_by_session(
@@ -1081,6 +1111,7 @@ def plan_device_compares(
                 preferred_session=session,
                 preferred_device_ref=session,
                 strict_device_ref=True,
+                preferred_condition="unshaved",
             )
             ze1 = pick_ze1_by_session(
                 ze1_files,
@@ -1154,7 +1185,7 @@ def plan_shave_compares(
     plans: list[dict[str, Any]] = []
     for site in sites:
         subject, muscle, side = site["subject"], site["muscle"], site["side"]
-        delsys = pick_delsys_reference(
+        delsys_before = pick_delsys_reference(
             delsys_files,
             subject=subject,
             muscle=muscle,
@@ -1162,7 +1193,20 @@ def plan_shave_compares(
             preferred_session=session,
             preferred_device_ref=session,
             strict_device_ref=True,
+            preferred_condition="unshaved",
         )
+        delsys_after = pick_delsys_reference(
+            delsys_files,
+            subject=subject,
+            muscle=muscle,
+            side=side,
+            preferred_session=session,
+            preferred_device_ref=session,
+            preferred_condition="shaved",
+        )
+        # If no dedicated shaved Delsys, fall back to the before/reference CSV.
+        if delsys_after is None:
+            delsys_after = delsys_before
         before = pick_ze1_by_session(
             ze1_files,
             subject=subject,
@@ -1200,10 +1244,10 @@ def plan_shave_compares(
                 "side": side,
                 "session": session,
                 "condition": "unshaved",
-                "delsys": delsys["name"] if delsys else "",
+                "delsys": delsys_before["name"] if delsys_before else "",
                 "device": "ze1",
                 "device_file": before["name"] if before else "",
-                "status": "ready" if (delsys and before) else "missing_files",
+                "status": "ready" if (delsys_before and before) else "missing_files",
             }
         )
         plans.append(
@@ -1215,10 +1259,10 @@ def plan_shave_compares(
                 "side": side,
                 "session": session,
                 "condition": "shaved",
-                "delsys": delsys["name"] if delsys else "",
+                "delsys": delsys_after["name"] if delsys_after else "",
                 "device": "ze1",
                 "device_file": after["name"] if after else "",
-                "status": "ready" if (delsys and after) else "missing_files",
+                "status": "ready" if (delsys_after and after) else "missing_files",
             }
         )
     return plans

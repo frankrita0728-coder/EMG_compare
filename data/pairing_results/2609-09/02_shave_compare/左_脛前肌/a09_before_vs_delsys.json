@@ -8,7 +8,7 @@
   "condition": "unshaved",
   "delsys": "2609-09 frank左脛前肌(Delsys)_with_a09_1.csv",
   "device": "ze1",
-  "device_file": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+  "device_file": "09-09_09-41-19_786_ExgCh1Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
   "status": "ready",
   "contraction_method": "ze1_schmitt",
   "feature_method": "ttri",
@@ -37,27 +37,15 @@
         "peak_rms": 0.525153,
         "method": "ttri"
       },
-      "txt": {
-        "index": 1,
-        "start": 13.125,
-        "end": 17.9609,
-        "duration": 4.8359,
-        "aemg": 0.111009,
-        "rms": 0.148428,
-        "iemg": 0.529991,
-        "mpf": 108.84,
-        "mdf": 106.7,
-        "peak_rms": 0.275362,
-        "method": "ttri"
-      },
+      "txt": null,
       "delta": {
-        "duration": 0.7316,
-        "aemg": 0.057868,
-        "iemg": 0.412455,
-        "rms": 0.076,
-        "mdf": -33.78,
-        "mpf": -16.13,
-        "peak_rms": 0.249791
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
       }
     },
     {
@@ -75,27 +63,15 @@
         "peak_rms": 0.477122,
         "method": "ttri"
       },
-      "txt": {
-        "index": 2,
-        "start": 23.4062,
-        "end": 25.9766,
-        "duration": 2.5704,
-        "aemg": 0.124869,
-        "rms": 0.169747,
-        "iemg": 0.312937,
-        "mpf": 110.43,
-        "mdf": 105.63,
-        "peak_rms": 0.2529,
-        "method": "ttri"
-      },
+      "txt": null,
       "delta": {
-        "duration": 3.1878,
-        "aemg": 0.03597,
-        "iemg": 0.618177,
-        "rms": 0.045777,
-        "mdf": -32.3,
-        "mpf": -17.39,
-        "peak_rms": 0.224222
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
       }
     },
     {
@@ -126,54 +102,54 @@
     }
   ],
   "correlation": {
-    "rms": 0.5203,
-    "iemg": 0.9785,
-    "mpf": 0.0992,
-    "mdf": 0.0407
+    "rms": -0.0323,
+    "iemg": 0.9897,
+    "mpf": 0.0749,
+    "mdf": 0.1344
   },
   "interval_agreement": [
     {
       "metric": "duration",
-      "n": 2,
-      "pearson_r": -1.0,
-      "icc": -0.0879
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     },
     {
       "metric": "aemg",
-      "n": 2,
-      "pearson_r": -1.0,
-      "icc": -0.0504
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     },
     {
       "metric": "iemg",
-      "n": 2,
-      "pearson_r": 1.0,
-      "icc": 0.0088
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     },
     {
       "metric": "rms",
-      "n": 2,
-      "pearson_r": -1.0,
-      "icc": -0.0507
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     },
     {
       "metric": "mdf",
-      "n": 2,
-      "pearson_r": -1.0,
-      "icc": -0.0004
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     },
     {
       "metric": "mpf",
-      "n": 2,
-      "pearson_r": 1.0,
-      "icc": 0.0019
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     },
     {
       "metric": "peak_rms",
-      "n": 2,
-      "pearson_r": 1.0,
-      "icc": 0.0188
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
     }
   ],
-  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 2 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。"
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 0 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。"
 }

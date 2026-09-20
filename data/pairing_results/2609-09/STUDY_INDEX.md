@@ -4,8 +4,8 @@
 1. **裝置比對**（每肌群）：a09 vs Delsys、a10 vs Delsys、ZE2 vs Delsys → `01_device_compare/`
 2. **刮腿毛比對**：a09 vs Delsys、刮腿毛後 a09 vs Delsys → `02_shave_compare/`
 
-- 完成：2
-- 缺檔：18
+- 完成：20
+- 缺檔：0
 - 摘要：`study_summary.csv`
 
 詳見各資料夾 README 與 plan.csv。
