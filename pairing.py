@@ -65,6 +65,14 @@ CHANNEL_HINT_ROWS: tuple[dict[str, str], ...] = (
     {"部位": "右腓腸肌", "ZE1": "Ch1", "ZE2": "Ch2"},
 )
 
+# Canonical study sites: both sides × tibialis anterior + gastrocnemius.
+STUDY_MUSCLE_SITES: tuple[tuple[str, str], ...] = (
+    ("左", "脛前肌"),
+    ("右", "脛前肌"),
+    ("左", "腓腸肌"),
+    ("右", "腓腸肌"),
+)
+
 
 def normalize_side(side: str) -> str:
     """Map filename side tags to 左/右 used by channel hints."""
@@ -755,17 +763,56 @@ def build_one_to_one_pairs(
     return pairs
 
 
+def _site_status(bucket: dict[str, list[str]]) -> str:
+    has_delsys = bool(bucket["delsys"])
+    has_device = bool(bucket["ze1"] or bucket["ze2"])
+    if has_delsys and has_device:
+        return "可比對"
+    if has_delsys:
+        return "僅 Delsys"
+    if has_device:
+        return "待補 Delsys"
+    return "不足"
+
+
+def _site_row(subject: str, muscle: str, side: str, bucket: dict[str, list[str]]) -> dict[str, Any]:
+    ze1_pref = prefer_recommended_files(bucket["ze1"], "ze1")
+    ze2_pref = prefer_recommended_files(bucket["ze2"], "ze2")
+    return {
+        "status": _site_status(bucket),
+        "subject": subject,
+        "muscle": muscle,
+        "side": side,
+        "channel_hint": channel_hint_label(side, muscle),
+        "ze1_channel_hint": recommended_channel("ze1", side=side, muscle=muscle),
+        "ze2_channel_hint": recommended_channel("ze2", side=side, muscle=muscle),
+        "delsys": bucket["delsys"],
+        "ze1": bucket["ze1"],
+        "ze2": bucket["ze2"],
+        "ze1_preferred": ze1_pref,
+        "ze2_preferred": ze2_pref,
+        "n_delsys": len(bucket["delsys"]),
+        "n_ze1": len(bucket["ze1"]),
+        "n_ze2": len(bucket["ze2"]),
+    }
+
+
 def enumerate_muscle_sites(
     delsys_files: list[dict[str, Any]],
     ze1_files: list[dict[str, Any]],
     ze2_files: list[dict[str, Any]],
+    *,
+    ensure_study_sites: bool = True,
 ) -> list[dict[str, Any]]:
     """
     One row per subject/muscle/side site across all sources.
 
     Sites without Delsys stay listed so other muscle groups are still processed.
+    When ensure_study_sites is True, every discovered subject also gets the four
+    canonical sites (L/R × tibialis/gastroc) even if no files exist yet.
     """
     buckets: dict[tuple[str, str, str], dict[str, list[str]]] = {}
+    subjects: set[str] = set()
     for source, files in (
         ("delsys", delsys_files),
         ("ze1", ze1_files),
@@ -776,43 +823,22 @@ def enumerate_muscle_sites(
             key = _site_key(tags)
             if key[0] == "?" or key[1] == "?" or key[2] == "?":
                 continue
+            subjects.add(key[0])
             bucket = buckets.setdefault(key, {"delsys": [], "ze1": [], "ze2": []})
             bucket[source].append(item["name"])
+
+    if ensure_study_sites and subjects:
+        for subject in subjects:
+            for side, muscle in STUDY_MUSCLE_SITES:
+                buckets.setdefault(
+                    (subject, muscle, side),
+                    {"delsys": [], "ze1": [], "ze2": []},
+                )
 
     rows: list[dict[str, Any]] = []
     for key, bucket in sorted(buckets.items()):
         subject, muscle, side = key
-        ze1_pref = prefer_recommended_files(bucket["ze1"], "ze1")
-        ze2_pref = prefer_recommended_files(bucket["ze2"], "ze2")
-        has_delsys = bool(bucket["delsys"])
-        has_device = bool(bucket["ze1"] or bucket["ze2"])
-        if has_delsys and has_device:
-            status = "可比對"
-        elif has_delsys:
-            status = "僅 Delsys"
-        elif has_device:
-            status = "待補 Delsys"
-        else:
-            status = "不足"
-        rows.append(
-            {
-                "status": status,
-                "subject": subject,
-                "muscle": muscle,
-                "side": side,
-                "channel_hint": channel_hint_label(side, muscle),
-                "ze1_channel_hint": recommended_channel("ze1", side=side, muscle=muscle),
-                "ze2_channel_hint": recommended_channel("ze2", side=side, muscle=muscle),
-                "delsys": bucket["delsys"],
-                "ze1": bucket["ze1"],
-                "ze2": bucket["ze2"],
-                "ze1_preferred": ze1_pref,
-                "ze2_preferred": ze2_pref,
-                "n_delsys": len(bucket["delsys"]),
-                "n_ze1": len(bucket["ze1"]),
-                "n_ze2": len(bucket["ze2"]),
-            }
-        )
+        rows.append(_site_row(subject, muscle, side, bucket))
     return rows
 
 

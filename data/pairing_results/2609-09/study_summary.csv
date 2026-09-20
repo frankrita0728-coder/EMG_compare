@@ -5,5 +5,17 @@ device_compare,右脛前肌,ze2_vs_delsys,missing_files,,09-09_11-27-57_319_Ch1(
 device_compare,左脛前肌,a09_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt,0.9785,0.5203
 device_compare,左脛前肌,a10_vs_delsys,missing_files,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,,,
 device_compare,左脛前肌,ze2_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,09-03_11-44-33_364_Ch2(Frank 左脛前肌).txt,0.9962,0.4741
+device_compare,右腓腸肌,a09_vs_delsys,missing_files,,,,
+device_compare,右腓腸肌,a10_vs_delsys,missing_files,,,,
+device_compare,右腓腸肌,ze2_vs_delsys,missing_files,,09-03_15-32-47_275_Ch2(Frank 右腓腸肌).txt,,
+device_compare,左腓腸肌,a09_vs_delsys,missing_files,,,,
+device_compare,左腓腸肌,a10_vs_delsys,missing_files,,,,
+device_compare,左腓腸肌,ze2_vs_delsys,missing_files,,09-03_12-24-16_163_Ch1(Frank 左腓腸肌).txt,,
+shave_compare,右脛前肌,a09_before_vs_delsys,missing_files,,,,
+shave_compare,右脛前肌,a09_after_shave_vs_delsys,missing_files,,,,
 shave_compare,左脛前肌,a09_before_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt,0.9785,0.5203
 shave_compare,左脛前肌,a09_after_shave_vs_delsys,missing_files,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,,,
+shave_compare,右腓腸肌,a09_before_vs_delsys,missing_files,,,,
+shave_compare,右腓腸肌,a09_after_shave_vs_delsys,missing_files,,,,
+shave_compare,左腓腸肌,a09_before_vs_delsys,missing_files,,,,
+shave_compare,左腓腸肌,a09_after_shave_vs_delsys,missing_files,,,,

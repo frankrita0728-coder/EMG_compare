@@ -5,7 +5,7 @@
 2. **刮腿毛比對**：a09 vs Delsys、刮腿毛後 a09 vs Delsys → `02_shave_compare/`
 
 - 完成：3
-- 缺檔：5
+- 缺檔：17
 - 摘要：`study_summary.csv`
 
 詳見各資料夾 README 與 plan.csv。
