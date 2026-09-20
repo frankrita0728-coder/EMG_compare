@@ -31,13 +31,20 @@ data/
 |------|----------|
 | ZE1 裝置 a09 | `a09` |
 | ZE1 裝置 a10 | `a10` |
+| ZE2 裝置（Delsys 參考） | `_with_ZE2_`（例：`…(Delsys)_with_ZE2_1.csv`） |
+| ZE1 裝置（Delsys 參考） | `_with_a09_` / `_with_a10_` |
 | 刮腿毛後 | `刮腿毛` / `刮腿毛後` / `shaved` |
 | 刮毛前（可選） | `刮腿毛前` / `unshaved` |
 | 肌群（固定四部位） | `左脛前肌` `右脛前肌` `左腓腸肌` `右腓腸肌` |
 | 通道 | `Ch1` / `Ch2` / `ExgCh1` / `ExgCh2` |
 
-Delsys 範例：`2609-09 frank左脛前肌(Delsys)_with_a09_1.csv`  
+Delsys 範例：
+- a09 參考：`2609-09 frank左脛前肌(Delsys)_with_a09_1.csv`
+- ZE2 參考：`2609-09 frank右腓腸肌(Delsys)_with_ZE2_1.csv`  
+
 ZE1 範例：`..._(Frank 左脛前肌)_a09_...txt`、`..._a10_...txt`、`..._a09_刮腿毛後_...txt`
+
+> **重要**：`ze2_vs_delsys` 只會選 `_with_ZE2_` 的 Delsys，不會拿 `_with_a09_` 去對 ZE2。
 
 ## 本機重跑
 

@@ -38,7 +38,9 @@ DATE_RE = re.compile(r"(?<!\d)(\d{1,2}-\d{1,2})(?!\d)")
 # Folder/prefix style dates like 2609-10 (YYMM-DD) → MM-DD
 YYMM_DATE_RE = re.compile(r"(?<!\d)\d{2}(\d{2})-(\d{1,2})(?!\d)")
 SESSION_RE = re.compile(r"(?:^|[_\s(\-])a(\d{2})(?:[_\s)\-]|$)", re.IGNORECASE)
-TRIAL_RE = re.compile(r"(?:_with)?(?:_a\d{2})?_(\d+)$", re.IGNORECASE)
+# Delsys pairing marker: _with_a09_1 / _with_ZE2_1 → which device this CSV is the reference for.
+WITH_DEVICE_RE = re.compile(r"_with[_\-]?(a\d{2}|ze[12])(?:[_\-]|\.|$)", re.IGNORECASE)
+TRIAL_RE = re.compile(r"(?:_with)?(?:_a\d{2}|_ze[12])?_(\d+)$", re.IGNORECASE)
 # Shaving / hair-removal condition markers in filenames.
 SHAVE_AFTER_RE = re.compile(
     r"(刮腿毛後|刮毛後|剃毛後|after[_\-]?shave|shaved|post[_\-]?shave)",
@@ -146,6 +148,8 @@ class FileTags:
     session: str = ""
     trial: str = ""
     condition: str = ""  # "", "unshaved", "shaved"
+    # Delsys "_with_a09" / "_with_ZE2" → which device this CSV is the reference for.
+    device_ref: str = ""  # "", "a09", "a10", "ze1", "ze2"
 
     def score_against(self, other: FileTags) -> int:
         score = 0
@@ -167,6 +171,8 @@ class FileTags:
             score += 8
         if self.condition and other.condition and self.condition == other.condition:
             score += 12
+        if self.device_ref and other.device_ref and self.device_ref == other.device_ref:
+            score += 25
         return score
 
     def group_key(self) -> tuple[str, str, str, str]:
@@ -175,8 +181,14 @@ class FileTags:
 
         Prefer session code (e.g. a09) over calendar date when present, so
         Delsys/ZE1/ZE2 from the same capture still group across day labels.
+        ZE2-tagged Delsys (_with_ZE2) group under sess:ze2.
         """
-        bucket = f"sess:{self.session}" if self.session else (self.date or "")
+        if self.session:
+            bucket = f"sess:{self.session}"
+        elif self.device_ref:
+            bucket = f"sess:{self.device_ref}"
+        else:
+            bucket = self.date or ""
         return (self.subject or "?", self.muscle or "?", self.side or "?", bucket)
 
     def as_dict(self) -> dict[str, str]:
@@ -190,6 +202,7 @@ class FileTags:
             "session": self.session,
             "trial": self.trial,
             "condition": self.condition,
+            "device_ref": self.device_ref,
         }
 
 
@@ -258,6 +271,17 @@ def extract_tags(filename: str) -> FileTags:
     if session_match:
         session = f"a{session_match.group(1)}"
 
+    device_ref = ""
+    with_match = WITH_DEVICE_RE.search(lowered)
+    if with_match:
+        device_ref = with_match.group(1).lower()
+        # _with_a09 also implies session a09 when not already set.
+        if device_ref.startswith("a") and not session:
+            session = device_ref
+    elif session:
+        # Bare a09 in name (no _with_) still counts as ZE1-session reference.
+        device_ref = session
+
     trial = ""
     trial_match = TRIAL_RE.search(stem)
     if trial_match:
@@ -282,6 +306,7 @@ def extract_tags(filename: str) -> FileTags:
         session=session,
         trial=trial,
         condition=condition,
+        device_ref=device_ref,
     )
 
 
@@ -922,6 +947,12 @@ def files_for_site(
     return out
 
 
+def delsys_device_ref(name: str) -> str:
+    """Return a09/a10/ze1/ze2 marker from a Delsys filename (_with_ZE2 / _with_a09)."""
+    tags = extract_tags(name)
+    return (tags.device_ref or tags.session or "").lower()
+
+
 def pick_delsys_reference(
     delsys_files: list[dict[str, Any]],
     *,
@@ -929,24 +960,45 @@ def pick_delsys_reference(
     muscle: str,
     side: str,
     preferred_session: str = "",
+    preferred_device_ref: str = "",
+    strict_device_ref: bool = False,
 ) -> dict[str, Any] | None:
-    """Pick one Delsys CSV for a muscle site; prefer matching session when present."""
+    """
+    Pick one Delsys CSV for a muscle site.
+
+    preferred_device_ref examples:
+      - "a09" / "a10" → Delsys named _with_a09 / session a09 (ZE1 device arm)
+      - "ze2" → Delsys named _with_ZE2_… (ZE2 device arm reference)
+
+    When strict_device_ref is True (used for ZE2), do not fall back to a
+    differently tagged Delsys CSV if the preferred marker is missing.
+    """
     candidates = files_for_site(delsys_files, subject=subject, muscle=muscle, side=side)
     if not candidates:
         return None
-    if preferred_session:
-        sess = [
-            item
-            for item in candidates
-            if extract_tags(item["name"]).session == preferred_session
-        ]
-        if sess:
-            return sess[0]
+
+    want = (preferred_device_ref or preferred_session or "").lower()
+    if want:
+        matched = [item for item in candidates if delsys_device_ref(item["name"]) == want]
+        if matched:
+            return sorted(matched, key=lambda item: item["name"])[0]
+        if strict_device_ref or want == "ze2":
+            return None
+        # Soft fallback for a09/a10: older files may lack _with_ but share session.
+        if preferred_session:
+            sess = [
+                item
+                for item in candidates
+                if extract_tags(item["name"]).session == preferred_session
+            ]
+            if sess:
+                return sorted(sess, key=lambda item: item["name"])[0]
+            return None
+
     # Prefer untagged / generic Delsys, else first alphabetical.
-    generic = [item for item in candidates if not extract_tags(item["name"]).session]
+    generic = [item for item in candidates if not delsys_device_ref(item["name"])]
     pool = generic or candidates
-    pool = sorted(pool, key=lambda item: item["name"])
-    return pool[0]
+    return sorted(pool, key=lambda item: item["name"])[0]
 
 
 def pick_ze1_by_session(
@@ -1027,6 +1079,8 @@ def plan_device_compares(
                 muscle=muscle,
                 side=side,
                 preferred_session=session,
+                preferred_device_ref=session,
+                strict_device_ref=True,
             )
             ze1 = pick_ze1_by_session(
                 ze1_files,
@@ -1060,8 +1114,14 @@ def plan_device_compares(
                     "status": "ready" if (delsys and ze1) else "missing_files",
                 }
             )
+        # ZE2 arm: Delsys reference must be named _with_ZE2_… (not a09/a10 CSV).
         delsys = pick_delsys_reference(
-            delsys_files, subject=subject, muscle=muscle, side=side, preferred_session=""
+            delsys_files,
+            subject=subject,
+            muscle=muscle,
+            side=side,
+            preferred_device_ref="ze2",
+            strict_device_ref=True,
         )
         ze2 = pick_ze2_for_site(ze2_files, subject=subject, muscle=muscle, side=side)
         plans.append(
@@ -1071,7 +1131,7 @@ def plan_device_compares(
                 "subject": subject,
                 "muscle": muscle,
                 "side": side,
-                "session": "",
+                "session": "ze2",
                 "delsys": delsys["name"] if delsys else "",
                 "device": "ze2",
                 "device_file": ze2["name"] if ze2 else "",
@@ -1100,6 +1160,8 @@ def plan_shave_compares(
             muscle=muscle,
             side=side,
             preferred_session=session,
+            preferred_device_ref=session,
+            strict_device_ref=True,
         )
         before = pick_ze1_by_session(
             ze1_files,
