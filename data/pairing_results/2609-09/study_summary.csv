@@ -1,0 +1,21 @@
+analysis,muscle_site,compare,status,delsys,device_file,correlation_iemg,correlation_rms
+device_compare,右脛前肌,a09_vs_delsys,done,2609-09 frank右脛前肌(Delsys)_with_a09_1.csv,09-09_11-19-17_426_ExgCh2Data_(Frank 右脛前肌)_a09_褲XL_1.txt,0.9878,0.0752
+device_compare,右脛前肌,a10_vs_delsys,done,2609-09 frank右脛前肌(Delsys)_with_a10_1.csv,09-09_11-23-48_013_ExgCh2Data_(Frank 右脛前肌)_a10_褲XL_1.txt,0.9828,-0.2272
+device_compare,右脛前肌,ze2_vs_delsys,done,2609-09 frank右脛前肌(Delsys)_with_ze2_1.csv,09-03_14-45-34_825_Ch1(Frank 右脛前肌).txt,0.9879,0.2162
+device_compare,左脛前肌,a09_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,09-09_09-41-19_786_ExgCh1Data_(Frank 左脛前肌)_a09_褲XL_1.txt,0.9897,-0.0323
+device_compare,左脛前肌,a10_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_a10_1.csv,09-09_09-52-57_312_ExgCh1Data_(Frank 左脛前肌)_a10_褲XL_1.txt,0.9836,-0.3171
+device_compare,左脛前肌,ze2_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_ze2_1.csv,09-03_11-44-33_364_Ch2(Frank 左脛前肌).txt,0.9498,-0.2067
+device_compare,右腓腸肌,a09_vs_delsys,done,2609-09 frank右腓腸肌(Delsys)_with_a09_1.csv,09-09_11-48-01_319_ExgCh1Data_(Frank 右腓腸肌)_a09_褲XL_1.txt,0.9984,-0.1824
+device_compare,右腓腸肌,a10_vs_delsys,done,2609-09 frank右腓腸肌(Delsys)_with_a10_1.csv,09-09_11-52-29_385_ExgCh1Data_(Frank 右腓腸肌)_a10_褲XL_1.txt,0.997,-0.3762
+device_compare,右腓腸肌,ze2_vs_delsys,done,2609-09 frank右腓腸肌(Delsys)_with_ZE2_1.csv,09-03_15-32-47_275_Ch2(Frank 右腓腸肌).txt,0.9806,-0.6615
+device_compare,左腓腸肌,a09_vs_delsys,done,2609-09 frank左腓腸肌(Delsys)_with_a09_1.csv,09-09_10-31-15_181_ExgCh2Data_(Frank 左腓腸肌)_a09_褲XL_1.txt,0.9978,-0.2831
+device_compare,左腓腸肌,a10_vs_delsys,done,2609-09 frank左腓腸肌(Delsys)_with_a10_1.csv,09-09_10-40-13_031_ExgCh2Data_(Frank 左腓腸肌)_a10_褲XL_1.txt,0.9901,0.1844
+device_compare,左腓腸肌,ze2_vs_delsys,done,2609-09 frank左腓腸肌(Delsys)_with_ze2_1.csv,09-03_12-24-16_163_Ch1(Frank 左腓腸肌).txt,0.9932,0.5259
+shave_compare,右脛前肌,a09_before_vs_delsys,done,2609-09 frank右脛前肌(Delsys)_with_a09_1.csv,09-09_11-19-17_426_ExgCh2Data_(Frank 右脛前肌)_a09_褲XL_1.txt,0.9878,0.0752
+shave_compare,右脛前肌,a09_after_shave_vs_delsys,done,2609-09 frank右脛前肌_with_a09_褲XL_去腿毛.csv,09-09_14-55-41_279_ExgCh2Data_(Frank 右脛前肌)_a09_褲XL_去腿毛.txt,0.9889,0.0425
+shave_compare,左脛前肌,a09_before_vs_delsys,done,2609-09 frank左脛前肌(Delsys)_with_a09_1.csv,09-09_09-41-19_786_ExgCh1Data_(Frank 左脛前肌)_a09_褲XL_1.txt,0.9897,-0.0323
+shave_compare,左脛前肌,a09_after_shave_vs_delsys,done,2609-09 frank左脛前肌_with_a09_褲XL_去腿毛.csv,09-09_12-39-13_023_ExgCh1Data_(Frank 左脛前肌)_a09_褲XL_去腿毛.txt,0.9858,0.3462
+shave_compare,右腓腸肌,a09_before_vs_delsys,done,2609-09 frank右腓腸肌(Delsys)_with_a09_1.csv,09-09_11-48-01_319_ExgCh1Data_(Frank 右腓腸肌)_a09_褲XL_1.txt,0.9984,-0.1824
+shave_compare,右腓腸肌,a09_after_shave_vs_delsys,done,2609-09 frank右腓腸肌_with_a09_褲XL_去腿毛.csv,09-09_15-16-55_610_ExgCh1Data_(Frank 右腓腸肌)_a09_褲XL_去腿毛.txt,0.9911,0.1419
+shave_compare,左腓腸肌,a09_before_vs_delsys,done,2609-09 frank左腓腸肌(Delsys)_with_a09_1.csv,09-09_10-31-15_181_ExgCh2Data_(Frank 左腓腸肌)_a09_褲XL_1.txt,0.9978,-0.2831
+shave_compare,左腓腸肌,a09_after_shave_vs_delsys,done,2609-09 frank左腓腸肌_with_a09_褲XL_去腿毛.csv,09-09_14-32-12_387_ExgCh2Data_(Frank 左腓腸肌)_a09_褲XL_去腿毛.txt,0.9978,0.0814
