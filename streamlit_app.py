@@ -1269,8 +1269,9 @@ def _render_correlation_block(result: dict[str, Any], *, device_label: str) -> N
     if agreement:
         st.markdown("**收縮區間一致性（Pearson r / ICC）**")
         st.caption(
-            f"跨 {n_intervals} 段收縮特徵："
-            "Pearson r 看同向變化；ICC(A,1) 看數值絕對一致性。"
+            f"跨 {n_intervals} 段收縮特徵（同 index 配對）。"
+            " Pearson \\(r\\)：同向變化；ICC(A,1)：絕對一致性。"
+            " 公式見本頁上方「怎麼算」。"
         )
         st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
     else:
@@ -1297,6 +1298,55 @@ def tab_correlation() -> None:
     st.caption(
         "依側邊欄選取的檔案，分別做 **Delsys × ZE1** 與 **Delsys × ZE2** 相關／ICC 分析。"
     )
+    with st.expander("收縮一致性／相關係數怎麼算（公式）", expanded=True):
+        st.markdown(
+            """
+**資料怎麼配對**
+
+- 每個收縮區間（第 1、2、3… 段）各算一組特徵（如 RMS、iEMG、MPF、MDF、AEMG）。
+- Delsys 與 ZE1／ZE2 **同一段 index** 配成一對；有效對數為 \\(n\\)（至少 2 段才有相關）。
+
+---
+
+**1. Pearson \\(r\\)（同向變化）**
+
+對某一特徵，令 Delsys 值為 \\(x_i\\)、裝置值為 \\(y_i\\)（\\(i=1\\ldots n\\)）：
+
+\\[
+r = \\frac{\\sum_{i=1}^{n}(x_i-\\bar{x})(y_i-\\bar{y})}
+{\\sqrt{\\sum_{i=1}^{n}(x_i-\\bar{x})^2}\\;\\sqrt{\\sum_{i=1}^{n}(y_i-\\bar{y})^2}}
+\\]
+
+- 範圍約 \\([-1,1]\\)；接近 1＝兩裝置同向變化。
+- 只看相對變化，**不要求數值一樣大**。
+- 任一邊標準差為 0（各段數值幾乎相同）→ 回傳空白。
+
+---
+
+**2. ICC(A,1)／ICC(2,1)（絕對一致性）**
+
+McGraw & Wong：**two-way random effects、single measurement、absolute agreement**。
+
+把 \\((x_i,y_i)\\) 當成 \\(n\\) 個目標 × 2 個評分者（Delsys / 裝置）：
+
+\\[
+\\mathrm{ICC}(A,1)=\\frac{MS_B - MS_E}
+{MS_B + (k-1)MS_E + \\dfrac{k}{n}(MS_R - MS_E)}
+\\]
+
+其中 \\(k=2\\)，\\(MS_B\\)=目標間均方，\\(MS_R\\)=評分者間均方，\\(MS_E\\)=誤差均方。
+
+- 接近 1＝兩裝置數值也接近（不只同向）。
+- 可比 Pearson 更嚴；一致性差時可能略為負值。
+
+---
+
+**3. TTRI 滑動窗 Pearson \\(r\\)**（下方另一張表）
+
+- 在 **Delsys 收縮區間內** 的滑動窗序列（RMS／iEMG／MPF／MDF）對齊後算 Pearson \\(r\\)。
+- 與「收縮區間一致性」不同：那是 **每段一個摘要值**；這是 **區間內時間序列**。
+            """
+        )
 
     delsys_files, ze1_files, ze2_files = refresh_file_lists()
     selected_delsys = st.session_state.selected_delsys
