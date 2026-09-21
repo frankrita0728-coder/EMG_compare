@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
 import numpy as np
 import plotly.graph_objects as go
@@ -43,6 +43,16 @@ TXT_COLORS = [
     "#48e0a0",
     "#90f0b0",
     "#68d8e0",
+]
+ZE2_COLORS = [
+    "#f0b429",
+    "#ff9f43",
+    "#ffc857",
+    "#e8a838",
+    "#f5c542",
+    "#d4a017",
+    "#ffb347",
+    "#e6b422",
 ]
 
 SPECTRAL_COLS = ["index", "start", "end", "duration", "iemg", "rms", "mdf", "mpf", "peak_rms"]
@@ -249,6 +259,96 @@ def card_close() -> None:
 
 def empty_slot(text: str = "尚未執行") -> None:
     st.markdown(f'<p class="empty-slot">{text}</p>', unsafe_allow_html=True)
+
+
+def _short_tab_label(prefix: str, filename: str | None, *, max_len: int | None = None) -> str:
+    """Tab label with full basename (max_len kept for compatibility; unused by default)."""
+    name = Path(str(filename or "未命名")).name
+    if max_len is not None and len(name) > max_len:
+        name = name[: max_len - 1] + "…"
+    return f"{prefix} · {name}"
+
+
+def render_result_pages(
+    pages: list[tuple[str, Any]] | list[tuple[str, Any, Any]],
+    *,
+    context: str,
+) -> None:
+    """One full-width chart page (Streamlit tab) per file / view, with optional clear button."""
+    if not pages:
+        empty_slot()
+        return
+    labels = [item[0] for item in pages]
+    tabs = st.tabs(labels)
+    for idx, (tab, page) in enumerate(zip(tabs, pages)):
+        label = page[0]
+        render_fn = page[1]
+        remove_fn = page[2] if len(page) > 2 else None
+        with tab:
+            if remove_fn is not None:
+                if st.button(
+                    "清除此結果",
+                    key=f"clear_result_{context}_{idx}_{label}",
+                    type="secondary",
+                ):
+                    remove_fn()
+                    st.rerun()
+            render_fn()
+
+
+def clear_wave_result(*, source: str, filename: str | None = None) -> None:
+    if source == "delsys":
+        st.session_state.wave_delsys = None
+    elif source == "txt" and filename:
+        st.session_state.wave_txt = [
+            item for item in (st.session_state.wave_txt or []) if item.get("filename") != filename
+        ]
+    elif source == "overlay":
+        st.session_state.wave_overlay = None
+
+
+def clear_contr_result(*, source: str, filename: str | None = None) -> None:
+    if source == "delsys":
+        st.session_state.contr_delsys = None
+    elif source == "txt" and filename:
+        st.session_state.contr_txt = [
+            item for item in (st.session_state.contr_txt or []) if item.get("filename") != filename
+        ]
+
+
+def clear_feat_result(*, source: str, filename: str | None = None) -> None:
+    if source == "delsys":
+        st.session_state.feat_delsys = None
+        st.session_state.feat_delta = None
+    elif source == "txt" and filename:
+        st.session_state.feat_txt_tables = [
+            item
+            for item in (st.session_state.feat_txt_tables or [])
+            if (item.get("result") or {}).get("filename") != filename
+        ]
+        st.session_state.feat_delta = None
+    elif source == "delta":
+        st.session_state.feat_delta = None
+
+
+def clear_corr_result(*, kind: str, filename: str | None = None) -> None:
+    if kind == "ze1" and filename:
+        st.session_state.corr_results_ze1 = [
+            item
+            for item in (st.session_state.corr_results_ze1 or [])
+            if ((item.get("ze1") or item.get("txt") or {}).get("filename") != filename)
+        ]
+    elif kind == "ze2" and filename:
+        st.session_state.corr_results_ze2 = [
+            item
+            for item in (st.session_state.corr_results_ze2 or [])
+            if ((item.get("ze2") or {}).get("filename") != filename)
+        ]
+    st.session_state.corr_results = list(st.session_state.corr_results_ze1 or []) + list(
+        st.session_state.corr_results_ze2 or []
+    )
+    combined = st.session_state.corr_results
+    st.session_state.corr_result = combined[0] if combined else None
 
 
 def y_title_for_norm(method: str) -> str:
@@ -788,60 +888,85 @@ def tab_waveform() -> None:
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    left, right = st.columns(2)
-    with left:
-        card_open("Delsys 結果")
-        if st.session_state.wave_delsys:
+    pages: list[tuple[str, Any, Any]] = []
+
+    overlay = st.session_state.wave_overlay
+    if overlay and overlay.get("overlay"):
+
+        def _render_overlay(ov=overlay) -> None:
             st.plotly_chart(
-                fig_from_trace(
-                    st.session_state.wave_delsys,
-                    color=DELSYS_COLOR,
-                    title=st.session_state.wave_delsys.get("filename", "Delsys"),
+                fig_overlay(
+                    ov["overlay"],
+                    title=f"波形疊圖（{ov.get('norm_method')}）",
                     y_title=y_title,
                 ),
                 use_container_width=True,
-                config={"displayModeBar": False},
+                config={"displayModeBar": True},
             )
-        else:
-            empty_slot()
-        card_close()
-    with right:
-        card_open("TXT 結果")
-        if st.session_state.wave_txt:
-            fig = go.Figure()
-            for i, trace in enumerate(st.session_state.wave_txt):
-                fig.add_trace(
-                    go.Scattergl(
-                        x=trace["times"],
-                        y=trace["values"],
-                        mode="lines",
-                        name=trace.get("filename"),
-                        line={"color": TXT_COLORS[i % len(TXT_COLORS)], "width": 1.2},
-                    )
-                )
-            fig.update_layout(**plot_layout(title="TXT", y_title=y_title))
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        else:
-            empty_slot()
-        card_close()
+            if ov.get("note"):
+                st.caption(ov["note"])
 
-    card_open("疊圖結果（兩邊一起）")
-    overlay = st.session_state.wave_overlay
-    if overlay and overlay.get("overlay"):
-        st.plotly_chart(
-            fig_overlay(
-                overlay["overlay"],
-                title=f"波形疊圖（{overlay.get('norm_method')}）",
-                y_title=y_title,
-            ),
-            use_container_width=True,
-            config={"displayModeBar": False},
+        pages.append(("疊圖", _render_overlay, lambda: clear_wave_result(source="overlay")))
+
+    if st.session_state.wave_delsys:
+        trace = st.session_state.wave_delsys
+
+        def _render_delsys(tr=trace) -> None:
+            st.plotly_chart(
+                fig_from_trace(
+                    tr,
+                    color=DELSYS_COLOR,
+                    title=tr.get("filename", "Delsys"),
+                    y_title=y_title,
+                ),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+
+        pages.append(
+            (
+                _short_tab_label("Delsys", trace.get("filename")),
+                _render_delsys,
+                lambda: clear_wave_result(source="delsys"),
+            )
         )
-        if overlay.get("note"):
-            st.caption(overlay["note"])
+
+    for i, trace in enumerate(st.session_state.wave_txt or []):
+        color = TXT_COLORS[i % len(TXT_COLORS)]
+        fname = trace.get("filename")
+
+        def _render_txt(tr=trace, c=color) -> None:
+            st.plotly_chart(
+                fig_from_trace(
+                    tr,
+                    color=c,
+                    title=tr.get("filename", "ZE1"),
+                    y_title=y_title,
+                ),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_txt,
+                lambda name=fname: clear_wave_result(source="txt", filename=name),
+            )
+        )
+
+    if pages:
+        st.caption("每個檔案／結果一個頁籤；可按「清除此結果」移除圖表。")
+        c_clear, _ = st.columns([1, 3])
+        with c_clear:
+            if st.button("清除全部波形結果", key="clear_all_wave"):
+                st.session_state.wave_delsys = None
+                st.session_state.wave_txt = None
+                st.session_state.wave_overlay = None
+                st.rerun()
+        render_result_pages(pages, context="wave")
     else:
         empty_slot()
-    card_close()
 
 
 def tab_contractions() -> None:
@@ -896,56 +1021,57 @@ def tab_contractions() -> None:
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    left, right = st.columns(2)
-    with left:
-        card_open("Delsys 結果")
+    pages: list[tuple[str, Any, Any]] = []
+    if st.session_state.contr_delsys:
         result = st.session_state.contr_delsys
-        if result:
+
+        def _render_delsys(res=result) -> None:
             st.plotly_chart(
-                fig_contractions(result, color=DELSYS_COLOR, title=result.get("filename", "Delsys")),
+                fig_contractions(res, color=DELSYS_COLOR, title=res.get("filename", "Delsys")),
                 use_container_width=True,
-                config={"displayModeBar": False},
+                config={"displayModeBar": True},
             )
-            st.dataframe(contractions_to_rows(result.get("contractions") or []), use_container_width=True)
-        else:
-            empty_slot()
-        card_close()
-    with right:
-        card_open("TXT 結果")
-        results = st.session_state.contr_txt
-        if results:
-            fig = go.Figure()
-            all_rows = []
-            for i, result in enumerate(results):
-                color = TXT_COLORS[i % len(TXT_COLORS)]
-                fig.add_trace(
-                    go.Scattergl(
-                        x=result["times"],
-                        y=result["values"],
-                        mode="lines",
-                        name=result.get("filename"),
-                        line={"color": color, "width": 1.2},
-                    )
-                )
-                for item in result.get("contractions") or []:
-                    fig.add_vrect(x0=item["start"], x1=item["end"], fillcolor=color, opacity=0.12, line_width=0)
-                    row = contractions_to_rows([item])[0]
-                    row["file"] = result.get("filename")
-                    all_rows.append(row)
-            fig.update_layout(**plot_layout(title="TXT 收縮區間", y_title="Norm (robust z)", height=320))
-            ys = []
-            for result in results:
-                ys.extend(result.get("values") or [])
-            if ys:
-                lo = float(np.percentile(ys, 0.5))
-                hi = float(np.percentile(ys, 99.5))
-                pad = max(0.5, 0.08 * (hi - lo))
-                fig.update_yaxes(range=[lo - pad, hi + pad])
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-            st.dataframe(all_rows, use_container_width=True)
-        else:
-            empty_slot()
-        card_close()
+            st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
+
+        pages.append(
+            (
+                _short_tab_label("Delsys", result.get("filename")),
+                _render_delsys,
+                lambda: clear_contr_result(source="delsys"),
+            )
+        )
+
+    for i, result in enumerate(st.session_state.contr_txt or []):
+        color = TXT_COLORS[i % len(TXT_COLORS)]
+        fname = result.get("filename")
+
+        def _render_txt(res=result, c=color) -> None:
+            st.plotly_chart(
+                fig_contractions(res, color=c, title=res.get("filename", "ZE1")),
+                use_container_width=True,
+                config={"displayModeBar": True},
+            )
+            st.dataframe(contractions_to_rows(res.get("contractions") or []), use_container_width=True)
+
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_txt,
+                lambda name=fname: clear_contr_result(source="txt", filename=name),
+            )
+        )
+
+    if pages:
+        st.caption("每個檔案一個頁籤；可按「清除此結果」移除圖表。")
+        c_clear, _ = st.columns([1, 3])
+        with c_clear:
+            if st.button("清除全部收縮結果", key="clear_all_contr"):
+                st.session_state.contr_delsys = None
+                st.session_state.contr_txt = None
+                st.rerun()
+        render_result_pages(pages, context="contr")
+    else:
+        empty_slot()
 
     render_export_panel(context="contractions")
 
@@ -1063,41 +1189,66 @@ def tab_features() -> None:
             except (FileNotFoundError, ValueError) as exc:
                 st.error(str(exc))
 
-    left, right = st.columns(2)
-    with left:
-        st.subheader("Delsys 特徵")
-        data = st.session_state.feat_delsys
-        if data:
-            method = data.get("feature_method") or feature_method
-            st.dataframe(feature_rows(data["result"]["features"], method), use_container_width=True)
-            series_fig = plot_ttri_series(data["result"].get("series"), title=data["result"].get("filename", "Delsys"))
-            if series_fig:
-                st.plotly_chart(series_fig, use_container_width=True)
-        else:
-            st.info("尚未執行")
-    with right:
-        st.subheader("TXT 特徵")
-        tables = st.session_state.feat_txt_tables
-        if tables:
-            for data in tables:
-                method = data.get("feature_method") or feature_method
-                st.markdown(f"**{data['result'].get('filename', 'TXT')}**")
-                st.dataframe(feature_rows(data["result"]["features"], method), use_container_width=True)
-                series_fig = plot_ttri_series(data["result"].get("series"), title=data["result"].get("filename", "TXT"))
-                if series_fig:
-                    st.plotly_chart(series_fig, use_container_width=True)
-        else:
-            st.info("尚未執行")
+    pages: list[tuple[str, Any, Any]] = []
+    data = st.session_state.feat_delsys
+    if data:
+        method = data.get("feature_method") or feature_method
 
-    st.subheader("差異對照 Δ")
+        def _render_delsys(d=data, m=method) -> None:
+            st.dataframe(feature_rows(d["result"]["features"], m), use_container_width=True)
+            series_fig = plot_ttri_series(d["result"].get("series"), title=d["result"].get("filename", "Delsys"))
+            if series_fig:
+                st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
+
+        pages.append(
+            (
+                _short_tab_label("Delsys", data["result"].get("filename")),
+                _render_delsys,
+                lambda: clear_feat_result(source="delsys"),
+            )
+        )
+
+    for i, data in enumerate(st.session_state.feat_txt_tables or []):
+        method = data.get("feature_method") or feature_method
+        fname = data["result"].get("filename")
+
+        def _render_txt(d=data, m=method) -> None:
+            st.dataframe(feature_rows(d["result"]["features"], m), use_container_width=True)
+            series_fig = plot_ttri_series(d["result"].get("series"), title=d["result"].get("filename", "ZE1"))
+            if series_fig:
+                st.plotly_chart(series_fig, use_container_width=True, config={"displayModeBar": True})
+
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_txt,
+                lambda name=fname: clear_feat_result(source="txt", filename=name),
+            )
+        )
+
     delta = st.session_state.feat_delta
     if delta:
-        if delta.get("note"):
-            st.caption(delta["note"])
-        st.dataframe(delta_rows(delta.get("pairs") or []), use_container_width=True)
-        st.caption("相關係數／ICC 請到「相關係數」分頁執行與查看。")
+
+        def _render_delta(d=delta) -> None:
+            if d.get("note"):
+                st.caption(d["note"])
+            st.dataframe(delta_rows(d.get("pairs") or []), use_container_width=True)
+            st.caption("相關係數／ICC 請到「相關係數」分頁執行與查看。")
+
+        pages.append(("差異 Δ", _render_delta, lambda: clear_feat_result(source="delta")))
+
+    if pages:
+        st.caption("每個檔案／結果一個頁籤；可按「清除此結果」移除。")
+        c_clear, _ = st.columns([1, 3])
+        with c_clear:
+            if st.button("清除全部特徵結果", key="clear_all_feat"):
+                st.session_state.feat_delsys = None
+                st.session_state.feat_txt_tables = None
+                st.session_state.feat_delta = None
+                st.rerun()
+        render_result_pages(pages, context="feat")
     else:
-        st.info("執行「兩邊一起」後顯示")
+        empty_slot()
 
     render_export_panel(context="features")
 
@@ -1315,25 +1466,42 @@ def tab_correlation() -> None:
         st.info("請選取 Delsys，並至少選 ZE1 或 ZE2，再按「執行相關分析」。也可先用上方自動配對一鍵套用。")
         return
 
-    st.subheader("Delsys（參考）")
-    st.caption(f"參考檔：`{selected_delsys or (ze1_results or ze2_results)[0].get('delsys', {}).get('filename', '')}`")
+    st.caption(
+        f"參考 Delsys：`{selected_delsys or (ze1_results or ze2_results)[0].get('delsys', {}).get('filename', '')}`"
+        "　｜　每個配對結果一個頁籤。"
+    )
 
-    st.subheader("ZE1 相關分析")
-    if ze1_results:
-        for result in ze1_results:
-            st.markdown("---")
-            _render_correlation_block(result, device_label="ZE1")
-    else:
-        st.info("這次沒有選 ZE1 檔案。")
+    pages: list[tuple[str, Any, Any]] = []
+    for result in ze1_results:
+        device = result.get("ze1") or result.get("txt") or {}
+        fname = device.get("filename")
 
-    st.subheader("ZE2 相關分析")
-    if ze2_results:
-        for result in ze2_results:
-            st.markdown("---")
-            _render_correlation_block(result, device_label="ZE2")
-    else:
-        st.info("這次沒有選 ZE2 檔案。")
+        def _render_ze1(res=result) -> None:
+            _render_correlation_block(res, device_label="ZE1")
 
+        pages.append(
+            (
+                _short_tab_label("ZE1", fname),
+                _render_ze1,
+                lambda name=fname: clear_corr_result(kind="ze1", filename=name),
+            )
+        )
+    for result in ze2_results:
+        device = result.get("ze2") or {}
+        fname = device.get("filename")
+
+        def _render_ze2(res=result) -> None:
+            _render_correlation_block(res, device_label="ZE2")
+
+        pages.append(
+            (
+                _short_tab_label("ZE2", fname),
+                _render_ze2,
+                lambda name=fname: clear_corr_result(kind="ze2", filename=name),
+            )
+        )
+
+    render_result_pages(pages, context="corr")
     render_export_panel(context="correlation")
 
 
