@@ -429,15 +429,15 @@ def fig_contractions(result: dict[str, Any], *, color: str, title: str) -> go.Fi
             }
         )
     fig.update_layout(
-        **plot_layout(title=title, y_title="Norm (robust z)", height=320),
+        **plot_layout(title=title, y_title=str(result.get("unit") or "mV"), height=320),
         shapes=shapes,
     )
-    # Keep rare spikes from dominating the visible scale.
+    # Keep rare spikes from dominating the visible scale (mV waveform).
     ys = list(result.get("values") or [])
     if ys:
         lo = float(np.percentile(ys, 0.5))
         hi = float(np.percentile(ys, 99.5))
-        pad = max(0.5, 0.08 * (hi - lo))
+        pad = max(0.05, 0.08 * (hi - lo))
         fig.update_yaxes(range=[lo - pad, hi + pad])
     return fig
 
