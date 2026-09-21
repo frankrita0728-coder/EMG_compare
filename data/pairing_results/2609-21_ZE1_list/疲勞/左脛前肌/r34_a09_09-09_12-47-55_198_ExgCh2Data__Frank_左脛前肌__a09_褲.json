@@ -7,6 +7,7 @@
   "exp_listed": "09-09_12-47-55_198_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞2.txt",
   "ref_resolved": "2609-09 frank 左脛前肌_a09_褲XL_疲勞2.csv",
   "exp_resolved": "09-09_12-47-55_198_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞2.txt",
+  "expected_count": 10,
   "contraction_method": "ze1_schmitt",
   "feature_method": "ttri",
   "metrics": [
@@ -36,25 +37,25 @@
       },
       "txt": {
         "index": 1,
-        "start": 25.4062,
-        "end": 31.3232,
-        "duration": 5.917,
-        "aemg": 0.114855,
-        "rms": 0.154206,
-        "iemg": 0.678702,
-        "mpf": 98.32,
-        "mdf": 91.07,
-        "peak_rms": 0.346814,
+        "start": 5.4609,
+        "end": 10.999,
+        "duration": 5.5381,
+        "aemg": 0.111396,
+        "rms": 0.147964,
+        "iemg": 0.616259,
+        "mpf": 101.52,
+        "mdf": 95.94,
+        "peak_rms": 0.355353,
         "method": "ttri"
       },
       "delta": {
-        "duration": -0.3733,
-        "aemg": -0.001855,
-        "iemg": -0.05076,
-        "rms": 0.001022,
-        "mdf": 44.83,
-        "mpf": 58.96,
-        "peak_rms": -0.052021
+        "duration": 0.0056,
+        "aemg": 0.001604,
+        "iemg": 0.011683,
+        "rms": 0.007264,
+        "mdf": 39.96,
+        "mpf": 55.76,
+        "peak_rms": -0.06056
       }
     },
     {
@@ -74,25 +75,25 @@
       },
       "txt": {
         "index": 2,
-        "start": 35.1328,
-        "end": 41.0107,
-        "duration": 5.8779,
-        "aemg": 0.111379,
-        "rms": 0.15071,
-        "iemg": 0.65426,
-        "mpf": 98.57,
-        "mdf": 91.78,
-        "peak_rms": 0.265064,
+        "start": 15.3516,
+        "end": 21.3496,
+        "duration": 5.998,
+        "aemg": 0.109227,
+        "rms": 0.14852,
+        "iemg": 0.6546,
+        "mpf": 98.74,
+        "mdf": 92.98,
+        "peak_rms": 0.296713,
         "method": "ttri"
       },
       "delta": {
-        "duration": 0.0709,
-        "aemg": -0.002908,
-        "iemg": -0.004438,
-        "rms": 0.001854,
-        "mdf": 39.93,
-        "mpf": 55.77,
-        "peak_rms": 0.041768
+        "duration": -0.0492,
+        "aemg": -0.000756,
+        "iemg": -0.004778,
+        "rms": 0.004044,
+        "mdf": 38.73,
+        "mpf": 55.6,
+        "peak_rms": 0.010119
       }
     },
     {
@@ -112,6 +113,158 @@
       },
       "txt": {
         "index": 3,
+        "start": 25.4062,
+        "end": 31.3232,
+        "duration": 5.917,
+        "aemg": 0.114855,
+        "rms": 0.154206,
+        "iemg": 0.678702,
+        "mpf": 98.32,
+        "mdf": 91.07,
+        "peak_rms": 0.346814,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 0.0873,
+        "aemg": -0.004111,
+        "iemg": -0.010478,
+        "rms": 0.001989,
+        "mdf": 36.42,
+        "mpf": 50.36,
+        "peak_rms": -0.053998
+      }
+    },
+    {
+      "index": 4,
+      "delsys": {
+        "index": 4,
+        "start": 38.6021,
+        "end": 44.4714,
+        "duration": 5.8693,
+        "aemg": 0.108,
+        "rms": 0.151255,
+        "iemg": 0.63707,
+        "mpf": 146.63,
+        "mdf": 122.47,
+        "peak_rms": 0.308435,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 4,
+        "start": 35.1328,
+        "end": 41.0107,
+        "duration": 5.8779,
+        "aemg": 0.111379,
+        "rms": 0.15071,
+        "iemg": 0.65426,
+        "mpf": 98.57,
+        "mdf": 91.78,
+        "peak_rms": 0.265064,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.0086,
+        "aemg": -0.003379,
+        "iemg": -0.01719,
+        "rms": 0.000545,
+        "mdf": 30.69,
+        "mpf": 48.06,
+        "peak_rms": 0.043371
+      }
+    },
+    {
+      "index": 5,
+      "delsys": {
+        "index": 5,
+        "start": 48.9097,
+        "end": 55.1364,
+        "duration": 6.2267,
+        "aemg": 0.090971,
+        "rms": 0.127371,
+        "iemg": 0.56894,
+        "mpf": 143.1,
+        "mdf": 121.28,
+        "peak_rms": 0.271324,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 5,
+        "start": 45.5,
+        "end": 51.6855,
+        "duration": 6.1855,
+        "aemg": 0.099729,
+        "rms": 0.135759,
+        "iemg": 0.6163,
+        "mpf": 97.32,
+        "mdf": 91.62,
+        "peak_rms": 0.271778,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 0.0412,
+        "aemg": -0.008758,
+        "iemg": -0.04736,
+        "rms": -0.008388,
+        "mdf": 29.66,
+        "mpf": 45.78,
+        "peak_rms": -0.000454
+      }
+    },
+    {
+      "index": 6,
+      "delsys": {
+        "index": 6,
+        "start": 59.2174,
+        "end": 65.0231,
+        "duration": 5.8057,
+        "aemg": 0.095223,
+        "rms": 0.134486,
+        "iemg": 0.555337,
+        "mpf": 142.78,
+        "mdf": 120.4,
+        "peak_rms": 0.27803,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 6,
+        "start": 55.7812,
+        "end": 61.8271,
+        "duration": 6.0459,
+        "aemg": 0.095102,
+        "rms": 0.129155,
+        "iemg": 0.574444,
+        "mpf": 93.58,
+        "mdf": 85.62,
+        "peak_rms": 0.287524,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.2402,
+        "aemg": 0.000121,
+        "iemg": -0.019107,
+        "rms": 0.005331,
+        "mdf": 34.78,
+        "mpf": 49.2,
+        "peak_rms": -0.009494
+      }
+    },
+    {
+      "index": 7,
+      "delsys": {
+        "index": 7,
+        "start": 68.7626,
+        "end": 74.6479,
+        "duration": 5.8853,
+        "aemg": 0.105009,
+        "rms": 0.149124,
+        "iemg": 0.620819,
+        "mpf": 144.12,
+        "mdf": 124.15,
+        "peak_rms": 0.300962,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 7,
         "start": 65.3125,
         "end": 71.1934,
         "duration": 5.8809,
@@ -124,67 +277,181 @@
         "method": "ttri"
       },
       "delta": {
-        "duration": 0.1234,
-        "aemg": 0.000792,
-        "iemg": 0.022047,
-        "rms": 0.007034,
-        "mdf": 36.05,
-        "mpf": 51.89,
-        "peak_rms": 0.016101
+        "duration": 0.0044,
+        "aemg": -0.004943,
+        "iemg": -0.025358,
+        "rms": -3.7e-05,
+        "mdf": 32.71,
+        "mpf": 47.33,
+        "peak_rms": 0.024247
+      }
+    },
+    {
+      "index": 8,
+      "delsys": {
+        "index": 8,
+        "start": 78.8638,
+        "end": 84.9396,
+        "duration": 6.0758,
+        "aemg": 0.097077,
+        "rms": 0.136604,
+        "iemg": 0.59276,
+        "mpf": 142.57,
+        "mdf": 121.55,
+        "peak_rms": 0.247377,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 8,
+        "start": 75.4219,
+        "end": 81.5449,
+        "duration": 6.123,
+        "aemg": 0.101955,
+        "rms": 0.139998,
+        "iemg": 0.623885,
+        "mpf": 94.52,
+        "mdf": 87.95,
+        "peak_rms": 0.251034,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.0472,
+        "aemg": -0.004878,
+        "iemg": -0.031125,
+        "rms": -0.003394,
+        "mdf": 33.6,
+        "mpf": 48.05,
+        "peak_rms": -0.003657
+      }
+    },
+    {
+      "index": 9,
+      "delsys": {
+        "index": 9,
+        "start": 88.9332,
+        "end": 94.4293,
+        "duration": 5.4961,
+        "aemg": 0.090114,
+        "rms": 0.127602,
+        "iemg": 0.49756,
+        "mpf": 145.23,
+        "mdf": 122.16,
+        "peak_rms": 0.248934,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 9,
+        "start": 85.4297,
+        "end": 91.0156,
+        "duration": 5.5859,
+        "aemg": 0.097916,
+        "rms": 0.135233,
+        "iemg": 0.546943,
+        "mpf": 95.01,
+        "mdf": 89.78,
+        "peak_rms": 0.285868,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.0898,
+        "aemg": -0.007802,
+        "iemg": -0.049383,
+        "rms": -0.007631,
+        "mdf": 32.38,
+        "mpf": 50.22,
+        "peak_rms": -0.036934
+      }
+    },
+    {
+      "index": 10,
+      "delsys": {
+        "index": 10,
+        "start": 99.0185,
+        "end": 104.9355,
+        "duration": 5.917,
+        "aemg": 0.091823,
+        "rms": 0.129479,
+        "iemg": 0.545286,
+        "mpf": 139.88,
+        "mdf": 118.43,
+        "peak_rms": 0.252471,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 10,
+        "start": 95.5156,
+        "end": 101.3799,
+        "duration": 5.8643,
+        "aemg": 0.098913,
+        "rms": 0.136702,
+        "iemg": 0.579866,
+        "mpf": 94.1,
+        "mdf": 87.92,
+        "peak_rms": 0.263138,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 0.0527,
+        "aemg": -0.00709,
+        "iemg": -0.03458,
+        "rms": -0.007223,
+        "mdf": 30.51,
+        "mpf": 45.78,
+        "peak_rms": -0.010667
       }
     }
   ],
   "correlation": {
-    "rms": 0.6072,
-    "iemg": 0.9695,
-    "mpf": -0.0674,
-    "mdf": -0.0585
+    "rms": 0.6807,
+    "iemg": 0.9974,
+    "mpf": 0.0352,
+    "mdf": 0.0614
   },
   "interval_agreement": [
     {
       "metric": "duration",
-      "n": 3,
-      "pearson_r": -0.9839,
-      "icc": -0.2537
+      "n": 10,
+      "pearson_r": 0.9105,
+      "icc": 0.9113
     },
     {
       "metric": "aemg",
-      "n": 3,
-      "pearson_r": 0.6876,
-      "icc": 0.6529
+      "n": 10,
+      "pearson_r": 0.9324,
+      "icc": 0.8131
     },
     {
       "metric": "iemg",
-      "n": 3,
-      "pearson_r": -0.973,
-      "icc": -1.8314
+      "n": 10,
+      "pearson_r": 0.9533,
+      "icc": 0.8353
     },
     {
       "metric": "rms",
-      "n": 3,
-      "pearson_r": -0.0408,
-      "icc": -0.0225
+      "n": 10,
+      "pearson_r": 0.9044,
+      "icc": 0.8603
     },
     {
       "metric": "mdf",
-      "n": 3,
-      "pearson_r": -0.5192,
-      "icc": -0.0009
+      "n": 10,
+      "pearson_r": 0.8253,
+      "icc": 0.0224
     },
     {
       "metric": "mpf",
-      "n": 3,
-      "pearson_r": 0.8902,
-      "icc": 0.0024
+      "n": 10,
+      "pearson_r": 0.8656,
+      "icc": 0.0097
     },
     {
       "metric": "peak_rms",
-      "n": 3,
-      "pearson_r": -0.5013,
-      "icc": -0.2726
+      "n": 10,
+      "pearson_r": 0.4222,
+      "icc": 0.3977
     }
   ],
-  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 3 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
-  "ref_count": 3,
-  "exp_count": 3
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
+  "ref_count": 10,
+  "exp_count": 10
 }

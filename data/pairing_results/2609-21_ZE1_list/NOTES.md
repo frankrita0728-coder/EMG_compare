@@ -5,4 +5,6 @@
 3. **第 6、37 列**：若收縮段數不足，區間 Pearson/ICC 可能為空；仍可能有 TTRI 滑動窗 r。
 4. **右腓腸肌 ZE2 Delsys**：清單 `with_ze2_` 對上實際檔名 `with_ZE2_`（大小寫）。
 
-分析配方見 `ANALYSIS_METHOD.md`（Schmitt + TTRI，預期 3 段）。
+分析配方見 `ANALYSIS_METHOD.md`：
+- 裝置比對／刮腿毛：Schmitt + TTRI，預期 **3** 段
+- 疲勞：Schmitt + TTRI，預期 **10** 段

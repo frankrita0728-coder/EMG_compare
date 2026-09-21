@@ -7,6 +7,7 @@
   "exp_listed": "09-09_10-8-56_879_Ch1_(Frank_左脛前肌)_ze2_褲XL_1.txt",
   "ref_resolved": "2609-09 frank左脛前肌(Delsys)_with_ze2_1.csv",
   "exp_resolved": "09-09_10-8-56_879_Ch1_(Frank_左脛前肌)_ze2_褲XL_1.txt",
+  "expected_count": 3,
   "contraction_method": "ze1_schmitt",
   "feature_method": "ttri",
   "metrics": [

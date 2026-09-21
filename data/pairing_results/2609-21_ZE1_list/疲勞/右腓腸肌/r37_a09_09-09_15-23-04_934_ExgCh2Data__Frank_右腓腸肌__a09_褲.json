@@ -7,6 +7,7 @@
   "exp_listed": "09-09_15-23-04_934_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞2.txt",
   "ref_resolved": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞2.csv",
   "exp_resolved": "09-09_15-23-04_934_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞2.txt",
+  "expected_count": 10,
   "contraction_method": "ze1_schmitt",
   "feature_method": "ttri",
   "metrics": [
@@ -24,6 +25,110 @@
       "delsys": null,
       "txt": {
         "index": 1,
+        "start": 5.6094,
+        "end": 13.5547,
+        "duration": 7.9453,
+        "aemg": 0.017375,
+        "rms": 0.022882,
+        "iemg": 0.138033,
+        "mpf": 82.85,
+        "mdf": 74.14,
+        "peak_rms": 0.048139,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 2,
+      "delsys": null,
+      "txt": {
+        "index": 2,
+        "start": 15.8594,
+        "end": 22.6953,
+        "duration": 6.8359,
+        "aemg": 0.018456,
+        "rms": 0.023998,
+        "iemg": 0.126101,
+        "mpf": 78.03,
+        "mdf": 67.58,
+        "peak_rms": 0.040752,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 3,
+      "delsys": null,
+      "txt": {
+        "index": 3,
+        "start": 25.1875,
+        "end": 32.4062,
+        "duration": 7.2187,
+        "aemg": 0.019119,
+        "rms": 0.024897,
+        "iemg": 0.137819,
+        "mpf": 81.24,
+        "mdf": 71.59,
+        "peak_rms": 0.044107,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 4,
+      "delsys": null,
+      "txt": {
+        "index": 4,
+        "start": 35.2344,
+        "end": 42.8594,
+        "duration": 7.625,
+        "aemg": 0.018928,
+        "rms": 0.024421,
+        "iemg": 0.143928,
+        "mpf": 80.32,
+        "mdf": 69.39,
+        "peak_rms": 0.044131,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 5,
+      "delsys": null,
+      "txt": {
+        "index": 5,
         "start": 45.7734,
         "end": 53.2734,
         "duration": 7.5,
@@ -46,10 +151,10 @@
       }
     },
     {
-      "index": 2,
+      "index": 6,
       "delsys": null,
       "txt": {
-        "index": 2,
+        "index": 6,
         "start": 55.6953,
         "end": 63.1094,
         "duration": 7.4141,
@@ -72,10 +177,10 @@
       }
     },
     {
-      "index": 3,
+      "index": 7,
       "delsys": null,
       "txt": {
-        "index": 3,
+        "index": 7,
         "start": 65.7891,
         "end": 72.4453,
         "duration": 6.6562,
@@ -85,6 +190,84 @@
         "mpf": 80.26,
         "mdf": 70.98,
         "peak_rms": 0.05103,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 8,
+      "delsys": null,
+      "txt": {
+        "index": 8,
+        "start": 75.6094,
+        "end": 83.125,
+        "duration": 7.5156,
+        "aemg": 0.01851,
+        "rms": 0.024081,
+        "iemg": 0.138816,
+        "mpf": 83.83,
+        "mdf": 75.23,
+        "peak_rms": 0.041808,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 9,
+      "delsys": null,
+      "txt": {
+        "index": 9,
+        "start": 85.7578,
+        "end": 92.1641,
+        "duration": 6.4063,
+        "aemg": 0.01897,
+        "rms": 0.024365,
+        "iemg": 0.120858,
+        "mpf": 80.49,
+        "mdf": 71.47,
+        "peak_rms": 0.041647,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 10,
+      "delsys": null,
+      "txt": {
+        "index": 10,
+        "start": 95.9297,
+        "end": 103.0469,
+        "duration": 7.1172,
+        "aemg": 0.019056,
+        "rms": 0.024498,
+        "iemg": 0.135264,
+        "mpf": 77.49,
+        "mdf": 65.14,
+        "peak_rms": 0.051468,
         "method": "ttri"
       },
       "delta": {
@@ -150,5 +333,5 @@
   ],
   "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 0 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
   "ref_count": 0,
-  "exp_count": 3
+  "exp_count": 10
 }

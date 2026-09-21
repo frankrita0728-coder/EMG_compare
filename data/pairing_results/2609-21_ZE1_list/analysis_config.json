@@ -3,7 +3,12 @@
   "contraction_method_label": "ZE1 施密特觸發（Schmitt trigger）",
   "feature_method": "ttri",
   "feature_method_label": "TTRI（AEMG + 滑動窗 RMS/iEMG/MPF/MDF）",
-  "expected_count": 3,
+  "expected_count_default": 3,
+  "expected_count_by_purpose": {
+    "裝置比對": 3,
+    "刮腿毛": 3,
+    "疲勞": 10
+  },
   "agreement_stats": [
     "Pearson r",
     "ICC(A,1)"
@@ -18,6 +23,6 @@
     "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT)",
     "裝置比對_ze2": "build_feature_compare_ze2(Delsys CSV × ZE2 TXT)",
     "刮腿毛": "build_feature_compare_txt_pair(ZE1 TXT × ZE1 TXT)",
-    "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT)"
+    "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT；expected_count=10)"
   }
 }

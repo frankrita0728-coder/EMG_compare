@@ -28,13 +28,18 @@ from parsers.ze2_txt import ZE2_MV_PER_COUNT  # noqa: E402
 
 OUT_ROOT = ROOT / "data" / "pairing_results" / "2609-21_ZE1_list"
 
-# Fixed analysis recipe used for every pair in this list run.
+# Analysis recipe for ZE1 list runs. Fatigue uses 10 contractions; others use 3.
 ANALYSIS_CONFIG: dict[str, Any] = {
     "contraction_method": "ze1_schmitt",
     "contraction_method_label": "ZE1 施密特觸發（Schmitt trigger）",
     "feature_method": "ttri",
     "feature_method_label": "TTRI（AEMG + 滑動窗 RMS/iEMG/MPF/MDF）",
-    "expected_count": 3,
+    "expected_count_default": 3,
+    "expected_count_by_purpose": {
+        "裝置比對": 3,
+        "刮腿毛": 3,
+        "疲勞": 10,
+    },
     "agreement_stats": ["Pearson r", "ICC(A,1)"],
     "agreement_scope": "跨收縮區間特徵（同 index 配對）",
     "series_correlation": "TTRI 滑動窗 Pearson r（僅 Delsys/對照收縮區間內）",
@@ -46,14 +51,25 @@ ANALYSIS_CONFIG: dict[str, Any] = {
         "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT)",
         "裝置比對_ze2": "build_feature_compare_ze2(Delsys CSV × ZE2 TXT)",
         "刮腿毛": "build_feature_compare_txt_pair(ZE1 TXT × ZE1 TXT)",
-        "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT)",
+        "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT；expected_count=10)",
     },
 }
 
 
+def expected_count_for(purpose: str) -> int:
+    mapping = ANALYSIS_CONFIG.get("expected_count_by_purpose") or {}
+    if purpose in mapping:
+        return int(mapping[purpose])
+    return int(ANALYSIS_CONFIG.get("expected_count_default") or 3)
+
+
 def _write_analysis_method(out_dir: Path, *, xlsx_name: str) -> None:
     cfg = ANALYSIS_CONFIG
-    text = f"""# 分析設定（本批結果一律用此配方）
+    by_purpose = cfg.get("expected_count_by_purpose") or {}
+    purpose_rows = "\n".join(
+        f"| {name} | **{count}** |" for name, count in by_purpose.items()
+    )
+    text = f"""# 分析設定（本批結果用此配方）
 
 來源清單：`{xlsx_name}`
 
@@ -63,13 +79,21 @@ def _write_analysis_method(out_dir: Path, *, xlsx_name: str) -> None:
 |------|----|
 | 收縮判斷 | `{cfg['contraction_method']}` — {cfg['contraction_method_label']} |
 | 特徵計算 | `{cfg['feature_method']}` — {cfg['feature_method_label']} |
-| 預期收縮次數 | **{cfg['expected_count']}** |
 | 區間一致性 | {', '.join(cfg['agreement_stats'])}；{cfg['agreement_scope']} |
 | 序列相關 | {cfg['series_correlation']} |
 | ZE1 換算 | {cfg['ze1_scale']} |
 | ZE2 取樣率 | {cfg['ze2_sample_rate_hz']} Hz |
 | ZE2 換算 | ×{cfg['ze2_mv_per_count']} mV/count |
 | ZE2 濾波 | {cfg['ze2_bandpass']} |
+
+## 預期收縮次數（依實驗目的）
+
+| 實驗目的 | expected_count |
+|----------|----------------|
+{purpose_rows}
+| （其他／未列） | **{cfg['expected_count_default']}** |
+
+> 疲勞分析固定抓 **10 次收縮**；裝置比對／刮腿毛為 **3 次**。
 
 ## 各實驗目的呼叫的函式
 
@@ -296,12 +320,14 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
                 ref_is_csv = ref_path.suffix.lower() == ".csv"
                 exp_is_txt = exp_path.suffix.lower() == ".txt"
                 ref_is_txt = ref_path.suffix.lower() == ".txt"
+                expected = expected_count_for(purpose)
+                meta["expected_count"] = expected
 
                 if purpose == "刮腿毛" and ref_is_txt and exp_is_txt:
                     result = build_feature_compare_txt_pair(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        expected_count=expected,
                         contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
                         feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                     )
@@ -309,7 +335,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
                     result = build_feature_compare_ze2(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        expected_count=expected,
                         contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
                         feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                         ze2_sample_rate=float(ANALYSIS_CONFIG["ze2_sample_rate_hz"]),
@@ -320,7 +346,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
                     result = build_feature_compare(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        expected_count=expected,
                         contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
                         feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                     )
@@ -328,7 +354,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
                     result = build_feature_compare_txt_pair(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        expected_count=expected,
                         contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
                         feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                     )
@@ -360,7 +386,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             "device_note": device_note,
             "contraction_method": ANALYSIS_CONFIG["contraction_method"],
             "feature_method": ANALYSIS_CONFIG["feature_method"],
-            "expected_count": ANALYSIS_CONFIG["expected_count"],
+            "expected_count": expected_count_for(purpose),
             "ref": meta["ref_resolved"] or ref_raw,
             "exp": meta["exp_resolved"] or exp_raw,
             "ref_count": "",
@@ -394,7 +420,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
         "",
         f"- 收縮判斷：`{ANALYSIS_CONFIG['contraction_method']}`（{ANALYSIS_CONFIG['contraction_method_label']}）",
         f"- 特徵計算：`{ANALYSIS_CONFIG['feature_method']}`（{ANALYSIS_CONFIG['feature_method_label']}）",
-        f"- 預期收縮次數：{ANALYSIS_CONFIG['expected_count']}",
+        f"- 預期收縮：裝置比對／刮腿毛 = **3**；疲勞 = **10**",
         f"- 統計：區間 Pearson r + ICC(A,1)；另算 TTRI 滑動窗 Pearson r",
         "",
         "詳見 [`ANALYSIS_METHOD.md`](ANALYSIS_METHOD.md) / [`analysis_config.json`](analysis_config.json)。",

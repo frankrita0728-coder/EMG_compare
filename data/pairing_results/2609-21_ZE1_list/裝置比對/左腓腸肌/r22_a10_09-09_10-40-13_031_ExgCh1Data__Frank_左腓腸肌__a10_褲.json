@@ -7,6 +7,7 @@
   "exp_listed": "09-09_10-40-13_031_ExgCh1Data_(Frank 左腓腸肌)_a10_褲XL_1.txt",
   "ref_resolved": "2609-09 frank左腓腸肌(Delsys)_with_a10_1.csv",
   "exp_resolved": "09-09_10-40-13_031_ExgCh1Data_(Frank 左腓腸肌)_a10_褲XL_1.txt",
+  "expected_count": 3,
   "contraction_method": "ze1_schmitt",
   "feature_method": "ttri",
   "metrics": [
