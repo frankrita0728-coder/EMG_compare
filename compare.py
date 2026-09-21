@@ -4,10 +4,17 @@ from typing import Any
 
 from align import align_traces_by_start, parse_delsys_start
 from detector import detect_contractions_dispatch
-from features import analyze_signal_features, compare_feature_rows
+from features import (
+    analyze_signal_features,
+    compare_feature_rows,
+    interval_agreement,
+    series_correlations,
+)
 from normalize import normalize_trace
 from parsers.delsys import load_delsys_emg
 from parsers.txt_device import TXT_MV_PER_COUNT, load_txt_emg
+from parsers.ze2_txt import ZE2_MV_PER_COUNT, load_ze2_emg
+from ze1_algo import compute_ttri_feature_series
 
 
 def load_signal(
@@ -21,6 +28,8 @@ def load_signal(
         return load_delsys_emg(filename, for_plot=for_plot)
     if source == "txt":
         return load_txt_emg(filename, for_plot=for_plot, year=year)
+    if source == "ze2":
+        return load_ze2_emg(filename, for_plot=for_plot, year=year)
     raise ValueError(f"未知來源：{source}")
 
 
@@ -245,7 +254,7 @@ def build_contraction_single(
         sample_rate=full["sample_rate"],
         source=source,
     )
-    plot = normalize_trace(load_signal(source, filename, for_plot=True), method="robust_zscore")
+    plot = normalize_trace(load_signal(source, filename, for_plot=True), method="none")
     return {
         "mode": "contractions_single",
         "source": source,
@@ -255,6 +264,7 @@ def build_contraction_single(
             "filename": full["filename"],
             "signal_name": full["signal_name"],
             "sample_rate": full["sample_rate"],
+            "unit": plot.get("unit") or full.get("unit") or "mV",
             "contractions": contractions,
             "times": plot["times"],
             "values": plot["values"],
@@ -268,7 +278,7 @@ def build_feature_single(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
-    feature_method: str = "spectral",
+    feature_method: str = "ttri",
 ) -> dict[str, Any]:
     full = load_signal(source, filename, for_plot=False)
     feat = analyze_signal_features(
@@ -324,8 +334,8 @@ def build_contraction_compare(
         sample_rate=right["sample_rate"],
         source="txt",
     )
-    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="robust_zscore")
-    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="robust_zscore")
+    left_plot = normalize_trace(load_delsys_emg(delsys_name, for_plot=True), method="none")
+    right_plot = normalize_trace(load_txt_emg(txt_name, for_plot=True), method="none")
     return {
         "mode": "contractions",
         "expected_count": expected_count,
@@ -334,6 +344,7 @@ def build_contraction_compare(
             "filename": left["filename"],
             "signal_name": left["signal_name"],
             "sample_rate": left["sample_rate"],
+            "unit": left_plot.get("unit") or left.get("unit") or "mV",
             "contractions": left_c,
             "times": left_plot["times"],
             "values": left_plot["values"],
@@ -342,6 +353,7 @@ def build_contraction_compare(
             "filename": right["filename"],
             "signal_name": right["signal_name"],
             "sample_rate": right["sample_rate"],
+            "unit": right_plot.get("unit") or right.get("unit") or "mV",
             "contractions": right_c,
             "times": right_plot["times"],
             "values": right_plot["values"],
@@ -355,7 +367,7 @@ def build_feature_compare(
     *,
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
-    feature_method: str = "spectral",
+    feature_method: str = "ttri",
 ) -> dict[str, Any]:
     left = load_delsys_emg(delsys_name, for_plot=False)
     right = load_txt_emg(txt_name, for_plot=False)
@@ -382,8 +394,9 @@ def build_feature_compare(
         right_feat["features"],
         metrics=left_feat["metrics"],
     )
-    return {
+    result = {
         "mode": "features",
+        "device": "ze1",
         "expected_count": expected_count,
         "contraction_method": contraction_method,
         "feature_method": feature_method,
@@ -395,7 +408,6 @@ def build_feature_compare(
             "unit": left["unit"],
             "features": left_feat["features"],
             "count": left_feat["count"],
-            "series": left_feat.get("series"),
         },
         "txt": {
             "filename": right["filename"],
@@ -404,8 +416,151 @@ def build_feature_compare(
             "unit": right["unit"],
             "features": right_feat["features"],
             "count": right_feat["count"],
-            "series": right_feat.get("series"),
+        },
+        "ze1": {
+            "filename": right["filename"],
+            "signal_name": right["signal_name"],
+            "sample_rate": right["sample_rate"],
+            "unit": right["unit"],
+            "features": right_feat["features"],
+            "count": right_feat["count"],
         },
         "pairs": pairs,
-        "note": f"TXT 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
+        "note": f"ZE1 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
     }
+    return _attach_correlation_stats(result, left=left, right=right, left_feat=left_feat, right_feat=right_feat)
+
+
+def build_feature_compare_ze2(
+    delsys_name: str,
+    ze2_name: str,
+    *,
+    expected_count: int = 3,
+    contraction_method: str = "rms_peak",
+    feature_method: str = "ttri",
+    ze2_sample_rate: float | None = None,
+    ze2_mv_per_count: float | None = None,
+    apply_bandpass: bool = True,
+) -> dict[str, Any]:
+    left = load_delsys_emg(delsys_name, for_plot=False)
+    year = _year_from_delsys(delsys_name)
+    right = load_ze2_emg(
+        ze2_name,
+        for_plot=False,
+        year=year,
+        sample_rate=ze2_sample_rate,
+        mv_per_count=ze2_mv_per_count,
+        apply_bandpass=apply_bandpass,
+    )
+    left_feat = analyze_signal_features(
+        left["times"],
+        left["values"],
+        sample_rate=left["sample_rate"],
+        expected_count=expected_count,
+        contraction_method=contraction_method,
+        feature_method=feature_method,
+        source="delsys",
+    )
+    right_feat = analyze_signal_features(
+        right["times"],
+        right["values"],
+        sample_rate=right["sample_rate"],
+        expected_count=expected_count,
+        contraction_method=contraction_method,
+        feature_method=feature_method,
+        source="ze2",
+    )
+    pairs = compare_feature_rows(
+        left_feat["features"],
+        right_feat["features"],
+        metrics=left_feat["metrics"],
+    )
+    for item in pairs:
+        item["ze2"] = item.pop("txt", None)
+    scale = ze2_mv_per_count or ZE2_MV_PER_COUNT
+    result = {
+        "mode": "features",
+        "device": "ze2",
+        "expected_count": expected_count,
+        "contraction_method": contraction_method,
+        "feature_method": feature_method,
+        "metrics": left_feat["metrics"],
+        "delsys": {
+            "filename": left["filename"],
+            "signal_name": left["signal_name"],
+            "sample_rate": left["sample_rate"],
+            "unit": left["unit"],
+            "features": left_feat["features"],
+            "count": left_feat["count"],
+        },
+        "ze2": {
+            "filename": right["filename"],
+            "signal_name": right["signal_name"],
+            "sample_rate": right["sample_rate"],
+            "unit": right["unit"],
+            "features": right_feat["features"],
+            "count": right_feat["count"],
+        },
+        "pairs": pairs,
+        "note": (
+            f"ZE2 已換算為 mV（×{scale}）"
+            + ("；已套用 20–400 Hz 帶通。" if apply_bandpass else "；未套用帶通濾波。")
+            + " iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
+        ),
+    }
+    return _attach_correlation_stats(result, left=left, right=right, left_feat=left_feat, right_feat=right_feat)
+
+
+def _attach_correlation_stats(
+    result: dict[str, Any],
+    *,
+    left: dict[str, Any],
+    right: dict[str, Any],
+    left_feat: dict[str, Any],
+    right_feat: dict[str, Any],
+) -> dict[str, Any]:
+    """Add interval Pearson/ICC and contraction-only TTRI series Pearson r."""
+    agreement = interval_agreement(
+        left_feat["features"],
+        right_feat["features"],
+        metrics=left_feat["metrics"],
+    )
+    left_series_corr = compute_ttri_feature_series(
+        left["values"], sample_rate=left["sample_rate"], max_points=None
+    )
+    right_series_corr = compute_ttri_feature_series(
+        right["values"], sample_rate=right["sample_rate"], max_points=None
+    )
+    corr_intervals = left_feat.get("features") or left_feat.get("contractions") or []
+    correlation = series_correlations(
+        left_series_corr,
+        right_series_corr,
+        intervals=corr_intervals,
+    )
+    window_l = left_series_corr.get("window_l", 157)
+    overlap = left_series_corr.get("overlap", 79)
+    n_intervals = min(left_feat["count"], right_feat["count"])
+    plot_series_left = left_feat.get("series") or compute_ttri_feature_series(
+        left["values"], sample_rate=left["sample_rate"]
+    )
+    plot_series_right = right_feat.get("series") or compute_ttri_feature_series(
+        right["values"], sample_rate=right["sample_rate"]
+    )
+    result["delsys"]["series"] = plot_series_left
+    device_key = "ze2" if result.get("device") == "ze2" else "txt"
+    if device_key in result:
+        result[device_key]["series"] = plot_series_right
+    if "ze1" in result:
+        result["ze1"]["series"] = plot_series_right
+    result["interval_agreement"] = agreement
+    result["correlation"] = correlation
+    result["correlation_method"] = "ttri_series_pearson_contraction_only"
+    result["correlation_window"] = {"window_l": window_l, "overlap": overlap}
+    note = str(result.get("note") or "")
+    result["note"] = (
+        note
+        + f" 收縮區間一致性：跨 {n_intervals} 段的 Pearson r 與 ICC(A,1)。"
+        + f" 另有 TTRI 滑動窗曲線（window_l={window_l}, overlap={overlap}）"
+        + " 僅收縮區間內點的 Pearson r。"
+    )
+    return result

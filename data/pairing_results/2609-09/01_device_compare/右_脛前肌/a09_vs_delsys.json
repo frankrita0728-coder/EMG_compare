@@ -1,0 +1,190 @@
+{
+  "analysis": "device_compare",
+  "compare": "a09_vs_delsys",
+  "subject": "Frank",
+  "muscle": "脛前肌",
+  "side": "右",
+  "session": "a09",
+  "delsys": "2609-09 frank右脛前肌(Delsys)_with_a09_1.csv",
+  "device": "ze1",
+  "device_file": "09-09_11-19-17_426_ExgCh2Data_(Frank 右脛前肌)_a09_褲XL_1.txt",
+  "status": "ready",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": {
+        "index": 1,
+        "start": 7.0915,
+        "end": 13.1037,
+        "duration": 6.0122,
+        "aemg": 0.190281,
+        "rms": 0.266118,
+        "iemg": 1.150296,
+        "mpf": 143.44,
+        "mdf": 115.88,
+        "peak_rms": 0.615117,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 1,
+        "start": 20.6016,
+        "end": 21.3516,
+        "duration": 0.75,
+        "aemg": 0.012986,
+        "rms": 0.020286,
+        "iemg": 0.009709,
+        "mpf": 58.4,
+        "mdf": 46.18,
+        "peak_rms": 0.044115,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 5.2622,
+        "aemg": 0.177295,
+        "iemg": 1.140587,
+        "rms": 0.245832,
+        "mdf": 69.7,
+        "mpf": 85.04,
+        "peak_rms": 0.571002
+      }
+    },
+    {
+      "index": 2,
+      "delsys": {
+        "index": 2,
+        "start": 17.4229,
+        "end": 22.7284,
+        "duration": 5.3055,
+        "aemg": 0.174063,
+        "rms": 0.241667,
+        "iemg": 0.928282,
+        "mpf": 144.24,
+        "mdf": 121.36,
+        "peak_rms": 0.436956,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 2,
+        "start": 26.8281,
+        "end": 27.8516,
+        "duration": 1.0235,
+        "aemg": 0.015336,
+        "rms": 0.019852,
+        "iemg": 0.015344,
+        "mpf": 61.16,
+        "mdf": 50.53,
+        "peak_rms": 0.044711,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 4.282,
+        "aemg": 0.158727,
+        "iemg": 0.912938,
+        "rms": 0.221815,
+        "mdf": 70.83,
+        "mpf": 83.08,
+        "peak_rms": 0.392245
+      }
+    },
+    {
+      "index": 3,
+      "delsys": {
+        "index": 3,
+        "start": 28.0879,
+        "end": 33.8223,
+        "duration": 5.7344,
+        "aemg": 0.153235,
+        "rms": 0.217298,
+        "iemg": 0.884502,
+        "mpf": 140.6,
+        "mdf": 119.34,
+        "peak_rms": 0.458386,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 3,
+        "start": 31.6016,
+        "end": 32.2109,
+        "duration": 0.6093,
+        "aemg": 0.012576,
+        "rms": 0.016676,
+        "iemg": 0.006849,
+        "mpf": 53.33,
+        "mdf": 39.31,
+        "peak_rms": 0.046199,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 5.1251,
+        "aemg": 0.140659,
+        "iemg": 0.877653,
+        "rms": 0.200622,
+        "mdf": 80.03,
+        "mpf": 87.27,
+        "peak_rms": 0.412187
+      }
+    }
+  ],
+  "correlation": {
+    "rms": 0.0752,
+    "iemg": 0.9878,
+    "mpf": 0.011,
+    "mdf": -0.0175
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 3,
+      "pearson_r": -0.7376,
+      "icc": -0.0046
+    },
+    {
+      "metric": "aemg",
+      "n": 3,
+      "pearson_r": 0.2083,
+      "icc": 0.0005
+    },
+    {
+      "metric": "iemg",
+      "n": 3,
+      "pearson_r": -0.0322,
+      "icc": -0.0
+    },
+    {
+      "metric": "rms",
+      "n": 3,
+      "pearson_r": 0.9154,
+      "icc": 0.0018
+    },
+    {
+      "metric": "mdf",
+      "n": 3,
+      "pearson_r": 0.2417,
+      "icc": 0.0014
+    },
+    {
+      "metric": "mpf",
+      "n": 3,
+      "pearson_r": 0.9896,
+      "icc": 0.0021
+    },
+    {
+      "metric": "peak_rms",
+      "n": 3,
+      "pearson_r": -0.64,
+      "icc": -0.0006
+    }
+  ],
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 3 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。"
+}
