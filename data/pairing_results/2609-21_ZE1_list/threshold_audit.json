@@ -1,0 +1,1574 @@
+[
+  {
+    "row": 2,
+    "purpose": "裝置比對",
+    "site": "右脛前肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右脛前肌(Delsys)_with_a09_1.csv",
+    "exp_file": "09-09_11-19-17_426_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右脛前肌(Delsys)_with_a09_1.csv",
+        "threshold": 0.011243070343549336,
+        "baseline": 0.007702043307690389,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-19-17_426_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_1.txt",
+        "threshold": 0.002690207861042333,
+        "baseline": 0.012337782602090638,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 3,
+    "purpose": "裝置比對",
+    "site": "右脛前肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右脛前肌(Delsys)_with_a09_2.csv",
+    "exp_file": "09-09_11-21-27_792_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右脛前肌(Delsys)_with_a09_2.csv",
+        "threshold": 0.0018504139099679256,
+        "baseline": 0.006767908242567683,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-21-27_792_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_2.txt",
+        "threshold": 0.004802725741694794,
+        "baseline": 0.006519667459953095,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 4,
+    "purpose": "裝置比對",
+    "site": "右脛前肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右脛前肌(Delsys)_with_a10_1.csv",
+    "exp_file": "09-09_11-23-48_013_ExgCh1Data_(Frank 右脛前肌)_a10_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右脛前肌(Delsys)_with_a10_1.csv",
+        "threshold": -9.272698684288693e-05,
+        "baseline": 0.00804436414612763,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-23-48_013_ExgCh1Data_(Frank 右脛前肌)_a10_褲XL_1.txt",
+        "threshold": 0.015554554345315245,
+        "baseline": 0.009413362585227446,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 5,
+    "purpose": "裝置比對",
+    "site": "右脛前肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右脛前肌(Delsys)_with_a10_2.csv",
+    "exp_file": "09-09_11-25-35_742_ExgCh1Data_(Frank 右脛前肌)_a10_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右脛前肌(Delsys)_with_a10_2.csv",
+        "threshold": 0.009682669383564033,
+        "baseline": 0.009171242953207698,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-25-35_742_ExgCh1Data_(Frank 右脛前肌)_a10_褲XL_2.txt",
+        "threshold": 0.004308672946074484,
+        "baseline": 0.009306918003420981,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 6,
+    "purpose": "裝置比對",
+    "site": "右脛前肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右脛前肌(Delsys)_with_ze2_1.csv",
+    "exp_file": "09-09_11-27-57_319_Ch2_(Frank 右脛前肌)_ze2_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右脛前肌(Delsys)_with_ze2_1.csv",
+        "threshold": 0.00905929709127137,
+        "baseline": 0.005570588104036027,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_11-27-57_319_Ch2_(Frank 右脛前肌)_ze2_褲XL_1.txt",
+        "threshold": 0.0053075278159783286,
+        "baseline": 0.001910841451454904,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": true,
+    "still_short": false
+  },
+  {
+    "row": 7,
+    "purpose": "裝置比對",
+    "site": "右脛前肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右脛前肌(Delsys)_with_ze2_2.csv",
+    "exp_file": "09-09_11-30-01_689_Ch2_(Frank 右脛前肌)_ze2_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右脛前肌(Delsys)_with_ze2_2.csv",
+        "threshold": 0.01322564016682344,
+        "baseline": 0.008193783198521,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_11-30-01_689_Ch2_(Frank 右脛前肌)_ze2_褲XL_2.txt",
+        "threshold": 0.0039054185173933165,
+        "baseline": 0.0013591811482786165,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 8,
+    "purpose": "裝置比對",
+    "site": "左脛前肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左脛前肌(Delsys)_with_a09_1.csv",
+    "exp_file": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左脛前肌(Delsys)_with_a09_1.csv",
+        "threshold": 0.005498650163208885,
+        "baseline": 0.0031445274150376603,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+        "threshold": 0.017887119459467547,
+        "baseline": 0.010109664145694058,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": true,
+    "still_short": false
+  },
+  {
+    "row": 9,
+    "purpose": "裝置比對",
+    "site": "左脛前肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左脛前肌(Delsys)_with_a09_2.csv",
+    "exp_file": "09-09_09-45-46_944_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左脛前肌(Delsys)_with_a09_2.csv",
+        "threshold": 0.002600139377356925,
+        "baseline": 0.0023307737102014827,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_09-45-46_944_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_2.txt",
+        "threshold": 0.024627071169300217,
+        "baseline": 0.015304758586440629,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 10,
+    "purpose": "裝置比對",
+    "site": "左脛前肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左脛前肌(Delsys)_with_a10_1.csv",
+    "exp_file": "09-09_09-52-57_312_ExgCh2Data_(Frank 左脛前肌)_a10_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左脛前肌(Delsys)_with_a10_1.csv",
+        "threshold": 0.0026293588106814274,
+        "baseline": 0.0024254749314796447,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_09-52-57_312_ExgCh2Data_(Frank 左脛前肌)_a10_褲XL_1.txt",
+        "threshold": 0.013702704254483757,
+        "baseline": 0.02253949281273181,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 11,
+    "purpose": "裝置比對",
+    "site": "左脛前肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左脛前肌(Delsys)_with_a10_2.csv",
+    "exp_file": "09-09_09-58-36_663_ExgCh2Data_(Frank 左脛前肌)_a10_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左脛前肌(Delsys)_with_a10_2.csv",
+        "threshold": 0.0017743166684295502,
+        "baseline": 0.00357147370702384,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_09-58-36_663_ExgCh2Data_(Frank 左脛前肌)_a10_褲XL_2.txt",
+        "threshold": 0.02831647634008582,
+        "baseline": 0.017587535723646734,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 12,
+    "purpose": "裝置比對",
+    "site": "左脛前肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左脛前肌(Delsys)_with_ze2_1.csv",
+    "exp_file": "09-09_10-8-56_879_Ch1_(Frank_左脛前肌)_ze2_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左脛前肌(Delsys)_with_ze2_1.csv",
+        "threshold": 0.0029177947643125096,
+        "baseline": 0.00215415324280749,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_10-8-56_879_Ch1_(Frank_左脛前肌)_ze2_褲XL_1.txt",
+        "threshold": 0.003564779596684281,
+        "baseline": 0.0018023679497753086,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 13,
+    "purpose": "裝置比對",
+    "site": "左脛前肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左脛前肌(Delsys)_with_ze2_2.csv",
+    "exp_file": "09-09_10-12-46_289_Ch1_(Frank 左脛前肌)_ze2_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左脛前肌(Delsys)_with_ze2_2.csv",
+        "threshold": 0.002781877217582723,
+        "baseline": 0.0021610931531458686,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_10-12-46_289_Ch1_(Frank 左脛前肌)_ze2_褲XL_2.txt",
+        "threshold": 0.0035293078661642547,
+        "baseline": 0.0017054417005693385,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 14,
+    "purpose": "裝置比對",
+    "site": "右腓腸肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右腓腸肌(Delsys)_with_a09_1.csv",
+    "exp_file": "09-09_11-48-01_319_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右腓腸肌(Delsys)_with_a09_1.csv",
+        "threshold": 0.010985770569455409,
+        "baseline": 0.007410307469258872,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-48-01_319_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_1.txt",
+        "threshold": 0.00701478918244158,
+        "baseline": 0.007837258669435566,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 15,
+    "purpose": "裝置比對",
+    "site": "右腓腸肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "missing_files",
+    "ref_file": "",
+    "exp_file": "09-09_11-50-05_808_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_2.txt",
+    "issue": "missing_files",
+    "severity": true
+  },
+  {
+    "row": 16,
+    "purpose": "裝置比對",
+    "site": "右腓腸肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右腓腸肌(Delsys)_with_a10_1.csv",
+    "exp_file": "09-09_11-52-29_385_ExgCh2Data_(Frank 右腓腸肌)_a10_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右腓腸肌(Delsys)_with_a10_1.csv",
+        "threshold": 0.007277480113877967,
+        "baseline": 0.004897267106059898,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-52-29_385_ExgCh2Data_(Frank 右腓腸肌)_a10_褲XL_1.txt",
+        "threshold": -0.0037542239226352053,
+        "baseline": 0.032224563707789526,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 17,
+    "purpose": "裝置比對",
+    "site": "右腓腸肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右腓腸肌(Delsys)_with_a10_2.csv",
+    "exp_file": "09-09_11-55-52_064_ExgCh2Data_(Frank 右腓腸肌)_a10_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右腓腸肌(Delsys)_with_a10_2.csv",
+        "threshold": 0.0012631579648866003,
+        "baseline": 0.00437012724072114,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_11-55-52_064_ExgCh2Data_(Frank 右腓腸肌)_a10_褲XL_2.txt",
+        "threshold": -0.007933647446737906,
+        "baseline": 0.04986074347790267,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 18,
+    "purpose": "裝置比對",
+    "site": "右腓腸肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右腓腸肌(Delsys)_with_ZE2_1.csv",
+    "exp_file": "09-09_11-59-10_048_Ch1_(Frank 右腓腸肌)_ze2_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右腓腸肌(Delsys)_with_ZE2_1.csv",
+        "threshold": 0.005123706515630908,
+        "baseline": 0.0025840781189166388,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_11-59-10_048_Ch1_(Frank 右腓腸肌)_ze2_褲XL_1.txt",
+        "threshold": 0.003688425535579361,
+        "baseline": 0.0022060855944856213,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 19,
+    "purpose": "裝置比對",
+    "site": "右腓腸肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank右腓腸肌(Delsys)_with_ZE2_2.csv",
+    "exp_file": "09-09_12-1-14_084_Ch1_(Frank 右腓腸肌)_ze2_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank右腓腸肌(Delsys)_with_ZE2_2.csv",
+        "threshold": 0.007692531659250601,
+        "baseline": 0.004082070127669624,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_12-1-14_084_Ch1_(Frank 右腓腸肌)_ze2_褲XL_2.txt",
+        "threshold": 0.003420473901672055,
+        "baseline": 0.004384613394426187,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 20,
+    "purpose": "裝置比對",
+    "site": "左腓腸肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左腓腸肌(Delsys)_with_a09_1.csv",
+    "exp_file": "09-09_10-31-15_181_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左腓腸肌(Delsys)_with_a09_1.csv",
+        "threshold": 0.006112360989969458,
+        "baseline": 0.003750840393349219,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_10-31-15_181_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_1.txt",
+        "threshold": 0.013536773324890344,
+        "baseline": 0.017967852964677438,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 21,
+    "purpose": "裝置比對",
+    "site": "左腓腸肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左腓腸肌(Delsys)_with_a09_2.csv",
+    "exp_file": "09-09_10-35-51_625_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左腓腸肌(Delsys)_with_a09_2.csv",
+        "threshold": 0.0023322980611456125,
+        "baseline": 0.003573841154405747,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_10-35-51_625_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_2.txt",
+        "threshold": 0.010379661926328007,
+        "baseline": 0.017321676878415924,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 22,
+    "purpose": "裝置比對",
+    "site": "左腓腸肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左腓腸肌(Delsys)_with_a10_1.csv",
+    "exp_file": "09-09_10-40-13_031_ExgCh1Data_(Frank 左腓腸肌)_a10_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左腓腸肌(Delsys)_with_a10_1.csv",
+        "threshold": 0.002020402812305877,
+        "baseline": 0.003928825636276684,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_10-40-13_031_ExgCh1Data_(Frank 左腓腸肌)_a10_褲XL_1.txt",
+        "threshold": 0.006031866703906011,
+        "baseline": 0.013035646896277613,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 23,
+    "purpose": "裝置比對",
+    "site": "左腓腸肌",
+    "device": "a10",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左腓腸肌(Delsys)_with_a10_2.csv",
+    "exp_file": "09-09_10-45-37_881_ExgCh1Data_(Frank 左腓腸肌)_a10_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左腓腸肌(Delsys)_with_a10_2.csv",
+        "threshold": 0.0017447344330549456,
+        "baseline": 0.00458764461043899,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_10-45-37_881_ExgCh1Data_(Frank 左腓腸肌)_a10_褲XL_2.txt",
+        "threshold": 0.0077285011027977074,
+        "baseline": 0.011854396447346534,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 24,
+    "purpose": "裝置比對",
+    "site": "左腓腸肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左腓腸肌(Delsys)_with_ze2_1.csv",
+    "exp_file": "09-09_10-48-41_826_Ch2_(Frank 左腓腸肌)_ze2_褲XL_1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左腓腸肌(Delsys)_with_ze2_1.csv",
+        "threshold": 0.0013604050054125286,
+        "baseline": 0.004483419571817615,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_10-48-41_826_Ch2_(Frank 左腓腸肌)_ze2_褲XL_1.txt",
+        "threshold": 0.003319072071960149,
+        "baseline": 0.0025208078283433417,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 25,
+    "purpose": "裝置比對",
+    "site": "左腓腸肌",
+    "device": "ze2",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "2609-09 frank左腓腸肌(Delsys)_with_ze2_2.csv",
+    "exp_file": "09-09_10-51-00_016_Ch2_(Frank 左腓腸肌)_ze2_褲XL_2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank左腓腸肌(Delsys)_with_ze2_2.csv",
+        "threshold": 0.00677199887520261,
+        "baseline": 0.0037596993697465893,
+        "count": 3,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "ze2",
+        "file": "09-09_10-51-00_016_Ch2_(Frank 左腓腸肌)_ze2_褲XL_2.txt",
+        "threshold": 0.0037437804438069824,
+        "baseline": 0.002038843794932985,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 26,
+    "purpose": "刮腿毛",
+    "site": "右脛前肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "09-09_11-19-17_426_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_1.txt",
+    "exp_file": "09-09_14-55-41_279_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_去腿毛.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "txt",
+        "file": "09-09_11-19-17_426_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_1.txt",
+        "threshold": 0.002690207861042333,
+        "baseline": 0.012337782602090638,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_14-55-41_279_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_去腿毛.txt",
+        "threshold": 0.00550741470756259,
+        "baseline": 0.011135785521784616,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 27,
+    "purpose": "刮腿毛",
+    "site": "左脛前肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+    "exp_file": "09-09_12-39-13_023_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_去腿毛.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "txt",
+        "file": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+        "threshold": 0.017887119459467547,
+        "baseline": 0.010109664145694058,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_12-39-13_023_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_去腿毛.txt",
+        "threshold": 0.00481812917838732,
+        "baseline": 0.006536855844387211,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": true,
+    "still_short": false
+  },
+  {
+    "row": 28,
+    "purpose": "刮腿毛",
+    "site": "右腓腸肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "09-09_11-48-01_319_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_1.txt",
+    "exp_file": "09-09_15-16-55_610_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_去腿毛.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "txt",
+        "file": "09-09_11-48-01_319_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_1.txt",
+        "threshold": 0.00701478918244158,
+        "baseline": 0.007837258669435566,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_15-16-55_610_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_去腿毛.txt",
+        "threshold": 0.005629939517771944,
+        "baseline": 0.006229433830788983,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 29,
+    "purpose": "刮腿毛",
+    "site": "左腓腸肌",
+    "device": "a09",
+    "expected": 3,
+    "status": "done",
+    "ref_file": "09-09_10-31-15_181_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_1.txt",
+    "exp_file": "09-09_14-32-12_387_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_去腿毛.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "txt",
+        "file": "09-09_10-31-15_181_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_1.txt",
+        "threshold": 0.013536773324890344,
+        "baseline": 0.017967852964677438,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_14-32-12_387_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_去腿毛.txt",
+        "threshold": 0.015403375893638674,
+        "baseline": 0.00810287240249171,
+        "count": 3,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 30,
+    "purpose": "疲勞",
+    "site": "右脛前肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 右脛前肌_a09_褲XL_疲勞1.csv",
+    "exp_file": "09-09_14-57-46_856_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_疲勞1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 右脛前肌_a09_褲XL_疲勞1.csv",
+        "threshold": 0.00034702996883894397,
+        "baseline": 0.006311303445408146,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_14-57-46_856_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_疲勞1.txt",
+        "threshold": 0.001719088005620109,
+        "baseline": 0.013361980749040893,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 31,
+    "purpose": "疲勞",
+    "site": "右脛前肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 右脛前肌_a09_褲XL_疲勞2.csv",
+    "exp_file": "09-09_15-01-03_995_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_疲勞2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 右脛前肌_a09_褲XL_疲勞2.csv",
+        "threshold": 0.0037309881392244408,
+        "baseline": 0.004359415678857475,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_15-01-03_995_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_疲勞2.txt",
+        "threshold": -0.008139017583713276,
+        "baseline": 0.022323685274382995,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 32,
+    "purpose": "疲勞",
+    "site": "右脛前肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 右脛前肌_a09_褲XL_疲勞3.csv",
+    "exp_file": "09-09_15-05-27_867_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_疲勞3.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 右脛前肌_a09_褲XL_疲勞3.csv",
+        "threshold": 0.00293904011651359,
+        "baseline": 0.0036863825097293787,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_15-05-27_867_ExgCh1Data_(Frank 右脛前肌)_a09_褲XL_疲勞3.txt",
+        "threshold": 0.02181025421049801,
+        "baseline": 0.013441895479258604,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 33,
+    "purpose": "疲勞",
+    "site": "左脛前肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 左脛前肌_a09_褲XL_疲勞1.csv",
+    "exp_file": "09-09_12-42-56_134_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 左脛前肌_a09_褲XL_疲勞1.csv",
+        "threshold": 0.004674662170557656,
+        "baseline": 0.002027974892753902,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_12-42-56_134_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞1.txt",
+        "threshold": 0.005175834263990504,
+        "baseline": 0.006922782354519814,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 34,
+    "purpose": "疲勞",
+    "site": "左脛前肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 左脛前肌_a09_褲XL_疲勞2.csv",
+    "exp_file": "09-09_12-47-55_198_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 左脛前肌_a09_褲XL_疲勞2.csv",
+        "threshold": 0.0018292849777358376,
+        "baseline": 0.003322445852585343,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_12-47-55_198_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞2.txt",
+        "threshold": 0.005176572364368298,
+        "baseline": 0.006061295635347924,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 35,
+    "purpose": "疲勞",
+    "site": "左脛前肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 左脛前肌_a09_褲XL_疲勞3.csv",
+    "exp_file": "09-09_12-51-53_172_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞3.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 左脛前肌_a09_褲XL_疲勞3.csv",
+        "threshold": 0.005428761063835066,
+        "baseline": 0.002978075536894851,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_12-51-53_172_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_疲勞3.txt",
+        "threshold": 0.006867593767315914,
+        "baseline": 0.006907893575461462,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 36,
+    "purpose": "疲勞",
+    "site": "右腓腸肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞1.csv",
+    "exp_file": "09-09_15-20-08_195_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞1.csv",
+        "threshold": 0.0021459085138547792,
+        "baseline": 0.003707291848609654,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_15-20-08_195_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞1.txt",
+        "threshold": 0.016649252768618485,
+        "baseline": 0.007293805152198454,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 37,
+    "purpose": "疲勞",
+    "site": "右腓腸肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞2.csv",
+    "exp_file": "09-09_15-23-04_934_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞2.csv",
+        "threshold": 0.007278876263690827,
+        "baseline": 0.007375569847898464,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_15-23-04_934_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞2.txt",
+        "threshold": 0.009373510082682649,
+        "baseline": 0.00710614066640136,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": true,
+    "still_short": false
+  },
+  {
+    "row": 38,
+    "purpose": "疲勞",
+    "site": "右腓腸肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞3.csv",
+    "exp_file": "09-09_15-25-56_272_ExgCh2Data(Frank 右腓腸肌)_a09_褲XL_疲勞3.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞3.csv",
+        "threshold": 0.002949327415828847,
+        "baseline": 0.003072970276078265,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_15-25-56_272_ExgCh2Data(Frank 右腓腸肌)_a09_褲XL_疲勞3.txt",
+        "threshold": 0.012535922805771822,
+        "baseline": 0.006000351215641312,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 39,
+    "purpose": "疲勞",
+    "site": "左腓腸肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 左腓腸肌_a09_褲XL_疲勞1.csv",
+    "exp_file": "09-09_14-34-47_174_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_疲勞1.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 左腓腸肌_a09_褲XL_疲勞1.csv",
+        "threshold": 0.0034538637658178303,
+        "baseline": 0.004624361455324513,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_14-34-47_174_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_疲勞1.txt",
+        "threshold": 0.008105495742852969,
+        "baseline": 0.007274177702642526,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 40,
+    "purpose": "疲勞",
+    "site": "左腓腸肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 左腓腸肌_a09_褲XL_疲勞2.csv",
+    "exp_file": "09-09_14-38-43_403_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_疲勞2.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 左腓腸肌_a09_褲XL_疲勞2.csv",
+        "threshold": 0.0077719599001854715,
+        "baseline": 0.004424054846227913,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_14-38-43_403_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_疲勞2.txt",
+        "threshold": 0.012451081150935123,
+        "baseline": 0.006638126504819031,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  },
+  {
+    "row": 41,
+    "purpose": "疲勞",
+    "site": "左腓腸肌",
+    "device": "a09",
+    "expected": 10,
+    "status": "done",
+    "ref_file": "2609-09 frank 左腓腸肌_a09_褲XL_疲勞3.csv",
+    "exp_file": "09-09_14-42-34_881_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_疲勞3.txt",
+    "sides": [
+      {
+        "role": "ref",
+        "source": "delsys",
+        "file": "2609-09 frank 左腓腸肌_a09_褲XL_疲勞3.csv",
+        "threshold": 0.0028882258507793206,
+        "baseline": 0.004014330729622524,
+        "count": 10,
+        "k": 3.0,
+        "cap": null,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      },
+      {
+        "role": "exp",
+        "source": "txt",
+        "file": "09-09_14-42-34_881_ExgCh1Data_(Frank 左腓腸肌)_a09_褲XL_疲勞3.txt",
+        "threshold": 0.00885868703443719,
+        "baseline": 0.009919950337487115,
+        "count": 10,
+        "k": 2.0,
+        "cap": 0.05,
+        "ready_s": 6.0,
+        "prefer_quiet": true,
+        "short": false
+      }
+    ],
+    "problematic": false,
+    "still_short": false
+  }
+]

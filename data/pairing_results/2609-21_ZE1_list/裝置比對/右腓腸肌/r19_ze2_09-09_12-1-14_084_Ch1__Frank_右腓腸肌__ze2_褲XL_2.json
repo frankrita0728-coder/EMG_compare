@@ -24,37 +24,37 @@
       "index": 1,
       "delsys": {
         "index": 1,
-        "start": 8.7353,
-        "end": 14.5403,
-        "duration": 5.805,
-        "aemg": 0.033241,
-        "rms": 0.044018,
-        "iemg": 0.192525,
-        "mpf": 134.78,
-        "mdf": 112.2,
-        "peak_rms": 0.095308,
+        "start": 8.7274,
+        "end": 14.6038,
+        "duration": 5.8764,
+        "aemg": 0.033021,
+        "rms": 0.043637,
+        "iemg": 0.194405,
+        "mpf": 133.58,
+        "mdf": 110.82,
+        "peak_rms": 0.099029,
         "method": "ttri"
       },
       "delta": {
-        "duration": -1.267,
-        "aemg": -0.006094,
-        "iemg": -0.085618,
-        "rms": -0.007751,
-        "mdf": 12.86,
-        "mpf": 19.38,
-        "peak_rms": -0.016429
+        "duration": -0.6516,
+        "aemg": -0.005061,
+        "iemg": -0.053794,
+        "rms": -0.006228,
+        "mdf": 11.33,
+        "mpf": 17.64,
+        "peak_rms": -0.011087
       },
       "ze2": {
         "index": 1,
-        "start": 5.456,
+        "start": 6.0,
         "end": 12.528,
-        "duration": 7.072,
-        "aemg": 0.039335,
-        "rms": 0.051769,
-        "iemg": 0.278143,
-        "mpf": 115.4,
-        "mdf": 99.34,
-        "peak_rms": 0.111737,
+        "duration": 6.528,
+        "aemg": 0.038082,
+        "rms": 0.049865,
+        "iemg": 0.248199,
+        "mpf": 115.94,
+        "mdf": 99.49,
+        "peak_rms": 0.110116,
         "method": "ttri"
       }
     },
@@ -62,37 +62,37 @@
       "index": 2,
       "delsys": {
         "index": 2,
-        "start": 18.8285,
-        "end": 24.8003,
-        "duration": 5.9718,
-        "aemg": 0.03415,
-        "rms": 0.045091,
-        "iemg": 0.205189,
-        "mpf": 125.46,
-        "mdf": 106.72,
-        "peak_rms": 0.084703,
+        "start": 18.7968,
+        "end": 24.8082,
+        "duration": 6.0114,
+        "aemg": 0.034051,
+        "rms": 0.044885,
+        "iemg": 0.205213,
+        "mpf": 124.58,
+        "mdf": 106.36,
+        "peak_rms": 0.079623,
         "method": "ttri"
       },
       "delta": {
-        "duration": -1.4442,
-        "aemg": -0.007117,
-        "iemg": -0.100413,
-        "rms": -0.008647,
-        "mdf": 13.91,
-        "mpf": 17.14,
-        "peak_rms": -0.013965
+        "duration": -2.1566,
+        "aemg": -0.004719,
+        "iemg": -0.110695,
+        "rms": -0.005961,
+        "mdf": 18.58,
+        "mpf": 19.73,
+        "peak_rms": -0.023402
       },
       "ze2": {
         "index": 2,
-        "start": 15.32,
-        "end": 22.736,
-        "duration": 7.416,
-        "aemg": 0.041267,
-        "rms": 0.053738,
-        "iemg": 0.305602,
-        "mpf": 108.32,
-        "mdf": 92.81,
-        "peak_rms": 0.098668,
+        "start": 15.304,
+        "end": 23.472,
+        "duration": 8.168,
+        "aemg": 0.03877,
+        "rms": 0.050846,
+        "iemg": 0.315908,
+        "mpf": 104.85,
+        "mdf": 87.78,
+        "peak_rms": 0.103025,
         "method": "ttri"
       }
     },
@@ -100,89 +100,89 @@
       "index": 3,
       "delsys": {
         "index": 3,
-        "start": 28.755,
-        "end": 34.7188,
-        "duration": 5.9638,
-        "aemg": 0.035881,
-        "rms": 0.047109,
-        "iemg": 0.215032,
-        "mpf": 125.49,
-        "mdf": 105.54,
-        "peak_rms": 0.077041,
+        "start": 28.7312,
+        "end": 34.7268,
+        "duration": 5.9956,
+        "aemg": 0.035778,
+        "rms": 0.047168,
+        "iemg": 0.214869,
+        "mpf": 125.8,
+        "mdf": 105.11,
+        "peak_rms": 0.077499,
         "method": "ttri"
       },
       "delta": {
-        "duration": -0.3002,
-        "aemg": -0.016523,
-        "iemg": -0.112888,
-        "rms": -0.021968,
-        "mdf": 10.06,
-        "mpf": 13.9,
-        "peak_rms": -0.028437
+        "duration": -0.2844,
+        "aemg": -0.016518,
+        "iemg": -0.113112,
+        "rms": -0.021837,
+        "mdf": 9.38,
+        "mpf": 13.83,
+        "peak_rms": -0.02599
       },
       "ze2": {
         "index": 3,
-        "start": 24.928,
-        "end": 31.192,
-        "duration": 6.264,
-        "aemg": 0.052404,
-        "rms": 0.069077,
-        "iemg": 0.32792,
-        "mpf": 111.59,
-        "mdf": 95.48,
-        "peak_rms": 0.105478,
+        "start": 24.92,
+        "end": 31.2,
+        "duration": 6.28,
+        "aemg": 0.052296,
+        "rms": 0.069005,
+        "iemg": 0.327981,
+        "mpf": 111.97,
+        "mdf": 95.73,
+        "peak_rms": 0.103489,
         "method": "ttri"
       }
     }
   ],
   "correlation": {
-    "rms": 0.722,
+    "rms": 0.7142,
     "iemg": 0.9868,
-    "mpf": 0.314,
-    "mdf": 0.2952
+    "mpf": 0.2985,
+    "mdf": 0.2826
   },
   "interval_agreement": [
     {
       "metric": "duration",
       "n": 3,
-      "pearson_r": -0.1849,
-      "icc": -0.0166
+      "pearson_r": 0.4879,
+      "icc": 0.0412
     },
     {
       "metric": "aemg",
       "n": 3,
-      "pearson_r": 0.9784,
-      "icc": 0.1334
+      "pearson_r": 0.9442,
+      "icc": 0.1647
     },
     {
       "metric": "iemg",
       "n": 3,
-      "pearson_r": 0.9999,
-      "icc": 0.053
+      "pearson_r": 0.9393,
+      "icc": 0.0816
     },
     {
       "metric": "rms",
       "n": 3,
-      "pearson_r": 0.9702,
-      "icc": 0.123
+      "pearson_r": 0.9522,
+      "icc": 0.1667
     },
     {
       "metric": "mdf",
       "n": 3,
-      "pearson_r": 0.8334,
-      "icc": 0.1125
+      "pearson_r": 0.5921,
+      "icc": 0.102
     },
     {
       "metric": "mpf",
       "n": 3,
-      "pearson_r": 0.8885,
-      "icc": 0.1053
+      "pearson_r": 0.8468,
+      "icc": 0.1352
     },
     {
       "metric": "peak_rms",
       "n": 3,
-      "pearson_r": 0.558,
-      "icc": 0.1362
+      "pearson_r": 0.989,
+      "icc": 0.1718
     }
   ],
   "note": "ZE2 已換算為 mV（×4.8e-05）；已套用 20–400 Hz 帶通。 iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 3 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
