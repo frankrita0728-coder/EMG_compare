@@ -1,0 +1,178 @@
+{
+  "row": 27,
+  "site": "左脛前肌",
+  "purpose": "刮腿毛",
+  "device_note": "a09",
+  "ref_listed": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+  "exp_listed": "09-09_12-39-13_023_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_去腿毛.txt",
+  "ref_resolved": "09-09_09-41-19_786_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_1.txt",
+  "exp_resolved": "09-09_12-39-13_023_ExgCh2Data_(Frank 左脛前肌)_a09_褲XL_去腿毛.txt",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": {
+        "index": 1,
+        "start": 13.125,
+        "end": 17.9609,
+        "duration": 4.8359,
+        "aemg": 0.111009,
+        "rms": 0.148428,
+        "iemg": 0.529991,
+        "mpf": 108.84,
+        "mdf": 106.7,
+        "peak_rms": 0.275362,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 1,
+        "start": 5.2344,
+        "end": 10.501,
+        "duration": 5.2666,
+        "aemg": 0.139001,
+        "rms": 0.187041,
+        "iemg": 0.730849,
+        "mpf": 103.19,
+        "mdf": 99.35,
+        "peak_rms": 0.379605,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.4307,
+        "aemg": -0.027992,
+        "iemg": -0.200858,
+        "rms": -0.038613,
+        "mdf": 7.35,
+        "mpf": 5.65,
+        "peak_rms": -0.104243
+      }
+    },
+    {
+      "index": 2,
+      "delsys": {
+        "index": 2,
+        "start": 23.4062,
+        "end": 25.9766,
+        "duration": 2.5704,
+        "aemg": 0.124869,
+        "rms": 0.169747,
+        "iemg": 0.312937,
+        "mpf": 110.43,
+        "mdf": 105.63,
+        "peak_rms": 0.2529,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 2,
+        "start": 15.3516,
+        "end": 20.5938,
+        "duration": 5.2422,
+        "aemg": 0.135845,
+        "rms": 0.181082,
+        "iemg": 0.711398,
+        "mpf": 99.2,
+        "mdf": 92.63,
+        "peak_rms": 0.322251,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -2.6718,
+        "aemg": -0.010976,
+        "iemg": -0.398461,
+        "rms": -0.011335,
+        "mdf": 13.0,
+        "mpf": 11.23,
+        "peak_rms": -0.069351
+      }
+    },
+    {
+      "index": 3,
+      "delsys": null,
+      "txt": {
+        "index": 3,
+        "start": 25.2031,
+        "end": 30.5869,
+        "duration": 5.3838,
+        "aemg": 0.138063,
+        "rms": 0.183934,
+        "iemg": 0.741963,
+        "mpf": 97.77,
+        "mdf": 92.72,
+        "peak_rms": 0.305344,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    }
+  ],
+  "correlation": {
+    "rms": -0.5518,
+    "iemg": 0.9744,
+    "mpf": -0.1469,
+    "mdf": -0.1842
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 2,
+      "pearson_r": 1.0,
+      "icc": 0.0149
+    },
+    {
+      "metric": "aemg",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.1071
+    },
+    {
+      "metric": "iemg",
+      "n": 2,
+      "pearson_r": 1.0,
+      "icc": 0.0407
+    },
+    {
+      "metric": "rms",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.1861
+    },
+    {
+      "metric": "mdf",
+      "n": 2,
+      "pearson_r": 1.0,
+      "icc": 0.0606
+    },
+    {
+      "metric": "mpf",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.0873
+    },
+    {
+      "metric": "peak_rms",
+      "n": 2,
+      "pearson_r": 1.0,
+      "icc": 0.1412
+    }
+  ],
+  "note": "ZE1×ZE1 比對（皆 ×0.00026 mV/count）；左欄為對照組 TXT，右欄為實驗組 TXT。 收縮區間一致性：跨 2 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
+  "ref_count": 2,
+  "exp_count": 3
+}

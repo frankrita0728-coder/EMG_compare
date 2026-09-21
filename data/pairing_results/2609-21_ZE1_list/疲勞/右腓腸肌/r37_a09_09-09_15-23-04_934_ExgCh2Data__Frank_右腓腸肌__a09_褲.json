@@ -1,0 +1,154 @@
+{
+  "row": 37,
+  "site": "右腓腸肌",
+  "purpose": "疲勞",
+  "device_note": "a09",
+  "ref_listed": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞2.csv",
+  "exp_listed": "09-09_15-23-04_934_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞2.txt",
+  "ref_resolved": "2609-09 frank 右腓腸肌_a09_褲XL_疲勞2.csv",
+  "exp_resolved": "09-09_15-23-04_934_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_疲勞2.txt",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": null,
+      "txt": {
+        "index": 1,
+        "start": 45.7734,
+        "end": 53.2734,
+        "duration": 7.5,
+        "aemg": 0.019547,
+        "rms": 0.024955,
+        "iemg": 0.146301,
+        "mpf": 79.59,
+        "mdf": 70.35,
+        "peak_rms": 0.046665,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 2,
+      "delsys": null,
+      "txt": {
+        "index": 2,
+        "start": 55.6953,
+        "end": 63.1094,
+        "duration": 7.4141,
+        "aemg": 0.01941,
+        "rms": 0.02484,
+        "iemg": 0.14324,
+        "mpf": 81.44,
+        "mdf": 71.55,
+        "peak_rms": 0.05441,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 3,
+      "delsys": null,
+      "txt": {
+        "index": 3,
+        "start": 65.7891,
+        "end": 72.4453,
+        "duration": 6.6562,
+        "aemg": 0.021418,
+        "rms": 0.027446,
+        "iemg": 0.142092,
+        "mpf": 80.26,
+        "mdf": 70.98,
+        "peak_rms": 0.05103,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    }
+  ],
+  "correlation": {
+    "rms": -0.4525,
+    "iemg": 0.9992,
+    "mpf": -0.029,
+    "mdf": 0.0234
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "aemg",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "iemg",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "rms",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "mdf",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "mpf",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "peak_rms",
+      "n": 0,
+      "pearson_r": null,
+      "icc": null
+    }
+  ],
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 0 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
+  "ref_count": 0,
+  "exp_count": 3
+}
