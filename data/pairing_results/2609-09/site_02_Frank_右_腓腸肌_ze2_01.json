@@ -1,0 +1,97 @@
+{
+  "delsys": null,
+  "status": "待補 Delsys",
+  "subject": "Frank",
+  "muscle": "腓腸肌",
+  "side": "右",
+  "channel_hint": "右腓腸肌 → ZE1 Ch1／ZE2 Ch2",
+  "match_note": "無對應 Delsys；先輸出 ZE2 單獨特徵",
+  "mode": "ze2_solo",
+  "filename": "09-03_15-32-47_275_Ch2(Frank 右腓腸肌).txt",
+  "sample_rate": 1000.0,
+  "unit": "mV",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "features": [
+    {
+      "index": 1,
+      "start": 5.648,
+      "end": 11.784,
+      "duration": 6.136,
+      "aemg": 0.010732,
+      "rms": 0.013933,
+      "iemg": 0.065758,
+      "mpf": 120.93,
+      "mdf": 100.18,
+      "peak_rms": 0.028476,
+      "method": "ttri"
+    },
+    {
+      "index": 2,
+      "start": 15.952,
+      "end": 21.928,
+      "duration": 5.976,
+      "aemg": 0.012004,
+      "rms": 0.015454,
+      "iemg": 0.071697,
+      "mpf": 116.67,
+      "mdf": 97.62,
+      "peak_rms": 0.027338,
+      "method": "ttri"
+    },
+    {
+      "index": 3,
+      "start": 26.232,
+      "end": 31.968,
+      "duration": 5.736,
+      "aemg": 0.011758,
+      "rms": 0.015149,
+      "iemg": 0.067367,
+      "mpf": 116.52,
+      "mdf": 96.69,
+      "peak_rms": 0.033756,
+      "method": "ttri"
+    }
+  ],
+  "count": 3,
+  "contractions": [
+    {
+      "index": 1,
+      "start": 5.648,
+      "end": 11.784,
+      "duration": 6.136,
+      "peak_rms": 0.014679,
+      "start_sample": 5648,
+      "end_sample": 11784
+    },
+    {
+      "index": 2,
+      "start": 15.952,
+      "end": 21.928,
+      "duration": 5.976,
+      "peak_rms": 0.016133,
+      "start_sample": 15952,
+      "end_sample": 21928
+    },
+    {
+      "index": 3,
+      "start": 26.232,
+      "end": 31.968,
+      "duration": 5.736,
+      "peak_rms": 0.016237,
+      "start_sample": 26232,
+      "end_sample": 31968
+    }
+  ],
+  "device": "ze2",
+  "device_file": "09-03_15-32-47_275_Ch2(Frank 右腓腸肌).txt"
+}

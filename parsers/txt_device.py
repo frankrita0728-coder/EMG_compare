@@ -20,7 +20,7 @@ def list_txt_files() -> list[dict[str, str]]:
     seen: set[str] = set()
     files: list[dict[str, str]] = []
     for folder in resolve_txt_dirs():
-        for path in sorted(folder.glob("*.txt"), key=lambda p: p.name.lower()):
+        for path in sorted(folder.rglob("*.txt"), key=lambda p: p.name.lower()):
             if path.name in seen:
                 continue
             seen.add(path.name)
@@ -41,6 +41,9 @@ def find_txt_path(filename: str) -> Path | None:
         path = folder / name
         if path.exists():
             return path
+        for nested in folder.rglob(name):
+            if nested.is_file():
+                return nested
     return None
 
 

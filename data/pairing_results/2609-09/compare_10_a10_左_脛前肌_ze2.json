@@ -1,0 +1,180 @@
+{
+  "delsys": "2609-09 frank左脛前肌(Delsys)_with_a10_1.csv",
+  "session": "a10",
+  "subject": "Frank",
+  "muscle": "脛前肌",
+  "side": "左",
+  "channel_hint": "左脛前肌 → ZE1 Ch1／ZE2 Ch2",
+  "match_note": "ZE1一對一 score=198（Frank / 脛前肌 / 左 / a10 / 09-09 / #1｜建議ZE1 Ch1）；ZE2一對一 score=115（Frank / 脛前肌 / 左｜建議ZE2 Ch2）",
+  "status": "可比對",
+  "device": "ze2",
+  "device_file": "09-03_11-44-33_364_Ch2(Frank 左脛前肌).txt",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": {
+        "index": 1,
+        "start": 6.4721,
+        "end": 12.0237,
+        "duration": 5.5516,
+        "aemg": 0.188214,
+        "rms": 0.249147,
+        "iemg": 1.048415,
+        "mpf": 96.47,
+        "mdf": 75.92,
+        "peak_rms": 0.451181,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 2.7836,
+        "aemg": 0.179565,
+        "iemg": 1.024668,
+        "rms": 0.236301,
+        "mdf": -7.35,
+        "mpf": -1.46,
+        "peak_rms": 0.404887
+      },
+      "ze2": {
+        "index": 1,
+        "start": 4.112,
+        "end": 6.88,
+        "duration": 2.768,
+        "aemg": 0.008649,
+        "rms": 0.012846,
+        "iemg": 0.023747,
+        "mpf": 97.93,
+        "mdf": 83.27,
+        "peak_rms": 0.046294,
+        "method": "ttri"
+      }
+    },
+    {
+      "index": 2,
+      "delsys": {
+        "index": 2,
+        "start": 17.0021,
+        "end": 22.3949,
+        "duration": 5.3928,
+        "aemg": 0.177558,
+        "rms": 0.235254,
+        "iemg": 0.961821,
+        "mpf": 92.92,
+        "mdf": 72.75,
+        "peak_rms": 0.516117,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 1.9208,
+        "aemg": 0.151963,
+        "iemg": 0.872956,
+        "rms": 0.199494,
+        "mdf": -13.32,
+        "mpf": -6.75,
+        "peak_rms": 0.458032
+      },
+      "ze2": {
+        "index": 2,
+        "start": 33.272,
+        "end": 36.744,
+        "duration": 3.472,
+        "aemg": 0.025595,
+        "rms": 0.03576,
+        "iemg": 0.088865,
+        "mpf": 99.67,
+        "mdf": 86.07,
+        "peak_rms": 0.058085,
+        "method": "ttri"
+      }
+    },
+    {
+      "index": 3,
+      "delsys": {
+        "index": 3,
+        "start": 27.1271,
+        "end": 32.4405,
+        "duration": 5.3134,
+        "aemg": 0.185489,
+        "rms": 0.247149,
+        "iemg": 0.988725,
+        "mpf": 93.62,
+        "mdf": 74.67,
+        "peak_rms": 0.43352,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      },
+      "ze2": null
+    }
+  ],
+  "features": null,
+  "count": null,
+  "correlation": {
+    "rms": 0.4569,
+    "iemg": 0.9893,
+    "mpf": 0.0063,
+    "mdf": 0.0236
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.0199
+    },
+    {
+      "metric": "aemg",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.0066
+    },
+    {
+      "metric": "iemg",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.0063
+    },
+    {
+      "metric": "rms",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.0067
+    },
+    {
+      "metric": "mdf",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.0831
+    },
+    {
+      "metric": "mpf",
+      "n": 2,
+      "pearson_r": -1.0,
+      "icc": -0.3496
+    },
+    {
+      "metric": "peak_rms",
+      "n": 2,
+      "pearson_r": 1.0,
+      "icc": 0.0041
+    }
+  ],
+  "note": "ZE2 已換算為 mV（×4.8e-05）；已套用 20–400 Hz 帶通。 iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 2 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。"
+}

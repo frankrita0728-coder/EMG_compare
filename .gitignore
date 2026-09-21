@@ -2,7 +2,12 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# Keep session measurement files trackable (needed for Cloud Agent re-runs).
+# Ignore only stray files directly under data/delsys or data/txt roots.
 data/delsys/*
 !data/delsys/.gitkeep
+!data/delsys/*/
 data/txt/*
 !data/txt/.gitkeep
+!data/txt/*/

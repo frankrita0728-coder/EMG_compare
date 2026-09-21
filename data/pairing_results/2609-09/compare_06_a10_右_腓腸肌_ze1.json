@@ -1,0 +1,192 @@
+{
+  "delsys": "2609-09 frank右腓腸肌(Delsys)_with_a10_1.csv",
+  "session": "a10",
+  "subject": "Frank",
+  "muscle": "腓腸肌",
+  "side": "右",
+  "channel_hint": "右腓腸肌 → ZE1 Ch1／ZE2 Ch2",
+  "match_note": "ZE1一對一 score=198（Frank / 腓腸肌 / 右 / a10 / 09-09 / #1｜建議ZE1 Ch1）；ZE2一對一 score=135（Frank / 腓腸肌 / 右 / 09-09｜建議ZE2 Ch2）",
+  "status": "可比對",
+  "device": "ze1",
+  "device_file": "09-09_11-52-29_385_ExgCh1Data_(Frank 右腓腸肌)_a10_褲XL_1.txt",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": {
+        "index": 1,
+        "start": 7.8141,
+        "end": 13.6588,
+        "duration": 5.8447,
+        "aemg": 0.035412,
+        "rms": 0.046026,
+        "iemg": 0.207996,
+        "mpf": 131.78,
+        "mdf": 109.62,
+        "peak_rms": 0.092331,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 1,
+        "start": 5.5469,
+        "end": 9.7109,
+        "duration": 4.164,
+        "aemg": 0.010795,
+        "rms": 0.01298,
+        "iemg": 0.044567,
+        "mpf": 82.65,
+        "mdf": 49.36,
+        "peak_rms": 0.032982,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 1.6807,
+        "aemg": 0.024617,
+        "iemg": 0.163429,
+        "rms": 0.033046,
+        "mdf": 60.26,
+        "mpf": 49.13,
+        "peak_rms": 0.059349
+      }
+    },
+    {
+      "index": 2,
+      "delsys": {
+        "index": 2,
+        "start": 17.7882,
+        "end": 23.5456,
+        "duration": 5.7574,
+        "aemg": 0.038079,
+        "rms": 0.049787,
+        "iemg": 0.219967,
+        "mpf": 129.71,
+        "mdf": 110.88,
+        "peak_rms": 0.104526,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 2,
+        "start": 10.7422,
+        "end": 13.0312,
+        "duration": 2.289,
+        "aemg": 0.013915,
+        "rms": 0.015113,
+        "iemg": 0.031018,
+        "mpf": 26.83,
+        "mdf": 6.94,
+        "peak_rms": 0.026871,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 3.4684,
+        "aemg": 0.024164,
+        "iemg": 0.188949,
+        "rms": 0.034674,
+        "mdf": 103.94,
+        "mpf": 102.88,
+        "peak_rms": 0.077655
+      }
+    },
+    {
+      "index": 3,
+      "delsys": {
+        "index": 3,
+        "start": 27.8656,
+        "end": 34.02,
+        "duration": 6.1544,
+        "aemg": 0.03798,
+        "rms": 0.049984,
+        "iemg": 0.233737,
+        "mpf": 128.26,
+        "mdf": 106.4,
+        "peak_rms": 0.097783,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 3,
+        "start": 30.8984,
+        "end": 33.1641,
+        "duration": 2.2657,
+        "aemg": 0.016324,
+        "rms": 0.017413,
+        "iemg": 0.036415,
+        "mpf": 22.88,
+        "mdf": 6.22,
+        "peak_rms": 0.029528,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": 3.8887,
+        "aemg": 0.021656,
+        "iemg": 0.197322,
+        "rms": 0.032571,
+        "mdf": 100.18,
+        "mpf": 105.38,
+        "peak_rms": 0.068255
+      }
+    }
+  ],
+  "features": null,
+  "count": null,
+  "correlation": {
+    "rms": -0.3762,
+    "iemg": 0.997,
+    "mpf": 0.3266,
+    "mdf": 0.3004
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 3,
+      "pearson_r": -0.3179,
+      "icc": -0.0147
+    },
+    {
+      "metric": "aemg",
+      "n": 3,
+      "pearson_r": 0.886,
+      "icc": 0.0133
+    },
+    {
+      "metric": "iemg",
+      "n": 3,
+      "pearson_r": -0.5648,
+      "icc": -0.0029
+    },
+    {
+      "metric": "rms",
+      "n": 3,
+      "pearson_r": 0.877,
+      "icc": 0.0077
+    },
+    {
+      "metric": "mdf",
+      "n": 3,
+      "pearson_r": 0.259,
+      "icc": 0.0036
+    },
+    {
+      "metric": "mpf",
+      "n": 3,
+      "pearson_r": 0.9348,
+      "icc": 0.0136
+    },
+    {
+      "metric": "peak_rms",
+      "n": 3,
+      "pearson_r": -0.9907,
+      "icc": -0.0079
+    }
+  ],
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 3 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。"
+}

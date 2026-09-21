@@ -196,3 +196,189 @@ def compare_feature_rows(
                 delta[key] = None
         pairs.append({"index": i + 1, "delsys": left, "txt": right, "delta": delta})
     return pairs
+
+
+def pearson_corr(xs: list[float], ys: list[float]) -> float | None:
+    """Pearson r for paired samples; None if fewer than 2 pairs or zero variance."""
+    if len(xs) != len(ys) or len(xs) < 2:
+        return None
+    x = np.asarray(xs, dtype=float)
+    y = np.asarray(ys, dtype=float)
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        return None
+    x_std = float(np.std(x))
+    y_std = float(np.std(y))
+    if x_std <= 0.0 or y_std <= 0.0:
+        return None
+    r = float(np.corrcoef(x, y)[0, 1])
+    if not np.isfinite(r):
+        return None
+    return round(r, 4)
+
+
+SERIES_CORR_METRICS = ("rms", "iemg", "mpf", "mdf")
+
+
+def feature_correlations(
+    left_rows: list[dict[str, Any]],
+    right_rows: list[dict[str, Any]],
+    metrics: tuple[str, ...] | list[str] | None = None,
+) -> dict[str, float | None]:
+    """
+    Pearson r per metric across paired contraction intervals (same index).
+    Requires at least 2 valid numeric pairs for a metric.
+    """
+    keys = tuple(metrics) if metrics else SPECTRAL_METRICS
+    count = min(len(left_rows), len(right_rows))
+    out: dict[str, float | None] = {}
+    for key in keys:
+        xs: list[float] = []
+        ys: list[float] = []
+        for i in range(count):
+            lv = left_rows[i].get(key)
+            rv = right_rows[i].get(key)
+            if isinstance(lv, (int, float)) and isinstance(rv, (int, float)):
+                xs.append(float(lv))
+                ys.append(float(rv))
+        out[key] = pearson_corr(xs, ys)
+    return out
+
+
+def icc_absolute_agreement(xs: list[float], ys: list[float]) -> float | None:
+    """
+    ICC(A,1) / ICC(2,1) absolute agreement for two raters (Delsys vs device).
+
+    McGraw & Wong two-way random effects, single measurement, absolute agreement.
+    None if fewer than 2 pairs or degenerate mean squares.
+    """
+    if len(xs) != len(ys) or len(xs) < 2:
+        return None
+    x = np.asarray(xs, dtype=float)
+    y = np.asarray(ys, dtype=float)
+    if not np.isfinite(x).all() or not np.isfinite(y).all():
+        return None
+
+    n = int(x.size)
+    k = 2
+    data = np.column_stack([x, y])
+    grand = float(np.mean(data))
+    row_means = np.mean(data, axis=1)
+    col_means = np.mean(data, axis=0)
+
+    ss_rows = float(k * np.sum((row_means - grand) ** 2))
+    ss_cols = float(n * np.sum((col_means - grand) ** 2))
+    ss_total = float(np.sum((data - grand) ** 2))
+    ss_err = ss_total - ss_rows - ss_cols
+    if ss_err < 0 and abs(ss_err) < 1e-12:
+        ss_err = 0.0
+
+    df_rows = n - 1
+    df_err = (n - 1) * (k - 1)
+    if df_rows <= 0 or df_err <= 0:
+        return None
+
+    msb = ss_rows / df_rows
+    msr = ss_cols / (k - 1)
+    mse = ss_err / df_err
+    denom = msb + (k - 1) * mse + k * (msr - mse) / n
+    if abs(denom) <= 1e-15:
+        return None
+    icc = (msb - mse) / denom
+    if not np.isfinite(icc):
+        return None
+    # ICC can be slightly negative when agreement is worse than chance.
+    return round(float(icc), 4)
+
+
+def interval_agreement(
+    left_rows: list[dict[str, Any]],
+    right_rows: list[dict[str, Any]],
+    metrics: tuple[str, ...] | list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Per-metric Pearson r and ICC(A,1) across paired contraction-interval features.
+    Each row of left/right is one contraction interval (same index).
+    """
+    keys = tuple(metrics) if metrics else SPECTRAL_METRICS
+    count = min(len(left_rows), len(right_rows))
+    rows: list[dict[str, Any]] = []
+    for key in keys:
+        xs: list[float] = []
+        ys: list[float] = []
+        for i in range(count):
+            lv = left_rows[i].get(key)
+            rv = right_rows[i].get(key)
+            if isinstance(lv, (int, float)) and isinstance(rv, (int, float)):
+                xs.append(float(lv))
+                ys.append(float(rv))
+        rows.append(
+            {
+                "metric": key,
+                "n": len(xs),
+                "pearson_r": pearson_corr(xs, ys),
+                "icc": icc_absolute_agreement(xs, ys),
+            }
+        )
+    return rows
+
+
+def _interval_mask(times: np.ndarray, intervals: list[dict[str, Any]] | None) -> np.ndarray:
+    """True where time falls inside any [start, end] contraction interval."""
+    if times.size == 0:
+        return np.zeros(0, dtype=bool)
+    if not intervals:
+        return np.ones(times.size, dtype=bool)
+    mask = np.zeros(times.size, dtype=bool)
+    for item in intervals:
+        try:
+            start = float(item.get("start"))
+            end = float(item.get("end"))
+        except (TypeError, ValueError):
+            continue
+        if end > start:
+            mask |= (times >= start) & (times <= end)
+    return mask
+
+
+def series_correlations(
+    left_series: dict[str, Any] | None,
+    right_series: dict[str, Any] | None,
+    metrics: tuple[str, ...] | list[str] | None = None,
+    *,
+    intervals: list[dict[str, Any]] | None = None,
+) -> dict[str, float | None]:
+    """
+    Pearson r per TTRI sliding-window feature curve.
+
+    Aligns by overlapping time range: interpolate the right series onto the
+    left series time stamps, optionally keep only samples inside contraction
+    intervals (rest excluded), then compute r.
+    """
+    keys = tuple(metrics) if metrics else SERIES_CORR_METRICS
+    out: dict[str, float | None] = {key: None for key in keys}
+    if not left_series or not right_series:
+        return out
+
+    for key in keys:
+        left = left_series.get(key) or {}
+        right = right_series.get(key) or {}
+        lt = np.asarray(left.get("times") or [], dtype=float)
+        lv = np.asarray(left.get("values") or [], dtype=float)
+        rt = np.asarray(right.get("times") or [], dtype=float)
+        rv = np.asarray(right.get("values") or [], dtype=float)
+        if lt.size < 2 or rt.size < 2 or lv.size != lt.size or rv.size != rt.size:
+            continue
+        t0 = float(max(lt[0], rt[0]))
+        t1 = float(min(lt[-1], rt[-1]))
+        if t1 <= t0:
+            continue
+        mask = (lt >= t0) & (lt <= t1)
+        if intervals is not None:
+            mask &= _interval_mask(lt, intervals)
+        t_common = lt[mask]
+        if t_common.size < 2:
+            continue
+        x = lv[mask]
+        y = np.interp(t_common, rt, rv)
+        out[key] = pearson_corr(x.tolist(), y.tolist())
+    return out
