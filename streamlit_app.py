@@ -624,6 +624,33 @@ def require_corr_selection() -> tuple[str, list[str], list[str]] | None:
     return delsys, ze1, ze2
 
 
+def queue_sidebar_selection(
+    *,
+    delsys: str | None = None,
+    txt: list[str] | None = None,
+    ze2: list[str] | None = None,
+) -> None:
+    """Queue file picks to apply before sidebar widgets are created next run."""
+    st.session_state["_queued_sidebar_selection"] = {
+        "delsys": delsys,
+        "txt": txt,
+        "ze2": ze2,
+    }
+
+
+def apply_queued_sidebar_selection() -> None:
+    """Apply queued picks before radio/multiselect widgets bind those keys."""
+    queued = st.session_state.pop("_queued_sidebar_selection", None)
+    if not queued:
+        return
+    if queued.get("delsys") is not None:
+        st.session_state.selected_delsys = queued["delsys"]
+    if queued.get("txt") is not None:
+        st.session_state.selected_txt = list(queued["txt"] or [])
+    if queued.get("ze2") is not None:
+        st.session_state.selected_ze2 = list(queued["ze2"] or [])
+
+
 def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]:
     """If user picks ExgCh1/Ch2, also include the matching pair name when present."""
     out: list[str] = []
@@ -646,6 +673,7 @@ def sibling_txt_channels(selected: list[str], available: list[str]) -> list[str]
 
 
 def render_sidebar() -> None:
+    apply_queued_sidebar_selection()
     st.sidebar.markdown(
         """
         <p class="brand-kicker">Zentan</p>
@@ -707,9 +735,8 @@ def render_sidebar() -> None:
             help="可同時勾選多個，例如 ExgCh1 + ExgCh2",
         )
         if st.sidebar.button("自動勾選 ZE1 Ch1+Ch2 配對", use_container_width=True):
-            st.session_state.selected_txt = sibling_txt_channels(
-                list(st.session_state.selected_txt or []),
-                txt_names,
+            queue_sidebar_selection(
+                txt=sibling_txt_channels(list(st.session_state.selected_txt or []), txt_names)
             )
             st.rerun()
 
@@ -764,14 +791,18 @@ def render_sidebar() -> None:
     if (st.session_state.selected_txt or st.session_state.selected_ze2) and (
         st.sidebar.button("依通道建議篩選目前選取", use_container_width=True)
     ):
-        if st.session_state.selected_txt:
-            st.session_state.selected_txt = prefer_recommended_files(
-                list(st.session_state.selected_txt), "ze1"
-            )
-        if st.session_state.selected_ze2:
-            st.session_state.selected_ze2 = prefer_recommended_files(
-                list(st.session_state.selected_ze2), "ze2"
-            )
+        queue_sidebar_selection(
+            txt=(
+                prefer_recommended_files(list(st.session_state.selected_txt), "ze1")
+                if st.session_state.selected_txt
+                else None
+            ),
+            ze2=(
+                prefer_recommended_files(list(st.session_state.selected_ze2), "ze2")
+                if st.session_state.selected_ze2
+                else None
+            ),
+        )
         st.rerun()
 
     st.sidebar.markdown("##### 自動建議（Delsys ↔ ZE1）")
@@ -806,10 +837,9 @@ def render_sidebar() -> None:
             txt_name = item.get("txt")
             label = f"{delsys_name} ↔ {txt_name}（{item.get('score', 0)}）"
             if st.sidebar.button(label, key=f"sug_{delsys_name}_{txt_name}", use_container_width=True):
-                st.session_state.selected_delsys = delsys_name
-                st.session_state.selected_txt = sibling_txt_channels(
-                    [txt_name] if txt_name else [],
-                    txt_names,
+                queue_sidebar_selection(
+                    delsys=delsys_name,
+                    txt=sibling_txt_channels([txt_name] if txt_name else [], txt_names),
                 )
                 st.rerun()
 
@@ -1396,16 +1426,19 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
                     + (f"｜{hint}" if hint else "")
                 )
                 if st.button(label, key=f"corr_group_{idx}", use_container_width=True):
-                    if g["delsys"]:
-                        st.session_state.selected_delsys = g["delsys"][0]
-                    if g["ze1"]:
-                        st.session_state.selected_txt = list(
-                            g.get("ze1_preferred") or prefer_recommended_files(g["ze1"], "ze1")
-                        )
-                    if g["ze2"]:
-                        st.session_state.selected_ze2 = list(
-                            g.get("ze2_preferred") or prefer_recommended_files(g["ze2"], "ze2")
-                        )
+                    queue_sidebar_selection(
+                        delsys=g["delsys"][0] if g.get("delsys") else None,
+                        txt=(
+                            list(g.get("ze1_preferred") or prefer_recommended_files(g["ze1"], "ze1"))
+                            if g.get("ze1")
+                            else None
+                        ),
+                        ze2=(
+                            list(g.get("ze2_preferred") or prefer_recommended_files(g["ze2"], "ze2"))
+                            if g.get("ze2")
+                            else None
+                        ),
+                    )
                     st.rerun()
         if triples:
             st.markdown("**建議配對（可一鍵套用選取）**")
@@ -1419,16 +1452,19 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
                     + (f"｜{hint}" if hint else f"｜{item.get('reason') or ''}")
                 )
                 if st.button(label, key=f"corr_triple_{idx}", use_container_width=True):
-                    if item.get("delsys"):
-                        st.session_state.selected_delsys = item["delsys"]
-                    if item.get("ze1"):
-                        st.session_state.selected_txt = prefer_recommended_files(
-                            [item["ze1"]], "ze1"
-                        )
-                    if item.get("ze2"):
-                        st.session_state.selected_ze2 = prefer_recommended_files(
-                            [item["ze2"]], "ze2"
-                        )
+                    queue_sidebar_selection(
+                        delsys=item.get("delsys"),
+                        txt=(
+                            prefer_recommended_files([item["ze1"]], "ze1")
+                            if item.get("ze1")
+                            else None
+                        ),
+                        ze2=(
+                            prefer_recommended_files([item["ze2"]], "ze2")
+                            if item.get("ze2")
+                            else None
+                        ),
+                    )
                     st.rerun()
         else:
             st.warning("目前掃不到可配對組合。請確認 data/delsys、data/txt、data/ZE2_txt 已放檔。")
