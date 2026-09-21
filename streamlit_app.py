@@ -198,6 +198,8 @@ def init_state() -> None:
         "corr_results": None,
         "corr_results_ze1": None,
         "corr_results_ze2": None,
+        "corr_sets": [],
+        "corr_set_seq": 0,
         "file_nonce": 0,
         "contr_method": "ze1_schmitt",
         "feat_contr_method": "ze1_schmitt",
@@ -622,6 +624,124 @@ def require_corr_selection() -> tuple[str, list[str], list[str]] | None:
         st.warning("請至少選擇一個 ZE1 或 ZE2 檔案")
         return None
     return delsys, ze1, ze2
+
+
+def _new_corr_set() -> dict[str, Any]:
+    st.session_state.corr_set_seq = int(st.session_state.get("corr_set_seq") or 0) + 1
+    return {
+        "id": int(st.session_state.corr_set_seq),
+        "delsys": None,
+        "device": "ze1",
+        "peer": None,
+    }
+
+
+def _ensure_corr_sets() -> list[dict[str, Any]]:
+    sets = list(st.session_state.get("corr_sets") or [])
+    if sets:
+        return sets
+    # First visit: seed from sidebar picks when available.
+    delsys = st.session_state.get("selected_delsys")
+    ze1 = list(st.session_state.get("selected_txt") or [])
+    ze2 = list(st.session_state.get("selected_ze2") or [])
+    seeded: list[dict[str, Any]] = []
+    for peer in ze1:
+        row = _new_corr_set()
+        row["delsys"] = delsys
+        row["device"] = "ze1"
+        row["peer"] = peer
+        seeded.append(row)
+    for peer in ze2:
+        row = _new_corr_set()
+        row["delsys"] = delsys
+        row["device"] = "ze2"
+        row["peer"] = peer
+        seeded.append(row)
+    if not seeded:
+        seeded = [_new_corr_set()]
+    st.session_state.corr_sets = seeded
+    return seeded
+
+
+def _corr_set_fingerprint(item: dict[str, Any]) -> tuple[str, str, str]:
+    return (
+        str(item.get("delsys") or ""),
+        str(item.get("device") or ""),
+        str(item.get("peer") or ""),
+    )
+
+
+def _add_corr_set_pair(*, delsys: str | None, device: str, peer: str | None) -> bool:
+    """Append one comparison set if complete and not already queued. Returns True if added."""
+    if not delsys or not peer or device not in ("ze1", "ze2"):
+        return False
+    sets = list(st.session_state.get("corr_sets") or [])
+    candidate = {"delsys": delsys, "device": device, "peer": peer}
+    fp = _corr_set_fingerprint(candidate)
+    for item in sets:
+        if _corr_set_fingerprint(item) == fp:
+            return False
+    # Prefer filling the first empty slot when present.
+    for item in sets:
+        if not item.get("delsys") and not item.get("peer"):
+            item["delsys"] = delsys
+            item["device"] = device
+            item["peer"] = peer
+            st.session_state.corr_sets = sets
+            return True
+    row = _new_corr_set()
+    row["delsys"] = delsys
+    row["device"] = device
+    row["peer"] = peer
+    sets.append(row)
+    st.session_state.corr_sets = sets
+    return True
+
+
+def _valid_corr_sets(sets: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
+    out: list[dict[str, Any]] = []
+    seen: set[tuple[str, str, str]] = set()
+    for item in sets if sets is not None else list(st.session_state.get("corr_sets") or []):
+        delsys = item.get("delsys")
+        peer = item.get("peer")
+        device = item.get("device")
+        if not delsys or not peer or device not in ("ze1", "ze2"):
+            continue
+        fp = _corr_set_fingerprint(item)
+        if fp in seen:
+            continue
+        seen.add(fp)
+        out.append(item)
+    return out
+
+
+def _run_one_corr_set(
+    item: dict[str, Any],
+    *,
+    expected: int,
+    contraction_method: str,
+    feature_method: str,
+) -> dict[str, Any]:
+    delsys_name = str(item["delsys"])
+    peer_name = str(item["peer"])
+    if item.get("device") == "ze2":
+        return build_feature_compare_ze2(
+            delsys_name,
+            peer_name,
+            expected_count=int(expected),
+            contraction_method=contraction_method,
+            feature_method=feature_method,
+            ze2_sample_rate=float(st.session_state.get("ze2_fs") or ZE2_DEFAULT_FS),
+            ze2_mv_per_count=float(st.session_state.get("ze2_mv") or ZE2_MV_PER_COUNT),
+            apply_bandpass=True,
+        )
+    return build_feature_compare(
+        delsys_name,
+        peer_name,
+        expected_count=int(expected),
+        contraction_method=contraction_method,
+        feature_method=feature_method,
+    )
 
 
 def queue_sidebar_selection(
@@ -1326,9 +1446,9 @@ def _render_correlation_block(result: dict[str, Any], *, device_label: str) -> N
 
 def tab_correlation() -> None:
     st.caption(
-        "依側邊欄選取的檔案，分別做 **Delsys × ZE1** 與 **Delsys × ZE2** 相關／ICC 分析。"
+        "在本頁載入**多組**要比對的檔案（每組：一個 Delsys + 一個 ZE1 或 ZE2），再一次執行相關／ICC 分析。"
     )
-    with st.expander("收縮一致性／相關係數怎麼算（公式）", expanded=True):
+    with st.expander("收縮一致性／相關係數怎麼算（公式）", expanded=False):
         st.markdown(
             """
 **資料怎麼配對**
@@ -1379,96 +1499,209 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
         )
 
     delsys_files, ze1_files, ze2_files = refresh_file_lists()
-    selected_delsys = st.session_state.selected_delsys
-    selected_ze1 = list(st.session_state.selected_txt or [])
-    selected_ze2 = list(st.session_state.selected_ze2 or [])
-    st.info(
-        f"**Delsys：** `{selected_delsys or '（未選）'}`　｜　"
-        f"**ZE1：** {', '.join(f'`{n}`' for n in selected_ze1) if selected_ze1 else '（未選）'}　｜　"
-        f"**ZE2：** {', '.join(f'`{n}`' for n in selected_ze2) if selected_ze2 else '（未選）'}"
-    )
+    delsys_names = [item["name"] for item in delsys_files]
+    ze1_names = [item["name"] for item in ze1_files]
+    ze2_names = [item["name"] for item in ze2_files]
 
-    with st.expander("自動掃描可配對組合（Delsys / ZE1 / ZE2）", expanded=True):
+    st.markdown("### 1. 載入檔案（可選）")
+    st.caption("上傳後會存進資料庫，下方各組選檔即可直接使用。")
+    up1, up2, up3, up4 = st.columns([1.2, 1.2, 1.2, 0.7])
+    with up1:
+        up_delsys = st.file_uploader(
+            "Delsys CSV",
+            type=["csv"],
+            accept_multiple_files=True,
+            key="corr_page_up_delsys",
+        )
+    with up2:
+        up_ze1 = st.file_uploader(
+            "ZE1 TXT",
+            type=["txt"],
+            accept_multiple_files=True,
+            key="corr_page_up_ze1",
+        )
+    with up3:
+        up_ze2 = st.file_uploader(
+            "ZE2 TXT",
+            type=["txt"],
+            accept_multiple_files=True,
+            key="corr_page_up_ze2",
+        )
+    with up4:
+        st.write("")
+        st.write("")
+        if st.button("儲存上傳", key="corr_page_save_uploads", use_container_width=True):
+            saved_d = save_uploads(up_delsys, DATA_DELSYS)
+            saved_t = save_uploads(up_ze1, DATA_TXT)
+            saved_z = save_uploads(up_ze2, DATA_ZE2)
+            st.session_state.file_nonce = int(st.session_state.get("file_nonce") or 0) + 1
+            parts = []
+            if saved_d:
+                parts.append(f"Delsys {len(saved_d)}")
+            if saved_t:
+                parts.append(f"ZE1 {len(saved_t)}")
+            if saved_z:
+                parts.append(f"ZE2 {len(saved_z)}")
+            if parts:
+                st.success("已儲存：" + "、".join(parts))
+                st.rerun()
+            else:
+                st.warning("尚未選擇要上傳的檔案。")
+
+    # Refresh lists after possible upload save on previous run.
+    delsys_files, ze1_files, ze2_files = refresh_file_lists()
+    delsys_names = [item["name"] for item in delsys_files]
+    ze1_names = [item["name"] for item in ze1_files]
+    ze2_names = [item["name"] for item in ze2_files]
+
+    st.markdown("### 2. 編輯要比對的多組檔案")
+    sets = _ensure_corr_sets()
+    manage_l, manage_r = st.columns([1, 1])
+    with manage_l:
+        if st.button("＋ 新增一組", key="corr_add_set", use_container_width=True):
+            sets = list(st.session_state.corr_sets or [])
+            sets.append(_new_corr_set())
+            st.session_state.corr_sets = sets
+            st.rerun()
+    with manage_r:
+        if st.button("清空所有組", key="corr_clear_sets", use_container_width=True):
+            st.session_state.corr_sets = [_new_corr_set()]
+            st.rerun()
+
+    # Sync widget edits into session after render; pickers bind to keys per set id.
+    updated_sets: list[dict[str, Any]] = []
+    for idx, item in enumerate(list(st.session_state.corr_sets or [])):
+        set_id = int(item.get("id") or idx + 1)
+        device = item.get("device") if item.get("device") in ("ze1", "ze2") else "ze1"
+        with st.container(border=True):
+            head_l, head_r = st.columns([5, 1])
+            with head_l:
+                st.markdown(f"**組 {idx + 1}**")
+            with head_r:
+                if st.button("移除", key=f"corr_rm_set_{set_id}", use_container_width=True):
+                    remain = [
+                        row
+                        for row in list(st.session_state.corr_sets or [])
+                        if int(row.get("id") or -1) != set_id
+                    ]
+                    st.session_state.corr_sets = remain or [_new_corr_set()]
+                    st.rerun()
+
+            c_dev, c_delsys, c_peer = st.columns([0.9, 1.6, 1.6])
+            with c_dev:
+                device_key = f"corr_set_device_{set_id}"
+                if device_key not in st.session_state:
+                    st.session_state[device_key] = device
+                device = st.selectbox(
+                    "裝置",
+                    options=["ze1", "ze2"],
+                    format_func=lambda x: "ZE1" if x == "ze1" else "ZE2",
+                    key=device_key,
+                )
+            with c_delsys:
+                delsys_key = f"corr_set_delsys_{set_id}"
+                delsys_options = [""] + delsys_names
+                current_delsys = item.get("delsys") if item.get("delsys") in delsys_names else ""
+                if delsys_key not in st.session_state:
+                    st.session_state[delsys_key] = current_delsys
+                elif st.session_state[delsys_key] not in delsys_options:
+                    st.session_state[delsys_key] = ""
+                delsys_pick = st.selectbox(
+                    "Delsys",
+                    options=delsys_options,
+                    format_func=lambda x: x or "（請選擇）",
+                    key=delsys_key,
+                )
+            with c_peer:
+                peer_options = [""] + (ze1_names if device == "ze1" else ze2_names)
+                peer_key = f"corr_set_peer_{set_id}_{device}"
+                current_peer = item.get("peer") if item.get("peer") in peer_options else ""
+                if peer_key not in st.session_state:
+                    st.session_state[peer_key] = current_peer
+                elif st.session_state[peer_key] not in peer_options:
+                    st.session_state[peer_key] = ""
+                peer_pick = st.selectbox(
+                    "ZE1 檔案" if device == "ze1" else "ZE2 檔案",
+                    options=peer_options,
+                    format_func=lambda x: x or "（請選擇）",
+                    key=peer_key,
+                )
+
+        updated_sets.append(
+            {
+                "id": set_id,
+                "delsys": delsys_pick or None,
+                "device": device,
+                "peer": peer_pick or None,
+            }
+        )
+    st.session_state.corr_sets = updated_sets
+
+    with st.expander("從自動掃描一次新增多組（可選）", expanded=False):
         triples = suggest_triple_pairs(delsys_files, ze1_files, ze2_files, limit=50)
         groups = scan_tag_groups(delsys_files, ze1_files, ze2_files)
         st.caption(
-            f"資料庫目前：Delsys {len(delsys_files)}、ZE1 {len(ze1_files)}、ZE2 {len(ze2_files)}。"
-            " 一對一：ZE1 需同場次碼；ZE2 只要同受試者／肌肉／側即可與 Delsys 比對。"
+            f"資料庫：Delsys {len(delsys_files)}、ZE1 {len(ze1_files)}、ZE2 {len(ze2_files)}。"
+            " 點下方按鈕會把該組合**加入**本頁清單（不覆蓋既有組）。"
         )
-        st.markdown("**通道建議（ZE2 與 ZE1 相反）**")
         st.dataframe(list(CHANNEL_HINT_ROWS), hide_index=True, use_container_width=True)
         if groups:
-            st.markdown("**依標籤分組（受試者／肌肉／側／日期）**")
-            group_rows = [
-                {
-                    "完整度": g["completeness"],
-                    "受試者": g["subject"],
-                    "肌肉": g["muscle"],
-                    "側": g["side"],
-                    "場次": g.get("session") or "—",
-                    "日期": g.get("date") or "—",
-                    "Delsys數": g["n_delsys"],
-                    "ZE1數": g["n_ze1"],
-                    "ZE2數": g["n_ze2"],
-                    "ZE1建議Ch": g.get("ze1_channel_hint") or "—",
-                    "ZE2建議Ch": g.get("ze2_channel_hint") or "—",
-                }
-                for g in groups[:30]
-            ]
-            st.dataframe(group_rows, use_container_width=True)
-            st.markdown("**一鍵套用分組選取（優先建議通道）**")
-            for idx, g in enumerate(groups[:12]):
-                hint = g.get("channel_hint") or ""
+            st.markdown("**依標籤分組**")
+            for g_idx, g in enumerate(groups[:12]):
                 sess = g.get("session") or g.get("date") or "—"
                 label = (
                     f"[{g['completeness']}] {g['subject']}/{g['muscle']}/{g['side']}/{sess} "
                     f"(D{g['n_delsys']} Z1:{g['n_ze1']} Z2:{g['n_ze2']})"
+                )
+                if st.button(label, key=f"corr_scan_group_{g_idx}", use_container_width=True):
+                    delsys_name = (g.get("delsys") or [None])[0]
+                    added = 0
+                    ze1_list = list(g.get("ze1_preferred") or prefer_recommended_files(g.get("ze1") or [], "ze1"))
+                    ze2_list = list(g.get("ze2_preferred") or prefer_recommended_files(g.get("ze2") or [], "ze2"))
+                    for peer in ze1_list[:2]:
+                        if _add_corr_set_pair(delsys=delsys_name, device="ze1", peer=peer):
+                            added += 1
+                    for peer in ze2_list[:2]:
+                        if _add_corr_set_pair(delsys=delsys_name, device="ze2", peer=peer):
+                            added += 1
+                    if added:
+                        st.success(f"已加入 {added} 組")
+                        st.rerun()
+                    else:
+                        st.info("這些配對已在清單中，或缺少檔案。")
+        if triples:
+            st.markdown("**建議配對**")
+            for t_idx, item in enumerate(triples[:20]):
+                hint = item.get("channel_hint") or item.get("reason") or ""
+                label = (
+                    f"[{item['completeness']}] D:{item.get('delsys') or '—'} × "
+                    f"ZE1:{item.get('ze1') or '—'} × ZE2:{item.get('ze2') or '—'}"
                     + (f"｜{hint}" if hint else "")
                 )
-                if st.button(label, key=f"corr_group_{idx}", use_container_width=True):
-                    queue_sidebar_selection(
-                        delsys=g["delsys"][0] if g.get("delsys") else None,
-                        txt=(
-                            list(g.get("ze1_preferred") or prefer_recommended_files(g["ze1"], "ze1"))
-                            if g.get("ze1")
-                            else None
-                        ),
-                        ze2=(
-                            list(g.get("ze2_preferred") or prefer_recommended_files(g["ze2"], "ze2"))
-                            if g.get("ze2")
-                            else None
-                        ),
-                    )
-                    st.rerun()
-        if triples:
-            st.markdown("**建議配對（可一鍵套用選取）**")
-            for idx, item in enumerate(triples[:20]):
-                hint = item.get("channel_hint") or ""
-                label = (
-                    f"[{item['completeness']}] score={item['score']}｜"
-                    f"D:{item.get('delsys') or '—'} × "
-                    f"ZE1:{item.get('ze1') or '—'} × "
-                    f"ZE2:{item.get('ze2') or '—'}"
-                    + (f"｜{hint}" if hint else f"｜{item.get('reason') or ''}")
-                )
-                if st.button(label, key=f"corr_triple_{idx}", use_container_width=True):
-                    queue_sidebar_selection(
-                        delsys=item.get("delsys"),
-                        txt=(
-                            prefer_recommended_files([item["ze1"]], "ze1")
-                            if item.get("ze1")
-                            else None
-                        ),
-                        ze2=(
-                            prefer_recommended_files([item["ze2"]], "ze2")
-                            if item.get("ze2")
-                            else None
-                        ),
-                    )
-                    st.rerun()
-        else:
-            st.warning("目前掃不到可配對組合。請確認 data/delsys、data/txt、data/ZE2_txt 已放檔。")
+                if st.button(label, key=f"corr_scan_triple_{t_idx}", use_container_width=True):
+                    added = 0
+                    if item.get("delsys") and item.get("ze1"):
+                        if _add_corr_set_pair(
+                            delsys=item["delsys"], device="ze1", peer=item["ze1"]
+                        ):
+                            added += 1
+                    if item.get("delsys") and item.get("ze2"):
+                        if _add_corr_set_pair(
+                            delsys=item["delsys"], device="ze2", peer=item["ze2"]
+                        ):
+                            added += 1
+                    if added:
+                        st.success(f"已加入 {added} 組")
+                        st.rerun()
+                    else:
+                        st.info("這些配對已在清單中，或缺少檔案。")
+        if not groups and not triples:
+            st.warning("目前掃不到可配對組合。請先上傳或確認 data/delsys、data/txt、data/ZE2_txt。")
 
+    valid_sets = _valid_corr_sets()
+    st.info(f"目前有效組數：**{len(valid_sets)}**／清單 {len(st.session_state.corr_sets or [])} 組")
+
+    st.markdown("### 3. 執行分析")
     c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.4])
     with c1:
         contraction_method = st.selectbox(
@@ -1495,7 +1728,7 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
         expected = st.number_input("預期次數", min_value=1, max_value=10, value=3, key="corr_expected")
     with c4:
         b_run, b_clear = st.columns(2)
-        run_corr = b_run.button("執行相關分析", key="corr_run", type="primary", use_container_width=True)
+        run_corr = b_run.button("執行全部組", key="corr_run", type="primary", use_container_width=True)
         clear_corr = b_clear.button("清除結果", key="corr_clear", use_container_width=True)
 
     if clear_corr:
@@ -1506,56 +1739,81 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
         st.rerun()
 
     if run_corr:
-        selection = require_corr_selection()
-        if selection:
-            delsys_name, ze1_names, ze2_names = selection
-            try:
-                ze1_results = []
-                for name in ze1_names:
-                    ze1_results.append(
-                        build_feature_compare(
-                            delsys_name,
-                            name,
-                            expected_count=int(expected),
-                            contraction_method=contraction_method,
-                            feature_method=feature_method,
-                        )
-                    )
-                ze2_results = []
-                for name in ze2_names:
-                    ze2_results.append(
-                        build_feature_compare_ze2(
-                            delsys_name,
-                            name,
-                            expected_count=int(expected),
-                            contraction_method=contraction_method,
-                            feature_method=feature_method,
-                            ze2_sample_rate=float(st.session_state.get("ze2_fs") or ZE2_DEFAULT_FS),
-                            ze2_mv_per_count=float(st.session_state.get("ze2_mv") or ZE2_MV_PER_COUNT),
-                            apply_bandpass=True,
-                        )
-                    )
-                st.session_state.corr_results_ze1 = ze1_results
-                st.session_state.corr_results_ze2 = ze2_results
-                st.session_state.corr_results = ze1_results + ze2_results
-                st.session_state.corr_result = (ze1_results or ze2_results or [None])[0]
-                st.success(
-                    f"相關分析完成：Delsys「{delsys_name}」× "
-                    f"ZE1 {len(ze1_results)} 個、ZE2 {len(ze2_results)} 個"
+        valid_sets = _valid_corr_sets()
+        if not valid_sets:
+            st.warning("請至少完整設定一組：Delsys + ZE1 或 ZE2。")
+        else:
+            ze1_results: list[dict[str, Any]] = []
+            ze2_results: list[dict[str, Any]] = []
+            errors: list[str] = []
+            for item in valid_sets:
+                label = (
+                    f"組#{item.get('id')} "
+                    f"{'ZE1' if item.get('device') == 'ze1' else 'ZE2'}："
+                    f"{item.get('peer')} × {item.get('delsys')}"
                 )
-            except (FileNotFoundError, ValueError, ImportError) as exc:
-                st.error(str(exc))
+                try:
+                    result = _run_one_corr_set(
+                        item,
+                        expected=int(expected),
+                        contraction_method=contraction_method,
+                        feature_method=feature_method,
+                    )
+                    if item.get("device") == "ze2":
+                        ze2_results.append(result)
+                    else:
+                        ze1_results.append(result)
+                except (FileNotFoundError, ValueError, ImportError) as exc:
+                    errors.append(f"{label} → {exc}")
+            st.session_state.corr_results_ze1 = ze1_results
+            st.session_state.corr_results_ze2 = ze2_results
+            st.session_state.corr_results = ze1_results + ze2_results
+            st.session_state.corr_result = (ze1_results or ze2_results or [None])[0]
+            if ze1_results or ze2_results:
+                st.success(
+                    f"相關分析完成：共 {len(ze1_results) + len(ze2_results)} 組"
+                    f"（ZE1 {len(ze1_results)}、ZE2 {len(ze2_results)}）"
+                )
+            for msg in errors:
+                st.error(msg)
 
     ze1_results = list(st.session_state.corr_results_ze1 or [])
     ze2_results = list(st.session_state.corr_results_ze2 or [])
     if not ze1_results and not ze2_results:
-        st.info("請選取 Delsys，並至少選 ZE1 或 ZE2，再按「執行相關分析」。也可先用上方自動配對一鍵套用。")
+        st.info("設定好多組檔案後，按「執行全部組」開始分析。")
         return
 
-    st.caption(
-        f"參考 Delsys：`{selected_delsys or (ze1_results or ze2_results)[0].get('delsys', {}).get('filename', '')}`"
-        "　｜　每個配對結果一個頁籤。"
-    )
+    # Summary table across all sets
+    summary_rows: list[dict[str, Any]] = []
+    for result in ze1_results + ze2_results:
+        device_label = "ZE2" if result.get("device") == "ze2" else "ZE1"
+        device = result.get("ze2") or result.get("ze1") or result.get("txt") or {}
+        agreement = {
+            row.get("metric"): row
+            for row in (result.get("interval_agreement") or [])
+            if isinstance(row, dict)
+        }
+        corr = result.get("correlation") or {}
+        summary_rows.append(
+            {
+                "裝置": device_label,
+                "Delsys": (result.get("delsys") or {}).get("filename"),
+                "對照檔": device.get("filename"),
+                "收縮段數": min(
+                    int((result.get("delsys") or {}).get("count") or 0),
+                    int(device.get("count") or 0),
+                ),
+                "RMS Pearson r": (agreement.get("rms") or {}).get("pearson_r"),
+                "RMS ICC": (agreement.get("rms") or {}).get("icc"),
+                "iEMG Pearson r": (agreement.get("iemg") or {}).get("pearson_r"),
+                "iEMG ICC": (agreement.get("iemg") or {}).get("icc"),
+                "TTRI RMS r": corr.get("rms"),
+                "TTRI iEMG r": corr.get("iemg"),
+            }
+        )
+    st.markdown("### 4. 結果總覽")
+    st.dataframe(summary_rows, use_container_width=True)
+    st.caption("每個配對結果一個頁籤；可個別清除。")
 
     pages: list[tuple[str, Any, Any]] = []
     for result in ze1_results:
