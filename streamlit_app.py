@@ -333,18 +333,31 @@ def clear_feat_result(*, source: str, filename: str | None = None) -> None:
         st.session_state.feat_delta = None
 
 
-def clear_corr_result(*, kind: str, filename: str | None = None) -> None:
+def clear_corr_result(
+    *,
+    kind: str,
+    filename: str | None = None,
+    delsys_filename: str | None = None,
+) -> None:
+    def _keep(item: dict[str, Any]) -> bool:
+        peer = item.get("ze2") if kind == "ze2" else (item.get("ze1") or item.get("txt") or {})
+        peer_name = (peer or {}).get("filename")
+        delsys_name = (item.get("delsys") or {}).get("filename")
+        if filename is not None and peer_name != filename:
+            return True
+        if delsys_filename is not None and delsys_name != delsys_filename:
+            return True
+        # Drop only the exact Delsys×peer pair when both are provided; otherwise
+        # fall back to peer-only match for older single-pair callers.
+        return False
+
     if kind == "ze1" and filename:
         st.session_state.corr_results_ze1 = [
-            item
-            for item in (st.session_state.corr_results_ze1 or [])
-            if ((item.get("ze1") or item.get("txt") or {}).get("filename") != filename)
+            item for item in (st.session_state.corr_results_ze1 or []) if _keep(item)
         ]
     elif kind == "ze2" and filename:
         st.session_state.corr_results_ze2 = [
-            item
-            for item in (st.session_state.corr_results_ze2 or [])
-            if ((item.get("ze2") or {}).get("filename") != filename)
+            item for item in (st.session_state.corr_results_ze2 or []) if _keep(item)
         ]
     st.session_state.corr_results = list(st.session_state.corr_results_ze1 or []) + list(
         st.session_state.corr_results_ze2 or []
@@ -671,6 +684,31 @@ def _corr_set_fingerprint(item: dict[str, Any]) -> tuple[str, str, str]:
     )
 
 
+def _apply_corr_set_widgets(item: dict[str, Any]) -> None:
+    """Queue selectbox key updates for the next run (avoid mid-run widget mutation)."""
+    set_id = int(item.get("id") or 0)
+    if not set_id:
+        return
+    device = item.get("device") if item.get("device") in ("ze1", "ze2") else "ze1"
+    pending = dict(st.session_state.get("_pending_corr_widgets") or {})
+    pending[set_id] = {
+        "device": device,
+        "delsys": item.get("delsys") or "",
+        "peer": item.get("peer") or "",
+    }
+    st.session_state["_pending_corr_widgets"] = pending
+
+
+def _flush_pending_corr_widgets() -> None:
+    """Apply queued selectbox values before any corr-set widgets are created."""
+    pending = st.session_state.pop("_pending_corr_widgets", None) or {}
+    for set_id, values in pending.items():
+        device = values.get("device") if values.get("device") in ("ze1", "ze2") else "ze1"
+        st.session_state[f"corr_set_device_{set_id}"] = device
+        st.session_state[f"corr_set_delsys_{set_id}"] = values.get("delsys") or ""
+        st.session_state[f"corr_set_peer_{set_id}_{device}"] = values.get("peer") or ""
+
+
 def _add_corr_set_pair(*, delsys: str | None, device: str, peer: str | None) -> bool:
     """Append one comparison set if complete and not already queued. Returns True if added."""
     if not delsys or not peer or device not in ("ze1", "ze2"):
@@ -687,12 +725,14 @@ def _add_corr_set_pair(*, delsys: str | None, device: str, peer: str | None) -> 
             item["delsys"] = delsys
             item["device"] = device
             item["peer"] = peer
+            _apply_corr_set_widgets(item)
             st.session_state.corr_sets = sets
             return True
     row = _new_corr_set()
     row["delsys"] = delsys
     row["device"] = device
     row["peer"] = peer
+    _apply_corr_set_widgets(row)
     sets.append(row)
     st.session_state.corr_sets = sets
     return True
@@ -1555,6 +1595,7 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
     ze2_names = [item["name"] for item in ze2_files]
 
     st.markdown("### 2. 編輯要比對的多組檔案")
+    _flush_pending_corr_widgets()
     sets = _ensure_corr_sets()
     manage_l, manage_r = st.columns([1, 1])
     with manage_l:
@@ -1819,6 +1860,7 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
     for result in ze1_results:
         device = result.get("ze1") or result.get("txt") or {}
         fname = device.get("filename")
+        delsys_name = (result.get("delsys") or {}).get("filename")
 
         def _render_ze1(res=result) -> None:
             _render_correlation_block(res, device_label="ZE1")
@@ -1827,12 +1869,15 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
             (
                 _short_tab_label("ZE1", fname),
                 _render_ze1,
-                lambda name=fname: clear_corr_result(kind="ze1", filename=name),
+                lambda name=fname, dname=delsys_name: clear_corr_result(
+                    kind="ze1", filename=name, delsys_filename=dname
+                ),
             )
         )
     for result in ze2_results:
         device = result.get("ze2") or {}
         fname = device.get("filename")
+        delsys_name = (result.get("delsys") or {}).get("filename")
 
         def _render_ze2(res=result) -> None:
             _render_correlation_block(res, device_label="ZE2")
@@ -1841,7 +1886,9 @@ McGraw & Wong：**two-way random effects、single measurement、absolute agreeme
             (
                 _short_tab_label("ZE2", fname),
                 _render_ze2,
-                lambda name=fname: clear_corr_result(kind="ze2", filename=name),
+                lambda name=fname, dname=delsys_name: clear_corr_result(
+                    kind="ze2", filename=name, delsys_filename=dname
+                ),
             )
         )
 
