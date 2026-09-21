@@ -181,7 +181,7 @@ ZE1_PRESETS: dict[str, dict[str, Any]] = {
         "threshold_prefer_quiet": True,
         "threshold_ready_s": 6.0,
     },
-    # muscleCaptureForZE1_v2_Rita.py（ZE1 / TXT）
+    # muscleCaptureForZE1_v2_Rita.py（ZE1 / TXT / ZE2）
     "txt": {
         "up_n": 30,
         "down_n": 40,
@@ -189,7 +189,12 @@ ZE1_PRESETS: dict[str, dict[str, Any]] = {
         "window_size": 512,
         "threshold_mode": "legacy_mv",
         "data_max": 0.1,
-        "threshold_std_k": 4.0,
+        # Match Delsys: quiet warm-up so early activity does not inflate thr.
+        "threshold_std_k": 2.0,
+        "threshold_prefer_quiet": True,
+        "threshold_ready_s": 6.0,
+        # Cap runaway adaptive floors (seen on ZE2 bandpass / noisy TXT).
+        "threshold_cap": 0.05,
     },
 }
 
@@ -238,6 +243,8 @@ def detect_contractions_ze1(
         threshold_mode = str(preset["threshold_mode"])
     threshold_std_k = float(preset.get("threshold_std_k") or 4.0)
     prefer_quiet = bool(preset.get("threshold_prefer_quiet"))
+    threshold_cap = preset.get("threshold_cap")
+    threshold_cap_f = float(threshold_cap) if threshold_cap is not None else None
     emg = np.asarray(values, dtype=float)
     fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
     if emg.size < int(fs * 3) + 10:
@@ -330,12 +337,18 @@ def detect_contractions_ze1(
             if mode in {"raw", "raw_std", "std"}:
                 threshold = emg_base + std_online * 4.0
             elif mode in {"legacy_mv", "mv_old", "txt"}:
-                legacy = emg_base + (0.1 - emg_base) * 4 / 100
-                if emg_base < 0.5 and std_online < 0.2:
-                    threshold = legacy
+                # Original ZE1 script uses a small legacy lift from data_max.
+                # When the arming window is noisy (early burst / ZE2 bandpass),
+                # mean+2*std can jump to 0.1–0.8 and miss all contractions.
+                legacy = emg_base + (float(data_max) - emg_base) * 4 / 100
+                floor = emg_base + threshold_std_k * max(std_online, 1e-6)
+                if std_online < 0.05 or (emg_base < 0.5 and std_online < 0.2):
+                    threshold = max(legacy, emg_base + 1.5 * max(std_online, 1e-6))
                 else:
-                    # Settled rest: mean + 2*std of last 32 bins (~0.25 s)
-                    threshold = emg_base + 2.0 * max(std_online, 1e-6)
+                    # Noisy window: keep a modest floor but do not trust full adaptive.
+                    threshold = max(legacy, min(floor, legacy + 0.02))
+                if threshold_cap_f is not None:
+                    threshold = min(float(threshold), threshold_cap_f)
             else:
                 # Delsys capture script (active formula), mV-scaled dataMax.
                 # After baseline subtraction, emg_base is often ~0 so the formula
@@ -504,6 +517,7 @@ def detect_contractions_ze1(
         "threshold_std_k": float(threshold_std_k),
         "threshold_ready_s": float(threshold_ready_s),
         "threshold_prefer_quiet": bool(prefer_quiet),
+        "threshold_cap": threshold_cap_f,
     }
 
 
