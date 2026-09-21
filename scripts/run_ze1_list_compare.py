@@ -28,6 +28,77 @@ from parsers.ze2_txt import ZE2_MV_PER_COUNT  # noqa: E402
 
 OUT_ROOT = ROOT / "data" / "pairing_results" / "2609-21_ZE1_list"
 
+# Fixed analysis recipe used for every pair in this list run.
+ANALYSIS_CONFIG: dict[str, Any] = {
+    "contraction_method": "ze1_schmitt",
+    "contraction_method_label": "ZE1 施密特觸發（Schmitt trigger）",
+    "feature_method": "ttri",
+    "feature_method_label": "TTRI（AEMG + 滑動窗 RMS/iEMG/MPF/MDF）",
+    "expected_count": 3,
+    "agreement_stats": ["Pearson r", "ICC(A,1)"],
+    "agreement_scope": "跨收縮區間特徵（同 index 配對）",
+    "series_correlation": "TTRI 滑動窗 Pearson r（僅 Delsys/對照收縮區間內）",
+    "ze1_scale": f"TXT × {TXT_MV_PER_COUNT} mV/count",
+    "ze2_sample_rate_hz": float(ZE2_DEFAULT_FS),
+    "ze2_mv_per_count": float(ZE2_MV_PER_COUNT),
+    "ze2_bandpass": "20–400 Hz（apply_bandpass=True）",
+    "pipeline": {
+        "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT)",
+        "裝置比對_ze2": "build_feature_compare_ze2(Delsys CSV × ZE2 TXT)",
+        "刮腿毛": "build_feature_compare_txt_pair(ZE1 TXT × ZE1 TXT)",
+        "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT)",
+    },
+}
+
+
+def _write_analysis_method(out_dir: Path, *, xlsx_name: str) -> None:
+    cfg = ANALYSIS_CONFIG
+    text = f"""# 分析設定（本批結果一律用此配方）
+
+來源清單：`{xlsx_name}`
+
+## 參數
+
+| 項目 | 值 |
+|------|----|
+| 收縮判斷 | `{cfg['contraction_method']}` — {cfg['contraction_method_label']} |
+| 特徵計算 | `{cfg['feature_method']}` — {cfg['feature_method_label']} |
+| 預期收縮次數 | **{cfg['expected_count']}** |
+| 區間一致性 | {', '.join(cfg['agreement_stats'])}；{cfg['agreement_scope']} |
+| 序列相關 | {cfg['series_correlation']} |
+| ZE1 換算 | {cfg['ze1_scale']} |
+| ZE2 取樣率 | {cfg['ze2_sample_rate_hz']} Hz |
+| ZE2 換算 | ×{cfg['ze2_mv_per_count']} mV/count |
+| ZE2 濾波 | {cfg['ze2_bandpass']} |
+
+## 各實驗目的呼叫的函式
+
+| 實驗目的 | 管線 |
+|----------|------|
+| 裝置比對（a09 / a10） | `{cfg['pipeline']['裝置比對_a09_a10']}` |
+| 裝置比對（ze2） | `{cfg['pipeline']['裝置比對_ze2']}` |
+| 刮腿毛 | `{cfg['pipeline']['刮腿毛']}` |
+| 疲勞 | `{cfg['pipeline']['疲勞']}` |
+
+## 輸出欄位說明（summary.csv）
+
+- `rms_pearson_r` / `rms_icc` / `iemg_pearson_r` / `iemg_icc`：收縮區間一致性
+- `ttri_rms_r` / `ttri_iemg_r`：TTRI 滑動窗序列 Pearson r
+- `ref_count` / `exp_count`：對照組／實驗組偵測到的收縮段數
+- `contraction_method` / `feature_method` / `expected_count`：本列實際使用的分析參數
+
+重跑指令：
+
+```bash
+python3 scripts/run_ze1_list_compare.py --xlsx <list.xlsx>
+```
+"""
+    (out_dir / "ANALYSIS_METHOD.md").write_text(text, encoding="utf-8")
+    (out_dir / "analysis_config.json").write_text(
+        json.dumps(cfg, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
 
 def _slug(*parts: str) -> str:
     text = "_".join(str(p) for p in parts if p)
@@ -163,7 +234,14 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
         raise SystemExit("需要 openpyxl：pip install openpyxl") from exc
 
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Fresh run: drop previous purpose folders / summaries, keep directory itself.
+    for child in list(out_dir.iterdir()):
+        if child.is_dir():
+            shutil.rmtree(child)
+        elif child.name not in {"NOTES.md"}:
+            child.unlink(missing_ok=True)
     shutil.copy2(xlsx, out_dir / "source_list.xlsx")
+    _write_analysis_method(out_dir, xlsx_name=xlsx.name)
 
     wb = openpyxl.load_workbook(xlsx, data_only=True)
     ws = wb.active
@@ -223,36 +301,36 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
                     result = build_feature_compare_txt_pair(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=3,
-                        contraction_method="ze1_schmitt",
-                        feature_method="ttri",
+                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
+                        feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                     )
                 elif device_note == "ze2" and ref_is_csv and exp_is_txt:
                     result = build_feature_compare_ze2(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=3,
-                        contraction_method="ze1_schmitt",
-                        feature_method="ttri",
-                        ze2_sample_rate=float(ZE2_DEFAULT_FS),
-                        ze2_mv_per_count=float(ZE2_MV_PER_COUNT),
+                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
+                        feature_method=str(ANALYSIS_CONFIG["feature_method"]),
+                        ze2_sample_rate=float(ANALYSIS_CONFIG["ze2_sample_rate_hz"]),
+                        ze2_mv_per_count=float(ANALYSIS_CONFIG["ze2_mv_per_count"]),
                         apply_bandpass=True,
                     )
                 elif ref_is_csv and exp_is_txt:
                     result = build_feature_compare(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=3,
-                        contraction_method="ze1_schmitt",
-                        feature_method="ttri",
+                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
+                        feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                     )
                 elif ref_is_txt and exp_is_txt:
                     result = build_feature_compare_txt_pair(
                         ref_path.name,
                         exp_path.name,
-                        expected_count=3,
-                        contraction_method="ze1_schmitt",
-                        feature_method="ttri",
+                        expected_count=int(ANALYSIS_CONFIG["expected_count"]),
+                        contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
+                        feature_method=str(ANALYSIS_CONFIG["feature_method"]),
                     )
                 else:
                     raise ValueError(
@@ -280,6 +358,9 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             "site": site,
             "purpose": purpose,
             "device_note": device_note,
+            "contraction_method": ANALYSIS_CONFIG["contraction_method"],
+            "feature_method": ANALYSIS_CONFIG["feature_method"],
+            "expected_count": ANALYSIS_CONFIG["expected_count"],
             "ref": meta["ref_resolved"] or ref_raw,
             "exp": meta["exp_resolved"] or exp_raw,
             "ref_count": "",
@@ -308,6 +389,15 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
         f"- 完成：{sum(1 for r in summary_rows if r['status'] == 'done')}",
         f"- 缺檔：{sum(1 for r in summary_rows if r['status'] == 'missing_files')}",
         f"- 錯誤：{sum(1 for r in summary_rows if str(r['status']).startswith('error'))}",
+        "",
+        "## 分析設定（本批）",
+        "",
+        f"- 收縮判斷：`{ANALYSIS_CONFIG['contraction_method']}`（{ANALYSIS_CONFIG['contraction_method_label']}）",
+        f"- 特徵計算：`{ANALYSIS_CONFIG['feature_method']}`（{ANALYSIS_CONFIG['feature_method_label']}）",
+        f"- 預期收縮次數：{ANALYSIS_CONFIG['expected_count']}",
+        f"- 統計：區間 Pearson r + ICC(A,1)；另算 TTRI 滑動窗 Pearson r",
+        "",
+        "詳見 [`ANALYSIS_METHOD.md`](ANALYSIS_METHOD.md) / [`analysis_config.json`](analysis_config.json)。",
         "",
         "| # | 狀態 | 部位 | 目的 | 裝置 | RMS Pearson r | RMS ICC | iEMG Pearson r | iEMG ICC | TTRI RMS r |",
         "|---|------|------|------|------|---------------|---------|----------------|----------|------------|",
