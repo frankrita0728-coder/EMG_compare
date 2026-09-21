@@ -32,6 +32,14 @@ from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
 from parsers.ze2_txt import ZE2_MV_PER_COUNT, list_ze2_files
 from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2, ensure_data_dirs
 from export_report import build_results_csv_zip, build_results_pdf
+from pair_list import (
+    ANALYSIS_CONFIG as PAIR_LIST_CONFIG,
+    expected_count_for as pair_list_expected_count,
+    parse_pair_list,
+    resolve_pair_rows,
+    run_pair_list,
+    summary_table as pair_list_summary_table,
+)
 
 DELSYS_COLOR = "#5ec8ff"
 TXT_COLORS = [
@@ -194,6 +202,9 @@ def init_state() -> None:
         "feat_delsys": None,
         "feat_txt_tables": None,
         "feat_delta": None,
+        "feat_list_rows": None,
+        "feat_list_results": None,
+        "feat_list_name": None,
         "corr_result": None,
         "corr_results": None,
         "corr_results_ze1": None,
@@ -1267,6 +1278,7 @@ def tab_contractions() -> None:
 
 
 def tab_features() -> None:
+    st.markdown("### 單檔／側邊欄選取")
     c1, c2, c3, c4 = st.columns([1.2, 1.4, 0.7, 1.6])
     with c1:
         contraction_method = st.selectbox(
@@ -1290,7 +1302,7 @@ def tab_features() -> None:
             key="feat_method",
         )
     with c3:
-        expected = st.number_input("預期次數", min_value=1, max_value=10, value=3, key="feat_expected")
+        expected = st.number_input("預期次數", min_value=1, max_value=15, value=3, key="feat_expected")
     with c4:
         b1, b2, b3 = st.columns(3)
         run_d = b1.button("執行 Delsys", key="feat_d", use_container_width=True)
@@ -1438,9 +1450,184 @@ def tab_features() -> None:
                 st.rerun()
         render_result_pages(pages, context="feat")
     else:
-        empty_slot()
+        empty_slot("尚未執行單檔特徵（或改用下方清單批次）")
 
+    _render_feature_pair_list_panel(
+        contraction_method=contraction_method,
+        feature_method=feature_method,
+    )
     render_export_panel(context="features")
+
+
+def _render_feature_pair_list_panel(
+    *,
+    contraction_method: str,
+    feature_method: str,
+) -> None:
+    """Upload ZE1 pair-list Excel and batch-run feature / agreement analysis."""
+    st.markdown("---")
+    st.markdown("### 從比對清單 Excel 批次分析")
+    st.caption(
+        "載入如 `2609-21 ZE1比對檔案list.xlsx`（欄：分析部位／對照組／實驗組／裝置備註／實驗目的）。"
+        f" 預設配方：{PAIR_LIST_CONFIG['contraction_method_label']}＋{PAIR_LIST_CONFIG['feature_method_label']}；"
+        "裝置比對／刮腿毛預期 3 段，疲勞 10 段。"
+    )
+
+    up = st.file_uploader(
+        "比對清單（.xlsx）",
+        type=["xlsx"],
+        key="feat_pair_list_upload",
+        accept_multiple_files=False,
+    )
+    c_load, c_run, c_clear = st.columns([1, 1, 1])
+    with c_load:
+        load_btn = st.button("載入清單", key="feat_list_load", use_container_width=True)
+    with c_run:
+        run_btn = st.button(
+            "執行清單分析",
+            key="feat_list_run",
+            type="primary",
+            use_container_width=True,
+        )
+    with c_clear:
+        clear_btn = st.button("清除清單結果", key="feat_list_clear", use_container_width=True)
+
+    if clear_btn:
+        st.session_state.feat_list_rows = None
+        st.session_state.feat_list_results = None
+        st.session_state.feat_list_name = None
+        st.rerun()
+
+    if load_btn:
+        if not up:
+            st.warning("請先選擇 Excel 檔案。")
+        else:
+            try:
+                rows = parse_pair_list(up, filename=up.name)
+                resolved = resolve_pair_rows(rows)
+                st.session_state.feat_list_rows = resolved
+                st.session_state.feat_list_name = up.name
+                st.session_state.feat_list_results = None
+                ok = sum(1 for r in resolved if r.get("files_ok"))
+                st.success(f"已載入「{up.name}」：{len(resolved)} 列，其中 {ok} 列檔案齊全。")
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"讀取清單失敗：{exc}")
+
+    rows = list(st.session_state.feat_list_rows or [])
+    if rows:
+        st.markdown(f"**目前清單：** `{st.session_state.feat_list_name or '（未命名）'}`")
+        preview = [
+            {
+                "列": r.get("row"),
+                "部位": r.get("site"),
+                "目的": r.get("purpose"),
+                "裝置": r.get("device_note"),
+                "預期段數": r.get("expected_count") or pair_list_expected_count(str(r.get("purpose") or "")),
+                "對照組": r.get("ref_resolved") or r.get("ref_listed") or "（缺）",
+                "實驗組": r.get("exp_resolved") or r.get("exp_listed") or "（缺）",
+                "檔案": "OK" if r.get("files_ok") else "缺檔",
+            }
+            for r in rows
+        ]
+        st.dataframe(preview, use_container_width=True, hide_index=True)
+
+    if run_btn:
+        if not rows:
+            st.warning("請先載入比對清單。")
+        else:
+            # Prefer list recipe defaults; UI selectors still override if user changed them.
+            progress = st.progress(0.0, text="開始清單分析…")
+            try:
+                results = run_pair_list(
+                    rows,
+                    contraction_method=contraction_method,
+                    feature_method=feature_method,
+                    progress=progress,
+                )
+                st.session_state.feat_list_results = results
+                done = sum(1 for r in results if r.get("status") == "done")
+                missing = sum(1 for r in results if r.get("status") == "missing_files")
+                errors = sum(1 for r in results if str(r.get("status") or "").startswith("error"))
+                st.success(f"清單分析完成：成功 {done}、缺檔 {missing}、錯誤 {errors}")
+                # Surface first result into classic feature panels for quick inspection.
+                first = next((r for r in results if r.get("status") == "done" and r.get("result")), None)
+                if first and first.get("result"):
+                    res = first["result"]
+                    st.session_state.feat_delta = res
+                    st.session_state.feat_delsys = {
+                        "feature_method": res.get("feature_method") or feature_method,
+                        "result": {
+                            "filename": (res.get("delsys") or {}).get("filename"),
+                            "features": (res.get("delsys") or {}).get("features") or [],
+                            "count": (res.get("delsys") or {}).get("count"),
+                            "series": (res.get("delsys") or {}).get("series"),
+                        },
+                    }
+                    right = res.get("ze2") or res.get("ze1") or res.get("txt") or {}
+                    st.session_state.feat_txt_tables = [
+                        {
+                            "feature_method": res.get("feature_method") or feature_method,
+                            "result": {
+                                "filename": right.get("filename"),
+                                "features": right.get("features") or [],
+                                "count": right.get("count"),
+                                "series": right.get("series"),
+                            },
+                        }
+                    ]
+            except Exception as exc:  # noqa: BLE001
+                st.error(str(exc))
+            finally:
+                progress.empty()
+
+    results = list(st.session_state.feat_list_results or [])
+    if not results:
+        return
+
+    st.markdown("#### 清單結果總覽")
+    st.dataframe(pair_list_summary_table(results), use_container_width=True, hide_index=True)
+
+    done_results = [r for r in results if r.get("status") == "done" and r.get("result")]
+    if not done_results:
+        return
+
+    st.markdown("#### 各列特徵／一致性")
+    labels = [
+        f"#{r.get('row')} {r.get('purpose') or ''} {r.get('site') or ''}".strip()
+        for r in done_results
+    ]
+    tabs = st.tabs(labels)
+    for tab, item in zip(tabs, done_results):
+        with tab:
+            res = item["result"]
+            st.caption(
+                f"對照：`{item.get('ref_resolved')}`　｜　實驗：`{item.get('exp_resolved')}`　｜　"
+                f"預期 {item.get('expected_count')}　｜　段數 {item.get('ref_count')}/{item.get('exp_count')}"
+            )
+            if res.get("note"):
+                st.caption(res["note"])
+            agreement = res.get("interval_agreement") or []
+            if agreement:
+                st.markdown("**收縮區間一致性**")
+                st.dataframe(interval_agreement_rows(agreement), use_container_width=True)
+            corr = res.get("correlation") or {}
+            if corr:
+                st.markdown("**TTRI 滑動窗相關係數**")
+                st.dataframe(correlation_rows(corr), use_container_width=True)
+            st.markdown("**對照組特徵**")
+            left = res.get("delsys") or {}
+            st.dataframe(
+                feature_rows(left.get("features") or [], item.get("feature_method") or feature_method),
+                use_container_width=True,
+            )
+            st.markdown("**實驗組特徵**")
+            right = res.get("ze2") or res.get("ze1") or res.get("txt") or {}
+            st.dataframe(
+                feature_rows(right.get("features") or [], item.get("feature_method") or feature_method),
+                use_container_width=True,
+            )
+            with st.expander("差異 Δ", expanded=False):
+                st.dataframe(delta_rows(res.get("pairs") or []), use_container_width=True)
 
 
 def _render_correlation_block(result: dict[str, Any], *, device_label: str) -> None:
