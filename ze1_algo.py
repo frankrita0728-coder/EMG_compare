@@ -262,6 +262,9 @@ def detect_contractions_ze1(
     emg_raw_data: list[float] = []
     emg128_raw_data: list[float] = []
     pre_threshold_bins: list[float] = []
+    pre_bin_ends: list[int] = []
+    armed_bins: list[float] = []
+    armed_ends: list[int] = []
     baseline_acc: list[float] = []
     base_check = False
     emg_base_check = False
@@ -313,6 +316,7 @@ def detect_contractions_ze1(
         emg128_raw_data.append(emg_128mean)
         if not emg_base_check:
             pre_threshold_bins.append(emg_128mean)
+            pre_bin_ends.append(i)
         emg_raw_data = []
 
         if len(emg128_raw_data) < smooth_bins:
@@ -320,6 +324,10 @@ def detect_contractions_ze1(
 
         # Threshold after warm-up (TXT uses 4 s to avoid baseline-settling transient)
         if base_check and (not emg_base_check) and (i >= int(fs * threshold_ready_s)):
+            # Keep the pre-arm envelope so a burst already under way can be
+            # extended backward. The ready gate otherwise clips its start to 6 s.
+            armed_bins = list(pre_threshold_bins)
+            armed_ends = list(pre_bin_ends)
             recent = np.asarray(emg128_raw_data[-smooth_bins:], dtype=float)
             if prefer_quiet and len(pre_threshold_bins) >= smooth_bins:
                 hist = np.asarray(pre_threshold_bins, dtype=float)
@@ -457,6 +465,18 @@ def detect_contractions_ze1(
         )
         segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
 
+    onset_override = _onset_before_ready_gate(
+        segments,
+        bin_end_samples=bin_end_samples,
+        block=block,
+        sample_rate_hz=fs,
+        threshold_ready_s=threshold_ready_s,
+        threshold=float(threshold),
+        armed_bins=armed_bins,
+        armed_ends=armed_ends,
+        smooth_bins=smooth_bins,
+    )
+
     contractions: list[dict[str, Any]] = []
     for index, seg in enumerate(segments, start=1):
         start_bin = max(0, min(int(seg["start_bin"]), len(bin_end_samples) - 1))
@@ -465,6 +485,8 @@ def detect_contractions_ze1(
         start_sample = int(bin_end_samples[start_bin]) - block + 1
         start_sample = max(0, min(start_sample, len(emg) - 1))
         end_sample = max(start_sample + 1, min(end_sample, len(emg)))
+        if index == 1 and onset_override is not None:
+            start_sample = min(start_sample, int(onset_override))
         start_s = start_sample / fs
         end_s = end_sample / fs
         contractions.append(
@@ -519,6 +541,57 @@ def detect_contractions_ze1(
         "threshold_prefer_quiet": bool(prefer_quiet),
         "threshold_cap": threshold_cap_f,
     }
+
+
+def _onset_before_ready_gate(
+    segments: list[dict[str, Any]],
+    *,
+    bin_end_samples: list[int],
+    block: int,
+    sample_rate_hz: float,
+    threshold_ready_s: float,
+    threshold: float,
+    armed_bins: list[float],
+    armed_ends: list[int],
+    smooth_bins: int,
+) -> int | None:
+    """
+    If the first burst was already active when the Schmitt gate armed, move its
+    start back to the envelope crossing instead of leaving it at the gate.
+    """
+    if not segments or not bin_end_samples or not armed_bins or not armed_ends:
+        return None
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
+    arm_sample = int(fs * float(threshold_ready_s))
+    start_bin = max(0, min(int(segments[0]["start_bin"]), len(bin_end_samples) - 1))
+    gated_start = max(0, int(bin_end_samples[start_bin]) - block + 1)
+    # Only the gate-clipped case: onset sits on the arming instant.
+    if gated_start > arm_sample + int(fs * 0.45):
+        return None
+
+    hist = np.asarray(armed_bins, dtype=float)
+    if hist.size < smooth_bins:
+        return None
+    smooth = np.convolve(hist, np.ones(smooth_bins) / smooth_bins, mode="valid")
+    down = float(threshold) * 0.55
+    if float(smooth[-1]) <= down:
+        return None
+
+    k = len(smooth) - 1
+    while k > 0 and float(smooth[k]) > down:
+        k -= 1
+    onset_k = k + 1 if float(smooth[k]) <= down else k
+    onset_k = min(max(0, onset_k), len(smooth) - 1)
+    sample_idx = onset_k + smooth_bins - 1
+    sample_idx = max(0, min(sample_idx, len(armed_ends) - 1))
+    onset_sample = max(0, int(armed_ends[sample_idx]) - block + 1)
+
+    # Stay after the 0–2 s baseline, and do not reach more than 3 s before the gate.
+    earliest = max(int(fs * 2.2), arm_sample - int(fs * 3.0))
+    onset_sample = max(onset_sample, earliest)
+    if onset_sample >= gated_start - int(fs * 0.08):
+        return None
+    return onset_sample
 
 
 def _trim_ze1_tail(
