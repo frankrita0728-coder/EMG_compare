@@ -329,8 +329,14 @@ def summary_table(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "目的": row.get("purpose"),
                 "裝置": row.get("device_note"),
                 "預期段數": row.get("expected_count"),
-                "對照組": row.get("ref_resolved") or row.get("ref_listed"),
-                "實驗組": row.get("exp_resolved") or row.get("exp_listed"),
+                "對照組": row.get("ref_resolved")
+                or row.get("ref_listed")
+                or row.get("ref")
+                or "",
+                "實驗組": row.get("exp_resolved")
+                or row.get("exp_listed")
+                or row.get("exp")
+                or "",
                 "段數": f"{row.get('ref_count') or '—'}/{row.get('exp_count') or '—'}",
                 "RMS r": row.get("rms_pearson_r"),
                 "RMS ICC": row.get("rms_icc"),
