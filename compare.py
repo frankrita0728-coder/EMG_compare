@@ -239,6 +239,19 @@ def build_waveform_overlay(
     }
 
 
+def _waveform_trace(raw: dict[str, Any], source: str) -> dict[str, Any]:
+    normed = normalize_trace(raw, method="none")
+    return {
+        "filename": raw["filename"],
+        "unit": normed.get("unit") or raw.get("unit") or "mV",
+        "times": list(normed["times"]),
+        "values": list(normed["values"]),
+        "start_epoch": raw.get("start_epoch"),
+        "start_label": raw.get("start_label") or "",
+        "source": source,
+    }
+
+
 def build_device_compare_waveform(
     ref_name: str,
     exp_name: str,
@@ -247,53 +260,79 @@ def build_device_compare_waveform(
     align_by_start: bool = True,
 ) -> dict[str, Any]:
     """Raw mV waveforms for one device pair (Delsys vs ZE1 TXT or ZE2)."""
+    return build_pair_waveform(
+        ref_name,
+        exp_name,
+        purpose="裝置比對",
+        device_note=device_note,
+        align_by_start=align_by_start,
+    )
+
+
+def build_pair_waveform(
+    ref_name: str,
+    exp_name: str,
+    *,
+    purpose: str = "裝置比對",
+    device_note: str = "",
+    align_by_start: bool = False,
+) -> dict[str, Any]:
+    """
+    Raw mV waveforms for one pair in the Excel list report.
+
+    - 裝置比對 / 疲勞：Delsys CSV × ZE1 TXT 或 ZE2
+    - 刮腿毛：刮毛前 TXT × 刮毛後 TXT
+    """
     note = str(device_note or "").strip().lower()
-    left = load_delsys_emg(ref_name, for_plot=False)
-    year = None
-    start = parse_delsys_start(left.get("metadata"))
-    if start:
-        year = start.year
-    apply_bandpass = note in {"ze2", "a10"}
-    if note == "ze2":
-        right = load_ze2_emg(
-            exp_name,
-            for_plot=False,
-            year=year,
-            apply_bandpass=True,
-        )
-        exp_label = "ZE2"
-        exp_source = "ze2"
+    purpose_s = str(purpose or "").strip()
+    apply_bandpass = False
+
+    if purpose_s == "刮腿毛":
+        left = load_txt_emg(ref_name, for_plot=False)
+        right = load_txt_emg(exp_name, for_plot=False)
+        ref_label = "刮毛前"
+        exp_label = "刮毛後"
+        ref_trace = _waveform_trace(left, "txt")
+        exp_trace = _waveform_trace(right, "txt")
     else:
-        right = load_txt_emg(
-            exp_name,
-            for_plot=False,
-            year=year,
-            apply_bandpass=apply_bandpass,
-        )
-        exp_label = "ZE1"
-        exp_source = "txt"
+        left = load_delsys_emg(ref_name, for_plot=False)
+        year = None
+        start = parse_delsys_start(left.get("metadata"))
+        if start:
+            year = start.year
+        apply_bandpass = note in {"ze2", "a10"}
+        if note == "ze2":
+            right = load_ze2_emg(
+                exp_name,
+                for_plot=False,
+                year=year,
+                apply_bandpass=True,
+            )
+            exp_label = "ZE2"
+            exp_source = "ze2"
+        else:
+            right = load_txt_emg(
+                exp_name,
+                for_plot=False,
+                year=year,
+                apply_bandpass=apply_bandpass,
+            )
+            exp_label = "ZE1"
+            exp_source = "txt"
+        ref_label = "Delsys"
+        ref_trace = _waveform_trace(left, "delsys")
+        exp_trace = _waveform_trace(right, exp_source)
 
-    def _trace(raw: dict[str, Any], source: str) -> dict[str, Any]:
-        normed = normalize_trace(raw, method="none")
-        return {
-            "filename": raw["filename"],
-            "unit": normed.get("unit") or raw.get("unit") or "mV",
-            "times": list(normed["times"]),
-            "values": list(normed["values"]),
-            "start_epoch": raw.get("start_epoch"),
-            "start_label": raw.get("start_label") or "",
-            "source": source,
-        }
-
-    delsys_trace = _trace(left, "delsys")
-    exp_trace = _trace(right, exp_source)
     align_info: dict[str, Any] = {"aligned": False}
     if align_by_start:
-        aligned, align_info = align_traces_by_start([delsys_trace, exp_trace])
-        delsys_trace, exp_trace = aligned[0], aligned[1]
+        aligned, align_info = align_traces_by_start([ref_trace, exp_trace])
+        ref_trace, exp_trace = aligned[0], aligned[1]
     return {
+        "purpose": purpose_s,
+        "ref_label": ref_label,
         "exp_label": exp_label,
-        "delsys": delsys_trace,
+        "delsys": ref_trace,  # top panel (legacy key used by PDF)
+        "ref": ref_trace,
         "exp": exp_trace,
         "align": align_info,
         "apply_bandpass": apply_bandpass,

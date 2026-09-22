@@ -394,6 +394,7 @@ def _waveform_compare_png(
     exp: dict[str, Any],
     exp_label: str,
     title: str,
+    ref_label: str = "Delsys",
 ) -> bytes | None:
     """Two-panel raw waveform. Y-axis includes the full peak-to-peak range."""
     try:
@@ -454,7 +455,7 @@ def _waveform_compare_png(
             legend_kwargs["prop"] = font_prop
         ax.legend(**legend_kwargs)
 
-    _draw(ax_ref, delsys, color="#5ec8ff", label="Delsys")
+    _draw(ax_ref, delsys, color="#5ec8ff", label=ref_label)
     _draw(ax_exp, exp, color="#3dd68c", label=exp_label)
 
     title_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 11, "pad": 8}
@@ -474,17 +475,19 @@ def _waveform_compare_png(
     return buf.getvalue()
 
 
-def _device_waveform_block(
+def _pair_waveform_block(
     row: dict[str, Any],
     payload: dict[str, Any],
     *,
+    purpose: str,
     h_style: ParagraphStyle,
     body_style: ParagraphStyle,
 ) -> list[Any]:
-    """One device-comparison waveform: heading, caption, plot."""
+    """One pair waveform page block for device / shaving / fatigue."""
     row_i = row.get("row")
     site = row.get("site") or row.get("部位") or ""
     device = str(row.get("device_note") or row.get("裝置") or payload.get("device_note") or "")
+    purpose_s = str(purpose or row.get("purpose") or payload.get("purpose") or "")
     ref_name = (
         payload.get("ref_resolved")
         or payload.get("ref")
@@ -512,11 +515,12 @@ def _device_waveform_block(
         return bits
 
     try:
-        from compare import build_device_compare_waveform
+        from compare import build_pair_waveform
 
-        wave = build_device_compare_waveform(
+        wave = build_pair_waveform(
             str(ref_name),
             str(exp_name),
+            purpose=purpose_s,
             device_note=device,
             align_by_start=False,
         )
@@ -525,28 +529,37 @@ def _device_waveform_block(
         return bits
 
     pairs = payload.get("pairs") if isinstance(payload.get("pairs"), list) else []
-    delsys = dict(wave["delsys"])
+    ref = dict(wave.get("ref") or wave["delsys"])
     exp = dict(wave["exp"])
-    delsys["spans"] = _spans_from_pairs(pairs, ("delsys",), 0.0)
+    # Pair JSON still stores ref under "delsys" for TXT×TXT 刮腿毛.
+    ref["spans"] = _spans_from_pairs(pairs, ("delsys", "ref"), 0.0)
     exp["spans"] = _spans_from_pairs(pairs, ("txt", "ze2", "ze1", "exp"), 0.0)
+    ref_label = str(wave.get("ref_label") or "Delsys")
     exp_label = str(wave.get("exp_label") or "ZE1")
     rms_r = row.get("rms_pearson_r") if "rms_pearson_r" in row else row.get("RMS r")
     iemg_r = row.get("iemg_pearson_r") if "iemg_pearson_r" in row else row.get("iEMG r")
     filter_note = ""
-    if device.lower() in {"a10", "ze2"}:
+    if purpose_s != "刮腿毛" and device.lower() in {"a10", "ze2"}:
         filter_note = "　｜　實驗組已套用 20–400 Hz 帶通"
+    count_note = ""
+    if purpose_s == "疲勞":
+        count_note = (
+            f"　｜　段數 {row.get('ref_count') or '—'}/{row.get('exp_count') or '—'}"
+            f"　疲勞可視 {row.get('fatigue_visible') or row.get('疲勞可視') or '—'}"
+        )
     caption = (
-        f"Delsys：{ref_name}　｜　{exp_label}：{exp_name}　｜　"
+        f"{ref_label}：{ref_name}　｜　{exp_label}：{exp_name}　｜　"
         f"RMS r={_fmt(rms_r)}　iEMG r={_fmt(iemg_r)}　｜　"
         f"時間軸以各檔錄音起點為 0 秒；縱軸依主要振幅留白"
-        f"{filter_note}"
+        f"{filter_note}{count_note}"
     )
     bits.append(Paragraph(_escape(caption), body_style))
     png = _waveform_compare_png(
-        delsys=delsys,
+        delsys=ref,
         exp=exp,
+        ref_label=ref_label,
         exp_label=exp_label,
-        title=f"#{row_i}  {site}  {device}  Delsys vs {exp_label}",
+        title=f"#{row_i}  {site}  {device}  {ref_label} vs {exp_label}",
     )
     if not png:
         bits.append(Paragraph(_escape("波形圖產生失敗。"), body_style))
@@ -555,6 +568,21 @@ def _device_waveform_block(
     bits.append(Image(io.BytesIO(png), width=26.2 * cm, height=12.2 * cm))
     return bits
 
+
+def _device_waveform_block(
+    row: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    h_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+) -> list[Any]:
+    return _pair_waveform_block(
+        row,
+        payload,
+        purpose="裝置比對",
+        h_style=h_style,
+        body_style=body_style,
+    )
 
 def build_results_pdf(
     *,
@@ -928,7 +956,39 @@ def build_pair_list_pdf(
             payload_by_row[key] = payload
 
     section_no = 2
-    cn = "一二三四五六"
+    cn = "一二三四五六七八九十"
+
+    def _append_waveform_section(
+        *,
+        purpose: str,
+        title: str,
+        intro: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        nonlocal section_no
+        if not rows:
+            return
+        story.append(PageBreak())
+        story.append(Paragraph(_escape(f"{cn[section_no - 1]}、{title}"), h_style))
+        section_no += 1
+        story.append(Paragraph(_escape(intro), small_style))
+        for index, row in enumerate(rows):
+            try:
+                row_i = int(row.get("row"))
+            except (TypeError, ValueError):
+                row_i = row.get("row")
+            if index:
+                story.append(PageBreak())
+            story.extend(
+                _pair_waveform_block(
+                    row,
+                    payload_by_row.get(row_i) or {},
+                    purpose=purpose,
+                    h_style=h_style,
+                    body_style=body_style,
+                )
+            )
+
     if interval_changes:
         story.extend(
             _interval_change_story(
@@ -942,41 +1002,47 @@ def build_pair_list_pdf(
         )
         section_no += 1
 
-    if device_rows:
-        story.append(PageBreak())
-        story.append(Paragraph(_escape(f"{cn[section_no - 1]}、裝置比對波形"), h_style))
-        section_no += 1
-        story.append(
-            Paragraph(
-                _escape(
-                    "每組一頁。上圖 Delsys、下圖 ZE1 或 ZE2，皆為原始 mV，時間軸以各檔錄音起點為 0 秒。"
-                    "縱軸依主要振幅留白。若底噪把整段塗滿，該圖改畫 0.25 秒 RMS，收縮才看得清楚。"
-                    "色帶是收縮區間。多數由 Schmitt 切出；底噪填滿的紀錄改依 0.25 秒 RMS 包絡重切。"
-                    "a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
-                ),
-                small_style,
-            )
-        )
-        for index, row in enumerate(device_rows):
-            try:
-                row_i = int(row.get("row"))
-            except (TypeError, ValueError):
-                row_i = row.get("row")
-            if index:
-                story.append(PageBreak())
-            story.extend(
-                _device_waveform_block(
-                    row,
-                    payload_by_row.get(row_i) or {},
-                    h_style=h_style,
-                    body_style=body_style,
-                )
-            )
-
-    # --- Fatigue ---
+    shave_rows = [
+        r
+        for r in summary_rows
+        if str(r.get("purpose") or r.get("目的") or "") == "刮腿毛"
+    ]
     fatigue_rows = [
         r for r in summary_rows if str(r.get("purpose") or r.get("目的") or "") == "疲勞"
     ]
+
+    _append_waveform_section(
+        purpose="裝置比對",
+        title="裝置比對波形",
+        intro=(
+            "每組一頁。上圖 Delsys、下圖 ZE1 或 ZE2，皆為原始 mV，時間軸以各檔錄音起點為 0 秒。"
+            "縱軸依主要振幅留白。若底噪把整段塗滿，該圖改畫 0.25 秒 RMS，收縮才看得清楚。"
+            "色帶是收縮區間。多數由 Schmitt 切出；底噪填滿的紀錄改依 0.25 秒 RMS 包絡重切。"
+            "a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
+        ),
+        rows=device_rows,
+    )
+    _append_waveform_section(
+        purpose="刮腿毛",
+        title="刮腿毛波形",
+        intro=(
+            "每組一頁。上圖刮毛前、下圖刮毛後，皆為 ZE1 TXT 原始 mV。"
+            "時間軸以各檔錄音起點為 0 秒；色帶是收縮區間。"
+        ),
+        rows=shave_rows,
+    )
+    _append_waveform_section(
+        purpose="疲勞",
+        title="疲勞波形",
+        intro=(
+            "每組一頁。上圖 Delsys、下圖 ZE1，皆為原始 mV；預期約 10 段收縮。"
+            "時間軸以各檔錄音起點為 0 秒；色帶是收縮區間。"
+            "若底噪把整段塗滿，該圖改畫 0.25 秒 RMS。"
+        ),
+        rows=fatigue_rows,
+    )
+
+    # --- Fatigue visibility table ---
     if fatigue_rows:
         story.append(PageBreak())
         story.append(Paragraph(_escape(f"{cn[section_no - 1]}、疲勞：這一次能否看出疲勞"), h_style))
@@ -1022,7 +1088,7 @@ def build_pair_list_pdf(
     story.append(Paragraph(_escape(f"{cn[section_no - 1]}、備註"), h_style))
     notes = [
         "詳細數值另見 analysis_results.xlsx（總覽／疲勞可視／區間特徵／區間一致性）。",
-        "裝置比對波形為原始 mV。縱軸依主要振幅留白，避免波峰貼齊框線。a10 與 ZE2 實驗組套用 20–400 Hz 帶通；a09 維持原訊號。",
+        "波形章節：裝置比對、刮腿毛（刮毛前／後）、疲勞皆為原始 mV。縱軸依主要振幅留白。a10 與 ZE2 實驗組套用 20–400 Hz 帶通；a09 與刮腿毛維持原訊號。",
         "第 15 列右腓腸肌 a09 缺 Delsys 對照檔，未執行。第 22、23 列左腓腸肌 a10 實驗組仍為 2 段：帶通後約 5–14 秒沒有連續超過門檻。",
         "RMS＝各收縮段單一 RMS 再跨段比；TTRI RMS＝滑動窗 RMS 曲線僅收縮區間內相關。",
     ]
