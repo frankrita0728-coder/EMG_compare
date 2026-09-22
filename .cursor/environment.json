@@ -1,0 +1,13 @@
+{
+  "name": "emg-compare",
+  "install": "bash scripts/cloud-setup.sh",
+  "terminals": [
+    {
+      "name": "streamlit",
+      "command": ". .venv/bin/activate && streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0 --server.headless true --browser.gatherUsageStats false"
+    }
+  ],
+  "ports": [
+    8501
+  ]
+}
