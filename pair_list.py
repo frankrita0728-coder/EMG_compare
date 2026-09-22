@@ -343,3 +343,220 @@ def summary_table(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             }
         )
     return table
+
+
+def _safe_sheet_name(name: str, used: set[str]) -> str:
+    cleaned = "".join(ch if ch not in r"[]:*?/\"" else "_" for ch in str(name))[:31] or "sheet"
+    base = cleaned
+    i = 2
+    while cleaned in used:
+        suffix = f"_{i}"
+        cleaned = (base[: 31 - len(suffix)] + suffix)
+        i += 1
+    used.add(cleaned)
+    return cleaned
+
+
+def _write_sheet_rows(ws: Any, rows: list[dict[str, Any]], fieldnames: list[str] | None = None) -> None:
+    if not rows:
+        ws.append(["（無資料）"])
+        return
+    keys = fieldnames or list(rows[0].keys())
+    ws.append(keys)
+    for row in rows:
+        ws.append([row.get(k, "") for k in keys])
+
+
+def build_pair_list_export_workbook(
+    summary_rows: list[dict[str, Any]],
+    *,
+    result_payloads: list[dict[str, Any]] | None = None,
+) -> Any:
+    """
+    Standalone multi-sheet workbook for list analysis results.
+
+    Sheets:
+    - 總覽：summary metrics (+ fatigue columns when present)
+    - 疲勞可視：fatigue-only verdict + evidence
+    - 區間特徵：per-contraction features for both sides (from JSON payloads)
+    """
+    try:
+        from openpyxl import Workbook
+    except ImportError as exc:  # pragma: no cover
+        raise ImportError("需要 openpyxl：pip install openpyxl") from exc
+
+    wb = Workbook()
+    used: set[str] = set()
+
+    ws_sum = wb.active
+    ws_sum.title = _safe_sheet_name("總覽", used)
+    overview = summary_table(summary_rows)
+    _write_sheet_rows(ws_sum, overview)
+
+    fatigue_rows: list[dict[str, Any]] = []
+    for row in summary_rows:
+        if str(row.get("purpose") or "") != "疲勞":
+            continue
+        fatigue_rows.append(
+            {
+                "列": row.get("row"),
+                "狀態": row.get("status"),
+                "部位": row.get("site"),
+                "裝置": row.get("device_note"),
+                "段數": f"{row.get('ref_count') or '—'}/{row.get('exp_count') or '—'}",
+                "綜合可視": row.get("fatigue_visible") or "",
+                "對照組可視": row.get("fatigue_ref") or "",
+                "實驗組可視": row.get("fatigue_exp") or "",
+                "對照檔": row.get("ref") or row.get("ref_resolved") or row.get("ref_listed"),
+                "實驗檔": row.get("exp") or row.get("exp_resolved") or row.get("exp_listed"),
+            }
+        )
+
+    # Enrich fatigue sheet with evidence from payloads when available.
+    payload_by_row: dict[Any, dict[str, Any]] = {}
+    for payload in result_payloads or []:
+        if isinstance(payload, dict) and payload.get("row") is not None:
+            payload_by_row[payload.get("row")] = payload
+
+    for fr in fatigue_rows:
+        payload = payload_by_row.get(fr.get("列")) or {}
+        fv = payload.get("fatigue_visibility") or {}
+        ref = fv.get("ref") or {}
+        exp = fv.get("exp") or {}
+        fr["對照依據"] = "; ".join(ref.get("evidence") or [])
+        fr["實驗依據"] = "; ".join(exp.get("evidence") or [])
+        fr["摘要"] = fv.get("summary") or ""
+
+    ws_fat = wb.create_sheet(_safe_sheet_name("疲勞可視", used))
+    _write_sheet_rows(ws_fat, fatigue_rows)
+
+    feature_rows: list[dict[str, Any]] = []
+    for payload in result_payloads or []:
+        if not isinstance(payload, dict):
+            continue
+        row_i = payload.get("row")
+        site = payload.get("site")
+        purpose = payload.get("purpose")
+        device = payload.get("device_note")
+        pairs = payload.get("pairs") or []
+        for pair in pairs:
+            if not isinstance(pair, dict):
+                continue
+            left = pair.get("delsys") or pair.get("ref") or {}
+            right = pair.get("txt") or pair.get("ze1") or pair.get("ze2") or pair.get("exp") or {}
+            idx = pair.get("index") or left.get("index") or right.get("index")
+            feature_rows.append(
+                {
+                    "列": row_i,
+                    "部位": site,
+                    "目的": purpose,
+                    "裝置": device,
+                    "收縮序": idx,
+                    "對照_duration": left.get("duration"),
+                    "對照_aemg": left.get("aemg"),
+                    "對照_rms": left.get("rms"),
+                    "對照_iemg": left.get("iemg"),
+                    "對照_mpf": left.get("mpf"),
+                    "對照_mdf": left.get("mdf"),
+                    "對照_peak_rms": left.get("peak_rms"),
+                    "實驗_duration": right.get("duration"),
+                    "實驗_aemg": right.get("aemg"),
+                    "實驗_rms": right.get("rms"),
+                    "實驗_iemg": right.get("iemg"),
+                    "實驗_mpf": right.get("mpf"),
+                    "實驗_mdf": right.get("mdf"),
+                    "實驗_peak_rms": right.get("peak_rms"),
+                }
+            )
+
+    ws_feat = wb.create_sheet(_safe_sheet_name("區間特徵", used))
+    _write_sheet_rows(ws_feat, feature_rows)
+
+    agree_rows: list[dict[str, Any]] = []
+    for payload in result_payloads or []:
+        if not isinstance(payload, dict):
+            continue
+        for item in payload.get("interval_agreement") or []:
+            if not isinstance(item, dict):
+                continue
+            agree_rows.append(
+                {
+                    "列": payload.get("row"),
+                    "部位": payload.get("site"),
+                    "目的": payload.get("purpose"),
+                    "裝置": payload.get("device_note"),
+                    "指標": item.get("metric"),
+                    "n": item.get("n"),
+                    "Pearson_r": item.get("pearson_r"),
+                    "ICC": item.get("icc"),
+                }
+            )
+    ws_agr = wb.create_sheet(_safe_sheet_name("區間一致性", used))
+    _write_sheet_rows(ws_agr, agree_rows)
+
+    return wb
+
+
+def export_pair_list_results_xlsx(
+    summary_rows: list[dict[str, Any]],
+    *,
+    result_payloads: list[dict[str, Any]] | None = None,
+    out_path: Path | None = None,
+) -> bytes:
+    """Return xlsx bytes; optionally also write to ``out_path``."""
+    wb = build_pair_list_export_workbook(summary_rows, result_payloads=result_payloads)
+    from io import BytesIO
+
+    buf = BytesIO()
+    wb.save(buf)
+    data = buf.getvalue()
+    if out_path is not None:
+        out_path = Path(out_path)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        out_path.write_bytes(data)
+    return data
+
+
+def export_pair_list_results_csv_zip(
+    summary_rows: list[dict[str, Any]],
+    *,
+    result_payloads: list[dict[str, Any]] | None = None,
+) -> bytes:
+    """Standalone ZIP of CSV sheets mirroring the Excel export."""
+    import csv
+    import io
+    import zipfile
+
+    wb = build_pair_list_export_workbook(summary_rows, result_payloads=result_payloads)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for ws in wb.worksheets:
+            text = io.StringIO()
+            writer = csv.writer(text)
+            for row in ws.iter_rows(values_only=True):
+                writer.writerow(["" if v is None else v for v in row])
+            zf.writestr(f"{ws.title}.csv", text.getvalue().encode("utf-8-sig"))
+    return buf.getvalue()
+
+
+def load_payloads_from_result_dir(out_dir: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load summary.csv + JSON payloads from an existing pairing_results folder."""
+    import csv
+    import json
+
+    out_dir = Path(out_dir)
+    summary_path = out_dir / "summary.csv"
+    summary_rows: list[dict[str, Any]] = []
+    if summary_path.exists():
+        with summary_path.open(encoding="utf-8", newline="") as fh:
+            summary_rows = list(csv.DictReader(fh))
+
+    payloads: list[dict[str, Any]] = []
+    for row in summary_rows:
+        rel = row.get("json") or ""
+        if not rel:
+            continue
+        path = out_dir / rel
+        if path.exists():
+            payloads.append(json.loads(path.read_text(encoding="utf-8")))
+    return summary_rows, payloads

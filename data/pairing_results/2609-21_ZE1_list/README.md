@@ -80,7 +80,7 @@
 
 ## 檔案對照
 
-詳見 `summary.csv` 與各目的資料夾內 JSON。
+詳見 `summary.csv`、獨立匯出 **`analysis_results.xlsx`**，與各目的資料夾內 JSON。
 
 - `裝置比對`：Delsys CSV × ZE1/ZE2 TXT
 - `刮腿毛`：ZE1 對照 TXT × ZE1 去腿毛 TXT

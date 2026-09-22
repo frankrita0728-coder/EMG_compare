@@ -35,6 +35,8 @@ from export_report import build_results_csv_zip, build_results_pdf
 from pair_list import (
     ANALYSIS_CONFIG as PAIR_LIST_CONFIG,
     expected_count_for as pair_list_expected_count,
+    export_pair_list_results_csv_zip,
+    export_pair_list_results_xlsx,
     parse_pair_list,
     resolve_pair_rows,
     run_pair_list,
@@ -1586,6 +1588,49 @@ def _render_feature_pair_list_panel(
 
     st.markdown("#### 清單結果總覽")
     st.dataframe(pair_list_summary_table(results), use_container_width=True, hide_index=True)
+
+    # Standalone download — analysis results only (no raw EMG).
+    payloads = [r.get("result") for r in results if r.get("status") == "done" and r.get("result")]
+    # Attach row meta onto payloads for export sheets.
+    export_payloads: list[dict] = []
+    for r in results:
+        res = r.get("result")
+        if not isinstance(res, dict):
+            continue
+        export_payloads.append(
+            {
+                **res,
+                "row": r.get("row"),
+                "site": r.get("site"),
+                "purpose": r.get("purpose"),
+                "device_note": r.get("device_note"),
+                "fatigue_visibility": res.get("fatigue_visibility"),
+                "pairs": res.get("pairs"),
+                "interval_agreement": res.get("interval_agreement"),
+            }
+        )
+    try:
+        xlsx_bytes = export_pair_list_results_xlsx(results, result_payloads=export_payloads)
+        zip_bytes = export_pair_list_results_csv_zip(results, result_payloads=export_payloads)
+        c1, c2 = st.columns(2)
+        with c1:
+            st.download_button(
+                "下載分析結果 Excel（獨立）",
+                data=xlsx_bytes,
+                file_name="analysis_results.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="feat_list_xlsx",
+            )
+        with c2:
+            st.download_button(
+                "下載分析結果 CSV ZIP（獨立）",
+                data=zip_bytes,
+                file_name="analysis_results_csv.zip",
+                mime="application/zip",
+                key="feat_list_csv_zip",
+            )
+    except Exception as exc:  # noqa: BLE001
+        st.caption(f"獨立匯出暫不可用：{exc}")
 
     done_results = [r for r in results if r.get("status") == "done" and r.get("result")]
     if not done_results:

@@ -5,6 +5,7 @@
 3. **右腓腸肌 ZE2 Delsys**：清單 `with_ze2_` 對上實際檔名 `with_ZE2_`（大小寫）。
 4. **門檻問題列**：詳見 `PROBLEM_THRESHOLDS.md`。曾缺段的 #6 / #8 / #27 / #37 已全部達標。
 5. **疲勞可視性**：詳見 `FATIGUE_VISIBILITY.md`。依跨收縮 MPF/MDF 下降（及 RMS/AEMG 上升輔助）判定「這一次能否看出疲勞」。
+6. **獨立匯出**：`analysis_results.xlsx`（總覽／疲勞可視／區間特徵／區間一致性）可單獨下載，不必翻 JSON 資料夾。
 
 分析配方見 `ANALYSIS_METHOD.md`：
 - 裝置比對／刮腿毛：Schmitt + TTRI，預期 **3** 段

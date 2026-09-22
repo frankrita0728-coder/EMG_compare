@@ -112,6 +112,16 @@ def _write_analysis_method(out_dir: Path, *, xlsx_name: str) -> None:
 - `contraction_method` / `feature_method` / `expected_count`：本列實際使用的分析參數
 - `fatigue_visible` / `fatigue_ref` / `fatigue_exp`：僅「疲勞」列——這一次能否看出疲勞（綜合／對照／實驗）
 
+## 獨立匯出
+
+重跑後會額外產生 **`analysis_results.xlsx`**（可單獨帶走）：
+- 工作表 `總覽`：全列摘要（含一致性、疲勞可視）
+- 工作表 `疲勞可視`：僅疲勞列 + 判定依據
+- 工作表 `區間特徵`：每段收縮的對照／實驗特徵
+- 工作表 `區間一致性`：各指標 Pearson r / ICC
+
+Streamlit「特徵」分頁載入 Excel 清單分析後，也可直接下載同一格式。
+
 ## 疲勞可視性（僅 purpose=疲勞）
 
 跨連續收縮看 **MPF／MDF 是否下降**（頻譜向低頻移動＝典型 EMG 疲勞訊號）；
@@ -500,6 +510,27 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             writer.writerow(row)
 
     _write_fatigue_visibility_doc(out_dir, summary_rows)
+
+    # Standalone workbook (總覽 / 疲勞可視 / 區間特徵 / 區間一致性) — easy to take away.
+    try:
+        from pair_list import export_pair_list_results_xlsx
+
+        payloads: list[dict[str, Any]] = []
+        for row in summary_rows:
+            rel = row.get("json") or ""
+            if not rel:
+                continue
+            jp = out_dir / str(rel)
+            if jp.exists():
+                payloads.append(json.loads(jp.read_text(encoding="utf-8")))
+        xlsx_path = out_dir / "analysis_results.xlsx"
+        export_pair_list_results_xlsx(
+            summary_rows, result_payloads=payloads, out_path=xlsx_path
+        )
+        print(f"export: {xlsx_path}")
+    except Exception as exc:  # noqa: BLE001
+        print(f"standalone export skipped: {exc}")
+
     return out_dir
 
 
