@@ -31,7 +31,7 @@ from parsers.txt_device import list_txt_files
 from parsers.ze2_txt import DEFAULT_SAMPLE_RATE as ZE2_DEFAULT_FS
 from parsers.ze2_txt import ZE2_MV_PER_COUNT, list_ze2_files
 from paths import DATA_DELSYS, DATA_TXT, DATA_ZE2, ensure_data_dirs
-from export_report import build_results_csv_zip, build_results_pdf
+from export_report import build_pair_list_pdf, build_results_csv_zip, build_results_pdf
 from pair_list import (
     ANALYSIS_CONFIG as PAIR_LIST_CONFIG,
     expected_count_for as pair_list_expected_count,
@@ -1612,10 +1612,15 @@ def _render_feature_pair_list_panel(
     try:
         xlsx_bytes = export_pair_list_results_xlsx(results, result_payloads=export_payloads)
         zip_bytes = export_pair_list_results_csv_zip(results, result_payloads=export_payloads)
-        c1, c2 = st.columns(2)
+        pdf_bytes = build_pair_list_pdf(
+            results,
+            result_payloads=export_payloads,
+            title="ZE1 清單分析結果報告",
+        )
+        c1, c2, c3 = st.columns(3)
         with c1:
             st.download_button(
-                "下載分析結果 Excel（獨立）",
+                "下載分析結果 Excel",
                 data=xlsx_bytes,
                 file_name="analysis_results.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -1623,7 +1628,15 @@ def _render_feature_pair_list_panel(
             )
         with c2:
             st.download_button(
-                "下載分析結果 CSV ZIP（獨立）",
+                "下載分析結果 PDF",
+                data=pdf_bytes,
+                file_name="analysis_results.pdf",
+                mime="application/pdf",
+                key="feat_list_pdf",
+            )
+        with c3:
+            st.download_button(
+                "下載 CSV ZIP",
                 data=zip_bytes,
                 file_name="analysis_results_csv.zip",
                 mime="application/zip",

@@ -376,6 +376,201 @@ def build_results_pdf(
     return buffer.getvalue()
 
 
+def _short(text: Any, max_len: int = 42) -> str:
+    s = "" if text is None else str(text)
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1] + "…"
+
+
+def build_pair_list_pdf(
+    summary_rows: list[dict[str, Any]],
+    *,
+    result_payloads: list[dict[str, Any]] | None = None,
+    title: str = "ZE1 清單分析結果報告",
+) -> bytes:
+    """
+    Standalone PDF for Excel pair-list batch results.
+
+    Includes overview metrics and a fatigue-visibility section with evidence.
+    """
+    font_name = _register_fonts()
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=1.0 * cm,
+        rightMargin=1.0 * cm,
+        topMargin=1.0 * cm,
+        bottomMargin=1.0 * cm,
+        title=title,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "TitleCJK",
+        parent=styles["Title"],
+        fontName=font_name,
+        fontSize=16,
+        leading=20,
+        textColor=colors.HexColor("#102018"),
+    )
+    h_style = ParagraphStyle(
+        "HeadingCJK",
+        parent=styles["Heading2"],
+        fontName=font_name,
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor("#1f3b2e"),
+        spaceBefore=10,
+        spaceAfter=6,
+    )
+    body_style = ParagraphStyle(
+        "BodyCJK",
+        parent=styles["Normal"],
+        fontName=font_name,
+        fontSize=9,
+        leading=13,
+    )
+    small_style = ParagraphStyle(
+        "SmallCJK",
+        parent=styles["Normal"],
+        fontName=font_name,
+        fontSize=7.5,
+        leading=10,
+    )
+
+    story: list[Any] = []
+    story.append(Paragraph(_escape(title), title_style))
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    n_done = sum(1 for r in summary_rows if r.get("status") == "done")
+    n_miss = sum(1 for r in summary_rows if r.get("status") == "missing_files")
+    n_err = sum(1 for r in summary_rows if str(r.get("status") or "").startswith("error"))
+    story.append(Paragraph(_escape(f"匯出時間：{stamp}"), body_style))
+    story.append(
+        Paragraph(
+            _escape(
+                f"完成 {n_done}／缺檔 {n_miss}／錯誤 {n_err}　｜　"
+                "收縮：ze1_schmitt　特徵：TTRI　裝置比對／刮腿毛預期 3 段、疲勞 10 段"
+            ),
+            body_style,
+        )
+    )
+    story.append(
+        Paragraph(
+            _escape(
+                "疲勞可視性：跨收縮 MPF／MDF 下降為主（RMS／AEMG 上升為輔）→ 是／弱／否"
+            ),
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 0.25 * cm))
+
+    # --- Overview ---
+    story.append(Paragraph(_escape("一、總覽"), h_style))
+    overview_header = [
+        "列",
+        "部位",
+        "目的",
+        "裝置",
+        "段數",
+        "RMS r",
+        "RMS ICC",
+        "iEMG r",
+        "TTRI RMS",
+        "疲勞",
+    ]
+    overview_body: list[list[str]] = []
+    for row in summary_rows:
+        overview_body.append(
+            [
+                _fmt(row.get("row")),
+                _short(row.get("site"), 8),
+                _short(row.get("purpose"), 6),
+                _short(row.get("device_note") or row.get("裝置"), 5),
+                _fmt(
+                    row.get("段數")
+                    or f"{row.get('ref_count') or '—'}/{row.get('exp_count') or '—'}"
+                ),
+                _fmt(row.get("rms_pearson_r") if "rms_pearson_r" in row else row.get("RMS r")),
+                _fmt(row.get("rms_icc") if "rms_icc" in row else row.get("RMS ICC")),
+                _fmt(row.get("iemg_pearson_r") if "iemg_pearson_r" in row else row.get("iEMG r")),
+                _fmt(row.get("ttri_rms_r") if "ttri_rms_r" in row else row.get("TTRI RMS r")),
+                _short(
+                    row.get("fatigue_visible")
+                    or row.get("疲勞可視")
+                    or ("—" if str(row.get("purpose") or row.get("目的") or "") != "疲勞" else ""),
+                    8,
+                ),
+            ]
+        )
+    story.append(_make_table([overview_header, *overview_body], font_name))
+
+    # --- Fatigue ---
+    fatigue_rows = [
+        r for r in summary_rows if str(r.get("purpose") or r.get("目的") or "") == "疲勞"
+    ]
+    payload_by_row: dict[Any, dict[str, Any]] = {}
+    for payload in result_payloads or []:
+        if isinstance(payload, dict) and payload.get("row") is not None:
+            try:
+                key = int(payload["row"])
+            except (TypeError, ValueError):
+                key = payload["row"]
+            payload_by_row[key] = payload
+
+    if fatigue_rows:
+        story.append(Paragraph(_escape("二、疲勞：這一次能否看出疲勞"), h_style))
+        story.append(
+            Paragraph(
+                _escape(
+                    "規則：≥5 段；MPF/MDF 對收縮序 r≤−0.35 且前→後三分之一 ≤−3%；"
+                    "振幅輔助 RMS/AEMG r≥0.35 且 ≥+5%。是＝兩項頻譜或一頻譜+一振幅。"
+                ),
+                small_style,
+            )
+        )
+        fat_header = ["列", "部位", "綜合", "Delsys", "TXT", "依據摘要"]
+        fat_body: list[list[Any]] = []
+        for row in fatigue_rows:
+            try:
+                row_i = int(row.get("row"))
+            except (TypeError, ValueError):
+                row_i = row.get("row")
+            payload = payload_by_row.get(row_i) or {}
+            fv = payload.get("fatigue_visibility") or {}
+            bits: list[str] = []
+            for side_key, tag in (("ref", "D"), ("exp", "T")):
+                side = fv.get(side_key) or {}
+                ev = side.get("evidence") or []
+                if ev:
+                    bits.append(f"{tag}: " + "; ".join(str(x) for x in ev[:2]))
+            evidence = " / ".join(bits) if bits else str(fv.get("summary") or "")
+            fat_body.append(
+                [
+                    _fmt(row_i),
+                    _short(row.get("site") or row.get("部位"), 8),
+                    _fmt(row.get("fatigue_visible") or row.get("綜合可視") or ""),
+                    _fmt(row.get("fatigue_ref") or row.get("對照組可視") or ""),
+                    _fmt(row.get("fatigue_exp") or row.get("實驗組可視") or ""),
+                    Paragraph(_escape(_short(evidence, 120)), small_style),
+                ]
+            )
+        story.append(_make_table([fat_header, *fat_body], font_name))
+
+    # --- Notes ---
+    story.append(Paragraph(_escape("三、備註"), h_style))
+    notes = [
+        "詳細數值另見 analysis_results.xlsx（總覽／疲勞可視／區間特徵／區間一致性）。",
+        "第 15 列右腓腸肌 a09 缺 Delsys 對照檔，未執行。",
+        "RMS＝各收縮段單一 RMS 再跨段比；TTRI RMS＝滑動窗 RMS 曲線僅收縮區間內相關。",
+    ]
+    for line in notes:
+        story.append(Paragraph(_escape(f"• {line}"), body_style))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
 def _write_csv(path_or_buf, rows: list[list[str]]) -> None:
     writer = csv.writer(path_or_buf)
     for row in rows:

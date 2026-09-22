@@ -528,6 +528,20 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             summary_rows, result_payloads=payloads, out_path=xlsx_path
         )
         print(f"export: {xlsx_path}")
+        try:
+            from export_report import build_pair_list_pdf
+
+            pdf_path = out_dir / "analysis_results.pdf"
+            pdf_path.write_bytes(
+                build_pair_list_pdf(
+                    summary_rows,
+                    result_payloads=payloads,
+                    title="2609-21 ZE1 清單分析結果報告",
+                )
+            )
+            print(f"pdf: {pdf_path}")
+        except Exception as pdf_exc:  # noqa: BLE001
+            print(f"pdf export skipped: {pdf_exc}")
     except Exception as exc:  # noqa: BLE001
         print(f"standalone export skipped: {exc}")
 
