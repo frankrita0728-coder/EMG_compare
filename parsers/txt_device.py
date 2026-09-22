@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from align import parse_txt_start, start_payload
+from emg_filter import bandpass_filter, filter_metadata_label
 from paths import MAX_PLOT_POINTS, resolve_txt_dirs
 
 TIME_PREFIX = re.compile(r"^\d{1,2}:\d{2}:\d{2}(?:\.\d+)?$")
@@ -20,7 +21,7 @@ def list_txt_files() -> list[dict[str, str]]:
     seen: set[str] = set()
     files: list[dict[str, str]] = []
     for folder in resolve_txt_dirs():
-        for path in sorted(folder.glob("*.txt"), key=lambda p: p.name.lower()):
+        for path in sorted(folder.rglob("*.txt"), key=lambda p: p.name.lower()):
             if path.name in seen:
                 continue
             seen.add(path.name)
@@ -41,6 +42,9 @@ def find_txt_path(filename: str) -> Path | None:
         path = folder / name
         if path.exists():
             return path
+        for nested in folder.rglob(name):
+            if nested.is_file():
+                return nested
     return None
 
 
@@ -111,6 +115,7 @@ def load_txt_emg(
     *,
     for_plot: bool = False,
     year: int | None = None,
+    apply_bandpass: bool = False,
 ) -> dict[str, Any]:
     path = find_txt_path(filename)
     if path is None:
@@ -124,6 +129,9 @@ def load_txt_emg(
     samples = load_column(path)
     sample_rate = parse_sample_rate(path)
     values = [float(v) * TXT_MV_PER_COUNT for v in samples]
+    filter_info: dict[str, Any] = {"applied": False}
+    if apply_bandpass:
+        values, filter_info = bandpass_filter(values, sample_rate)
     times = [i / sample_rate for i in range(len(values))]
     point_count = len(values)
     if for_plot:
@@ -147,7 +155,13 @@ def load_txt_emg(
             "ExgSampleRate": f"{sample_rate} Hz",
             "Start time": start_info.get("start_label") or "",
             "Scale": f"{TXT_MV_PER_COUNT} mV/count",
+            **(
+                {"Filter": filter_metadata_label(filter_info)}
+                if filter_metadata_label(filter_info)
+                else {}
+            ),
         },
+        "filter": filter_info,
         "sensor_name": channel,
         **start_info,
     }

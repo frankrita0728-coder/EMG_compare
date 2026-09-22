@@ -1,0 +1,168 @@
+{
+  "delsys": "2609-09 frank左脛前肌_with_a09_褲XL_去腿毛.csv",
+  "session": "a09",
+  "subject": "Frank",
+  "muscle": "脛前肌",
+  "side": "左",
+  "channel_hint": "左脛前肌 → ZE1 Ch1／ZE2 Ch2",
+  "match_note": "ZE1一對一 score=190（Frank / 脛前肌 / 左 / a09 / 09-09｜建議ZE1 Ch1）；ZE2未配對：無符合一對一檔名條件",
+  "status": "可比對",
+  "device": "ze1",
+  "device_file": "09-09_12-51-53_172_ExgCh1Data_(Frank 左脛前肌)_a09_褲XL_疲勞3.txt",
+  "contraction_method": "ze1_schmitt",
+  "feature_method": "ttri",
+  "metrics": [
+    "duration",
+    "aemg",
+    "iemg",
+    "rms",
+    "mdf",
+    "mpf",
+    "peak_rms"
+  ],
+  "pairs": [
+    {
+      "index": 1,
+      "delsys": {
+        "index": 1,
+        "start": 8.1635,
+        "end": 13.612,
+        "duration": 5.4485,
+        "aemg": 0.140386,
+        "rms": 0.194967,
+        "iemg": 0.767173,
+        "mpf": 151.76,
+        "mdf": 133.0,
+        "peak_rms": 0.325439,
+        "method": "ttri"
+      },
+      "txt": {
+        "index": 1,
+        "start": 84.0078,
+        "end": 89.5312,
+        "duration": 5.5234,
+        "aemg": 0.030641,
+        "rms": 0.046639,
+        "iemg": 0.167968,
+        "mpf": 58.92,
+        "mdf": 48.1,
+        "peak_rms": 0.877358,
+        "method": "ttri"
+      },
+      "delta": {
+        "duration": -0.0749,
+        "aemg": 0.109745,
+        "iemg": 0.599205,
+        "rms": 0.148328,
+        "mdf": 84.9,
+        "mpf": 92.84,
+        "peak_rms": -0.551919
+      }
+    },
+    {
+      "index": 2,
+      "delsys": {
+        "index": 2,
+        "start": 18.5506,
+        "end": 23.9117,
+        "duration": 5.3611,
+        "aemg": 0.134267,
+        "rms": 0.186721,
+        "iemg": 0.724436,
+        "mpf": 148.34,
+        "mdf": 129.18,
+        "peak_rms": 0.336533,
+        "method": "ttri"
+      },
+      "txt": null,
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    },
+    {
+      "index": 3,
+      "delsys": {
+        "index": 3,
+        "start": 28.5168,
+        "end": 33.9573,
+        "duration": 5.4405,
+        "aemg": 0.13864,
+        "rms": 0.19221,
+        "iemg": 0.758383,
+        "mpf": 140.82,
+        "mdf": 121.52,
+        "peak_rms": 0.326777,
+        "method": "ttri"
+      },
+      "txt": null,
+      "delta": {
+        "duration": null,
+        "aemg": null,
+        "iemg": null,
+        "rms": null,
+        "mdf": null,
+        "mpf": null,
+        "peak_rms": null
+      }
+    }
+  ],
+  "features": null,
+  "count": null,
+  "correlation": {
+    "rms": 0.2483,
+    "iemg": 0.9875,
+    "mpf": -0.2285,
+    "mdf": -0.2411
+  },
+  "interval_agreement": [
+    {
+      "metric": "duration",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "aemg",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "iemg",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "rms",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "mdf",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "mpf",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    },
+    {
+      "metric": "peak_rms",
+      "n": 1,
+      "pearson_r": null,
+      "icc": null
+    }
+  ],
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 1 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。"
+}

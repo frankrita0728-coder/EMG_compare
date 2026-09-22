@@ -174,8 +174,14 @@ ZE1_PRESETS: dict[str, dict[str, Any]] = {
         "window_size": 529,
         "threshold_mode": "delsys",
         "data_max": 0.1,  # mV 尺度（原腳本 Volt 用 0.0001）
+        # Warm-up adaptive floor: mean + k*std. Original 4.0 is too strict when
+        # the arming window still contains early activity (e.g. fatigue CSVs).
+        "threshold_std_k": 3.0,
+        # Prefer a quieter 32-bin window in the pre-threshold history.
+        "threshold_prefer_quiet": True,
+        "threshold_ready_s": 6.0,
     },
-    # muscleCaptureForZE1_v2_Rita.py（ZE1 / TXT）
+    # muscleCaptureForZE1_v2_Rita.py（ZE1 / TXT / ZE2）
     "txt": {
         "up_n": 30,
         "down_n": 40,
@@ -183,13 +189,19 @@ ZE1_PRESETS: dict[str, dict[str, Any]] = {
         "window_size": 512,
         "threshold_mode": "legacy_mv",
         "data_max": 0.1,
+        # Match Delsys: quiet warm-up so early activity does not inflate thr.
+        "threshold_std_k": 2.0,
+        "threshold_prefer_quiet": True,
+        "threshold_ready_s": 6.0,
+        # Cap runaway adaptive floors (seen on ZE2 bandpass / noisy TXT).
+        "threshold_cap": 0.05,
     },
 }
 
 
 def resolve_ze1_preset(source: str | None = None) -> dict[str, Any]:
     key = (source or "delsys").strip().lower()
-    if key in {"txt", "device", "ze1_device"}:
+    if key in {"txt", "device", "ze1_device", "ze2"}:
         return dict(ZE1_PRESETS["txt"])
     return dict(ZE1_PRESETS["delsys"])
 
@@ -229,6 +241,10 @@ def detect_contractions_ze1(
         data_max = float(preset["data_max"])
     if threshold_mode is None:
         threshold_mode = str(preset["threshold_mode"])
+    threshold_std_k = float(preset.get("threshold_std_k") or 4.0)
+    prefer_quiet = bool(preset.get("threshold_prefer_quiet"))
+    threshold_cap = preset.get("threshold_cap")
+    threshold_cap_f = float(threshold_cap) if threshold_cap is not None else None
     emg = np.asarray(values, dtype=float)
     fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
     if emg.size < int(fs * 3) + 10:
@@ -245,6 +261,10 @@ def detect_contractions_ze1(
 
     emg_raw_data: list[float] = []
     emg128_raw_data: list[float] = []
+    pre_threshold_bins: list[float] = []
+    pre_bin_ends: list[int] = []
+    armed_bins: list[float] = []
+    armed_ends: list[int] = []
     baseline_acc: list[float] = []
     base_check = False
     emg_base_check = False
@@ -264,7 +284,11 @@ def detect_contractions_ze1(
 
     mode = (threshold_mode or "delsys").strip().lower()
     # TXT×mV: wait a bit after 3 s so the post-baseline envelope settles before arming.
-    threshold_ready_s = 4.0 if mode in {"legacy_mv", "mv_old", "txt"} else 3.0
+    # Delsys may use a longer ready window (preset) so quiet rest after an early burst
+    # can be used for the adaptive floor.
+    threshold_ready_s = float(preset.get("threshold_ready_s") or 0.0)
+    if threshold_ready_s <= 0:
+        threshold_ready_s = 4.0 if mode in {"legacy_mv", "mv_old", "txt"} else 3.0
 
     for i in range(len(emg)):
         start = max(0, i - window_size + 1)
@@ -290,6 +314,9 @@ def detect_contractions_ze1(
             emg_128mean = float(np.mean(emg_raw_abs))
 
         emg128_raw_data.append(emg_128mean)
+        if not emg_base_check:
+            pre_threshold_bins.append(emg_128mean)
+            pre_bin_ends.append(i)
         emg_raw_data = []
 
         if len(emg128_raw_data) < smooth_bins:
@@ -297,27 +324,49 @@ def detect_contractions_ze1(
 
         # Threshold after warm-up (TXT uses 4 s to avoid baseline-settling transient)
         if base_check and (not emg_base_check) and (i >= int(fs * threshold_ready_s)):
+            # Keep the pre-arm envelope so a burst already under way can be
+            # extended backward. The ready gate otherwise clips its start to 6 s.
+            armed_bins = list(pre_threshold_bins)
+            armed_ends = list(pre_bin_ends)
             recent = np.asarray(emg128_raw_data[-smooth_bins:], dtype=float)
+            if prefer_quiet and len(pre_threshold_bins) >= smooth_bins:
+                hist = np.asarray(pre_threshold_bins, dtype=float)
+                best_std = float("inf")
+                best_mean = float(np.mean(hist[-smooth_bins:]))
+                for start in range(0, len(hist) - smooth_bins + 1):
+                    window = hist[start : start + smooth_bins]
+                    std_w = float(np.std(window))
+                    if std_w < best_std:
+                        best_std = std_w
+                        best_mean = float(np.mean(window))
+                        recent = window
             emg_base = float(np.mean(recent))
             std_online = float(np.std(recent))
             if mode in {"raw", "raw_std", "std"}:
                 threshold = emg_base + std_online * 4.0
             elif mode in {"legacy_mv", "mv_old", "txt"}:
-                legacy = emg_base + (0.1 - emg_base) * 4 / 100
-                if emg_base < 0.5 and std_online < 0.2:
-                    threshold = legacy
+                # Original ZE1 script uses a small legacy lift from data_max.
+                # When the arming window is noisy (early burst / ZE2 bandpass),
+                # mean+2*std can jump to 0.1–0.8 and miss all contractions.
+                legacy = emg_base + (float(data_max) - emg_base) * 4 / 100
+                floor = emg_base + threshold_std_k * max(std_online, 1e-6)
+                if std_online < 0.05 or (emg_base < 0.5 and std_online < 0.2):
+                    threshold = max(legacy, emg_base + 1.5 * max(std_online, 1e-6))
                 else:
-                    # Settled rest: mean + 2*std of last 32 bins (~0.25 s)
-                    threshold = emg_base + 2.0 * max(std_online, 1e-6)
+                    # Noisy window: keep a modest floor but do not trust full adaptive.
+                    threshold = max(legacy, min(floor, legacy + 0.02))
+                if threshold_cap_f is not None:
+                    threshold = min(float(threshold), threshold_cap_f)
             else:
                 # Delsys capture script (active formula), mV-scaled dataMax.
                 # After baseline subtraction, emg_base is often ~0 so the formula
                 # alone yields ~0.003 and keeps inter-burst rest "active".
-                # Floor with mean+4*std of the warm-up envelope window.
+                # Floor with mean+k*std of a quiet warm-up envelope window.
                 formula = emg_base + (float(data_max) - emg_base) * 3 / 100
-                adaptive = emg_base + 4.0 * max(std_online, 1e-6)
+                adaptive = emg_base + threshold_std_k * max(std_online, 1e-6)
                 threshold = max(formula, adaptive)
             emg_base_check = True
+            pre_threshold_bins.clear()
 
         if emg_base_check:
             emg_data = float(np.mean(emg128_raw_data[-smooth_bins:]))
@@ -416,6 +465,18 @@ def detect_contractions_ze1(
         )
         segments.append({"start_bin": int(start_bin), "end_bin": int(end_bin)})
 
+    onset_override = _onset_before_ready_gate(
+        segments,
+        bin_end_samples=bin_end_samples,
+        block=block,
+        sample_rate_hz=fs,
+        threshold_ready_s=threshold_ready_s,
+        threshold=float(threshold),
+        armed_bins=armed_bins,
+        armed_ends=armed_ends,
+        smooth_bins=smooth_bins,
+    )
+
     contractions: list[dict[str, Any]] = []
     for index, seg in enumerate(segments, start=1):
         start_bin = max(0, min(int(seg["start_bin"]), len(bin_end_samples) - 1))
@@ -424,6 +485,8 @@ def detect_contractions_ze1(
         start_sample = int(bin_end_samples[start_bin]) - block + 1
         start_sample = max(0, min(start_sample, len(emg) - 1))
         end_sample = max(start_sample + 1, min(end_sample, len(emg)))
+        if index == 1 and onset_override is not None:
+            start_sample = min(start_sample, int(onset_override))
         start_s = start_sample / fs
         end_s = end_sample / fs
         contractions.append(
@@ -458,13 +521,20 @@ def detect_contractions_ze1(
         tail_rms_ratio=0.18,
         tail_pad_seconds=0.12,
     )
+    envelope_segments = _noise_floor_segments(
+        emg, sample_rate_hz=fs, expected_count=expected_count
+    )
+    segment_method = "ze1_schmitt"
+    if envelope_segments:
+        contractions = envelope_segments
+        segment_method = "rms_envelope"
 
     return {
         "contractions": contractions,
         "threshold": float(threshold),
         "baseline": float(baseline),
         "analysis_hz": float(analysis_hz),
-        "method": "ze1_schmitt",
+        "method": segment_method,
         "envelope": moving_avg_list,
         "threshold_mode": mode,
         "source_preset": (source or "delsys").strip().lower(),
@@ -473,7 +543,151 @@ def detect_contractions_ze1(
         "merge_gap_n": merge_gap_n,
         "window_size": window_size,
         "data_max": float(data_max),
+        "threshold_std_k": float(threshold_std_k),
+        "threshold_ready_s": float(threshold_ready_s),
+        "threshold_prefer_quiet": bool(prefer_quiet),
+        "threshold_cap": threshold_cap_f,
     }
+
+
+def _onset_before_ready_gate(
+    segments: list[dict[str, Any]],
+    *,
+    bin_end_samples: list[int],
+    block: int,
+    sample_rate_hz: float,
+    threshold_ready_s: float,
+    threshold: float,
+    armed_bins: list[float],
+    armed_ends: list[int],
+    smooth_bins: int,
+) -> int | None:
+    """
+    If the first burst was already active when the Schmitt gate armed, move its
+    start back to the envelope crossing instead of leaving it at the gate.
+    """
+    if not segments or not bin_end_samples or not armed_bins or not armed_ends:
+        return None
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1259.0
+    arm_sample = int(fs * float(threshold_ready_s))
+    start_bin = max(0, min(int(segments[0]["start_bin"]), len(bin_end_samples) - 1))
+    gated_start = max(0, int(bin_end_samples[start_bin]) - block + 1)
+    # Only the gate-clipped case: onset sits on the arming instant.
+    if gated_start > arm_sample + int(fs * 0.45):
+        return None
+
+    hist = np.asarray(armed_bins, dtype=float)
+    if hist.size < smooth_bins:
+        return None
+    smooth = np.convolve(hist, np.ones(smooth_bins) / smooth_bins, mode="valid")
+    down = float(threshold) * 0.55
+    if float(smooth[-1]) <= down:
+        return None
+
+    k = len(smooth) - 1
+    while k > 0 and float(smooth[k]) > down:
+        k -= 1
+    onset_k = k + 1 if float(smooth[k]) <= down else k
+    onset_k = min(max(0, onset_k), len(smooth) - 1)
+    sample_idx = onset_k + smooth_bins - 1
+    sample_idx = max(0, min(sample_idx, len(armed_ends) - 1))
+    onset_sample = max(0, int(armed_ends[sample_idx]) - block + 1)
+
+    # Stay after the 0–2 s baseline, and do not reach more than 3 s before the gate.
+    earliest = max(int(fs * 2.2), arm_sample - int(fs * 3.0))
+    onset_sample = max(onset_sample, earliest)
+    if onset_sample >= gated_start - int(fs * 0.08):
+        return None
+    return onset_sample
+
+
+def _noise_floor_segments(
+    emg: np.ndarray,
+    *,
+    sample_rate_hz: float,
+    expected_count: int | None,
+) -> list[dict[str, Any]] | None:
+    """
+    Re-segment a recording whose rest noise is as large as the bursts.
+
+    Schmitt then keeps only the tallest spikes and splits one effort into
+    short pieces. A 0.25 s RMS envelope, thresholded above the noise floor,
+    follows the sustained effort instead.
+    """
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1024.0
+    if emg.size < int(fs * 3):
+        return None
+    win = max(4, int(round(0.25 * fs)))
+    hop = max(1, int(round(0.05 * fs)))
+    if emg.size < win * 4:
+        return None
+    rms: list[float] = []
+    centers: list[int] = []
+    for i in range(0, len(emg) - win + 1, hop):
+        chunk = emg[i : i + win]
+        rms.append(float(np.sqrt(np.mean(chunk * chunk))))
+        centers.append(i + win // 2)
+    rms_a = np.asarray(rms, dtype=float)
+    loud = float(np.percentile(rms_a, 90))
+    if loud <= 0:
+        return None
+    # Only take over when most of the record is already near the loud level.
+    if float(np.mean(rms_a > 0.55 * loud)) < 0.8:
+        return None
+    base = float(np.percentile(rms_a, 20))
+    peak = float(np.percentile(rms_a, 95))
+    if base <= 0 or peak < base * 1.4:
+        return None
+    level = base + 0.40 * (peak - base)
+    active = rms_a > level
+    groups: list[list[int]] = []
+    i = 0
+    while i < len(active):
+        if not active[i]:
+            i += 1
+            continue
+        j = i
+        while j < len(active) and active[j]:
+            j += 1
+        if not groups:
+            groups.append([i, j - 1])
+        else:
+            gap = (centers[i] - centers[groups[-1][1]]) / fs
+            if gap < 0.8:
+                groups[-1][1] = j - 1
+            else:
+                groups.append([i, j - 1])
+        i = j
+
+    found: list[dict[str, Any]] = []
+    for a, b in groups:
+        start_sample = max(0, int(centers[a]) - win // 2)
+        end_sample = min(len(emg), int(centers[b]) + win // 2)
+        if (end_sample - start_sample) / fs < 1.0:
+            continue
+        seg = emg[start_sample:end_sample]
+        found.append(
+            {
+                "start_sample": start_sample,
+                "end_sample": end_sample,
+                "start": start_sample / fs,
+                "end": end_sample / fs,
+                "duration": (end_sample - start_sample) / fs,
+                "peak_rms": float(np.sqrt(np.mean(seg * seg))) if seg.size else 0.0,
+            }
+        )
+    if len(found) < 2:
+        return None
+    if expected_count and expected_count > 0 and len(found) > int(expected_count):
+        ranked = sorted(found, key=lambda c: float(c["duration"]), reverse=True)
+        found = sorted(ranked[: int(expected_count)], key=lambda c: float(c["start"]))
+    for index, item in enumerate(found, start=1):
+        item["index"] = index
+        item["start"] = round(float(item["start"]), 4)
+        item["end"] = round(float(item["end"]), 4)
+        item["duration"] = round(float(item["end"]) - float(item["start"]), 4)
+        item["peak_rms"] = round(float(item["peak_rms"]), 6)
+    return found
 
 
 def _trim_ze1_tail(
@@ -755,7 +969,7 @@ def _series_time_axis(n: int, sample_rate: float, window_l: float, overlap: floa
 
 
 def _downsample_xy(xs: list[float], ys: list[float], max_points: int = 2500) -> tuple[list[float], list[float]]:
-    if len(xs) <= max_points:
+    if max_points <= 0 or len(xs) <= max_points:
         return xs, ys
     step = max(1, len(xs) // max_points)
     out_x = xs[::step]
@@ -772,11 +986,11 @@ def compute_ttri_feature_series(
     sample_rate: float,
     window_l: float = 157,
     overlap: float = 79,
-    max_points: int = 2500,
+    max_points: int | None = 2500,
 ) -> dict[str, Any]:
     """
     Full-signal TTRI feature curves (same kernels as muscleCaptureForZE1 plots).
-    Returns downsampled x/y series for web plotting.
+    Returns x/y series; set max_points=None to keep full resolution (for correlation).
     """
     arr = np.asarray(values, dtype=float)
     fs = float(sample_rate) if sample_rate > 0 else 1024.0
@@ -790,7 +1004,8 @@ def compute_ttri_feature_series(
     def pack(series: np.ndarray, ov: float) -> dict[str, list[float]]:
         ys = [float(v) for v in series.tolist()]
         xs = _series_time_axis(len(ys), fs, window_l, ov)
-        xs, ys = _downsample_xy(xs, ys, max_points=max_points)
+        if max_points is not None:
+            xs, ys = _downsample_xy(xs, ys, max_points=max_points)
         return {"times": xs, "values": ys}
 
     return {

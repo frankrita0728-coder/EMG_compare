@@ -15,7 +15,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 def _find_cjk_font() -> str | None:
@@ -128,13 +128,41 @@ def _rows_from_delta(pairs: list[dict[str, Any]]) -> list[list[str]]:
     return [header, *body]
 
 
-def _make_table(data: list[list[str]], font_name: str) -> Table:
-    table = Table(data, repeatRows=1)
+def _rows_from_correlation(correlation: dict[str, Any] | None) -> list[list[str]]:
+    if not correlation:
+        return [["metric", "r"], ["", "no correlation"]]
+    body = [[str(key), _fmt(value)] for key, value in correlation.items()]
+    return [["metric", "r"], *body]
+
+
+def _rows_from_interval_agreement(rows: list[dict[str, Any]] | None) -> list[list[str]]:
+    if not rows:
+        return [["metric", "n", "pearson_r", "icc"], ["", "", "", "no agreement"]]
+    body = [
+        [
+            str(item.get("metric") or ""),
+            _fmt(item.get("n")),
+            _fmt(item.get("pearson_r")),
+            _fmt(item.get("icc")),
+        ]
+        for item in rows
+    ]
+    return [["metric", "n", "pearson_r", "icc"], *body]
+
+
+def _make_table(
+    data: list[list[str]],
+    font_name: str,
+    *,
+    col_widths: list[float] | None = None,
+    font_size: float = 8,
+) -> Table:
+    table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(
         TableStyle(
             [
                 ("FONTNAME", (0, 0), (-1, -1), font_name),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), font_size),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#18201c")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#e7efe9")),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f7faf8")),
@@ -243,6 +271,319 @@ def _add_series_image(story: list[Any], series: dict[str, Any] | None, title: st
     story.append(img)
 
 
+def _filled_fraction(times: list[float], values: list[float]) -> float:
+    """Share of the record that is already loud. Near 1 means noise fills the trace."""
+    n = min(len(times), len(values))
+    if n < 8:
+        return 0.0
+    dt = (float(times[n - 1]) - float(times[0])) / (n - 1)
+    if dt <= 0:
+        return 0.0
+    win = max(4, int(round(0.25 / dt)))
+    if n < win * 4:
+        return 0.0
+    try:
+        import numpy as np
+    except Exception:
+        return 0.0
+    x = np.asarray(values[:n], dtype=float)
+    sq = np.cumsum(x * x)
+    ends = np.arange(win, n + 1, win)
+    starts = ends - win
+    energy = sq[ends - 1] - np.where(starts > 0, sq[starts - 1], 0.0)
+    rms = np.sqrt(np.maximum(energy, 0.0) / win)
+    loud = float(np.percentile(rms, 90))
+    if loud <= 0:
+        return 0.0
+    return float(np.mean(rms > 0.55 * loud))
+
+
+def _rolling_rms(times: list[float], values: list[float], win_s: float = 0.25) -> list[float]:
+    n = min(len(times), len(values))
+    if n < 4:
+        return values[:n]
+    dt = (float(times[n - 1]) - float(times[0])) / (n - 1)
+    if dt <= 0:
+        return values[:n]
+    win = max(4, int(round(win_s / dt)))
+    try:
+        import numpy as np
+    except Exception:
+        return values[:n]
+    x = np.asarray(values[:n], dtype=float)
+    sq = np.cumsum(x * x)
+    idx = np.arange(n)
+    starts = np.maximum(0, idx - win + 1)
+    energy = sq[idx] - np.where(starts > 0, sq[starts - 1], 0.0)
+    counts = idx - starts + 1
+    return np.sqrt(np.maximum(energy, 0.0) / counts).tolist()
+
+
+def _stride(times: list[float], values: list[float], max_points: int = 4000) -> tuple[list[float], list[float]]:
+    n = min(len(times), len(values))
+    times, values = times[:n], values[:n]
+    if n <= max_points:
+        return times, values
+    step = max(1, n // max_points)
+    return times[::step], values[::step]
+
+
+def _percentile(values: list[float], q: float) -> float:
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    pos = (len(ordered) - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, len(ordered) - 1)
+    frac = pos - lo
+    return float(ordered[lo]) * (1.0 - frac) + float(ordered[hi]) * frac
+
+
+def _readable_ylim(values: list[float]) -> tuple[float, float]:
+    """Frame the main waveform with headroom so peaks do not sit on the border."""
+    if not values:
+        return -1.0, 1.0
+    lo = _percentile(values, 0.005)
+    hi = _percentile(values, 0.995)
+    span = hi - lo
+    if span <= 0:
+        span = max(abs(hi), abs(lo), 1e-3)
+    # Extra room so the trace is not flush with the frame (that reads as clipping).
+    pad = 0.4 * span
+    return lo - pad, hi + pad
+
+
+def _style_dark_ax(ax, font_prop) -> None:
+    ax.set_facecolor("#141b18")
+    ax.tick_params(colors="#e7efe9", labelsize=8)
+    ax.xaxis.label.set_color("#e7efe9")
+    ax.yaxis.label.set_color("#e7efe9")
+    for spine in ax.spines.values():
+        spine.set_color("#2c3a33")
+    ax.grid(True, color="#24322b", alpha=0.7)
+    if font_prop is not None:
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_fontproperties(font_prop)
+
+
+def _spans_from_pairs(
+    pairs: list[dict[str, Any]], keys: tuple[str, ...], offset: float
+) -> list[tuple[float, float]]:
+    spans: list[tuple[float, float]] = []
+    for item in pairs:
+        block = None
+        for key in keys:
+            if isinstance(item.get(key), dict):
+                block = item[key]
+                break
+        if not block:
+            continue
+        try:
+            start = float(block["start"]) + offset
+            end = float(block["end"]) + offset
+        except (KeyError, TypeError, ValueError):
+            continue
+        if end > start:
+            spans.append((start, end))
+    return spans
+
+
+def _waveform_compare_png(
+    *,
+    delsys: dict[str, Any],
+    exp: dict[str, Any],
+    exp_label: str,
+    title: str,
+    ref_label: str = "Delsys",
+) -> bytes | None:
+    """Two-panel raw waveform. Y-axis includes the full peak-to-peak range."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import ScalarFormatter
+    except Exception:
+        return None
+
+    font_prop = _matplotlib_font_properties()
+    if font_prop is not None:
+        try:
+            plt.rcParams["font.family"] = font_prop.get_name()
+            plt.rcParams["axes.unicode_minus"] = False
+        except Exception:
+            pass
+
+    fig, (ax_ref, ax_exp) = plt.subplots(2, 1, figsize=(11.2, 5.3), sharex=False)
+    fig.patch.set_facecolor("#0f1412")
+    for ax in (ax_ref, ax_exp):
+        _style_dark_ax(ax, font_prop)
+
+    def _draw(ax, trace: dict[str, Any], *, color: str, label: str) -> None:
+        times = [float(t) for t in (trace.get("times") or [])]
+        values = [float(v) for v in (trace.get("values") or [])]
+        n = min(len(times), len(values))
+        times, values = times[:n], values[:n]
+        use_envelope = _filled_fraction(times, values) >= 0.8
+        shown = _rolling_rms(times, values) if use_envelope else values
+        shown_label = f"{label} 0.25s RMS" if use_envelope else label
+        for start, end in trace.get("spans") or []:
+            ax.axvspan(start, end, color=color, alpha=0.16, linewidth=0)
+        if times and shown:
+            y0, y1 = _readable_ylim(shown)
+            draw_t, draw_v = _stride(times, shown)
+            ax.plot(draw_t, draw_v, color=color, linewidth=1.1 if use_envelope else 0.7, label=shown_label)
+            ax.set_ylim(y0, y1)
+            ax.set_xlim(times[0], times[-1])
+        formatter = ScalarFormatter(useOffset=False)
+        formatter.set_scientific(False)
+        ax.yaxis.set_major_formatter(formatter)
+        ax.margins(x=0.01)
+        y_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 9}
+        if font_prop is not None:
+            y_kwargs["fontproperties"] = font_prop
+        unit = str(trace.get("unit") or "mV")
+        ax.set_ylabel(f"{label} ({unit})", **y_kwargs)
+        legend_kwargs: dict[str, Any] = {
+            "loc": "upper right",
+            "facecolor": "#18201c",
+            "edgecolor": "#2c3a33",
+            "labelcolor": "#e7efe9",
+            "fontsize": 8,
+        }
+        if font_prop is not None:
+            legend_kwargs["prop"] = font_prop
+        ax.legend(**legend_kwargs)
+
+    _draw(ax_ref, delsys, color="#5ec8ff", label=ref_label)
+    _draw(ax_exp, exp, color="#3dd68c", label=exp_label)
+
+    title_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 11, "pad": 8}
+    if font_prop is not None:
+        title_kwargs["fontproperties"] = font_prop
+    ax_ref.set_title(title, **title_kwargs)
+    x_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 9}
+    if font_prop is not None:
+        x_kwargs["fontproperties"] = font_prop
+    ax_exp.set_xlabel("Time (s)", **x_kwargs)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _pair_waveform_block(
+    row: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    purpose: str,
+    h_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+) -> list[Any]:
+    """One pair waveform page block for device / shaving / fatigue."""
+    row_i = row.get("row")
+    site = row.get("site") or row.get("部位") or ""
+    device = str(row.get("device_note") or row.get("裝置") or payload.get("device_note") or "")
+    purpose_s = str(purpose or row.get("purpose") or payload.get("purpose") or "")
+    ref_name = (
+        payload.get("ref_resolved")
+        or payload.get("ref")
+        or row.get("ref")
+        or row.get("ref_resolved")
+        or ((payload.get("delsys") or {}).get("filename") if isinstance(payload.get("delsys"), dict) else "")
+        or ""
+    )
+    exp_name = payload.get("exp_resolved") or payload.get("exp") or row.get("exp") or row.get("exp_resolved") or ""
+    if not exp_name:
+        for key in ("ze2", "ze1", "txt"):
+            block = payload.get(key)
+            if isinstance(block, dict) and block.get("filename"):
+                exp_name = block["filename"]
+                break
+
+    heading = f"第 {row_i} 列　{site}　{device}"
+    bits = [Paragraph(_escape(heading), h_style)]
+    status = str(row.get("status") or "")
+    if status and status != "done":
+        bits.append(Paragraph(_escape(f"未繪製波形：{status}"), body_style))
+        return bits
+    if not ref_name or not exp_name:
+        bits.append(Paragraph(_escape("未繪製波形：缺少對照或實驗檔名。"), body_style))
+        return bits
+
+    try:
+        from compare import build_pair_waveform
+
+        wave = build_pair_waveform(
+            str(ref_name),
+            str(exp_name),
+            purpose=purpose_s,
+            device_note=device,
+            align_by_start=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        bits.append(Paragraph(_escape(f"波形讀取失敗：{exc}"), body_style))
+        return bits
+
+    pairs = payload.get("pairs") if isinstance(payload.get("pairs"), list) else []
+    ref = dict(wave.get("ref") or wave["delsys"])
+    exp = dict(wave["exp"])
+    # Pair JSON still stores ref under "delsys" for TXT×TXT 刮腿毛.
+    ref["spans"] = _spans_from_pairs(pairs, ("delsys", "ref"), 0.0)
+    exp["spans"] = _spans_from_pairs(pairs, ("txt", "ze2", "ze1", "exp"), 0.0)
+    ref_label = str(wave.get("ref_label") or "Delsys")
+    exp_label = str(wave.get("exp_label") or "ZE1")
+    rms_r = row.get("rms_pearson_r") if "rms_pearson_r" in row else row.get("RMS r")
+    iemg_r = row.get("iemg_pearson_r") if "iemg_pearson_r" in row else row.get("iEMG r")
+    filter_note = ""
+    if purpose_s != "刮腿毛" and device.lower() in {"a10", "ze2"}:
+        filter_note = "　｜　實驗組已套用 20–400 Hz 帶通"
+    count_note = ""
+    if purpose_s == "疲勞":
+        count_note = (
+            f"　｜　段數 {row.get('ref_count') or '—'}/{row.get('exp_count') or '—'}"
+            f"　疲勞可視 {row.get('fatigue_visible') or row.get('疲勞可視') or '—'}"
+        )
+    caption = (
+        f"{ref_label}：{ref_name}　｜　{exp_label}：{exp_name}　｜　"
+        f"RMS r={_fmt(rms_r)}　iEMG r={_fmt(iemg_r)}　｜　"
+        f"時間軸以各檔錄音起點為 0 秒；縱軸依主要振幅留白"
+        f"{filter_note}{count_note}"
+    )
+    bits.append(Paragraph(_escape(caption), body_style))
+    png = _waveform_compare_png(
+        delsys=ref,
+        exp=exp,
+        ref_label=ref_label,
+        exp_label=exp_label,
+        title=f"#{row_i}  {site}  {device}  {ref_label} vs {exp_label}",
+    )
+    if not png:
+        bits.append(Paragraph(_escape("波形圖產生失敗。"), body_style))
+        return bits
+    bits.append(Spacer(1, 0.15 * cm))
+    bits.append(Image(io.BytesIO(png), width=26.2 * cm, height=12.2 * cm))
+    return bits
+
+
+def _device_waveform_block(
+    row: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    h_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+) -> list[Any]:
+    return _pair_waveform_block(
+        row,
+        payload,
+        purpose="裝置比對",
+        h_style=h_style,
+        body_style=body_style,
+    )
+
 def build_results_pdf(
     *,
     title: str = "emg-compare.app Report",
@@ -323,6 +664,19 @@ def build_results_pdf(
         if feat_delta.get("note"):
             story.append(Paragraph(_escape(str(feat_delta["note"])), body_style))
         story.append(_make_table(_rows_from_delta(feat_delta.get("pairs") or []), font_name))
+        if feat_delta.get("interval_agreement"):
+            story.append(Paragraph(_escape("收縮區間一致性（Pearson r / ICC(A,1)）"), h_style))
+            story.append(
+                _make_table(
+                    _rows_from_interval_agreement(feat_delta.get("interval_agreement") or []),
+                    font_name,
+                )
+            )
+        if feat_delta.get("correlation"):
+            story.append(Paragraph(_escape("TTRI 滑動窗相關係數（Pearson r）"), h_style))
+            story.append(
+                _make_table(_rows_from_correlation(feat_delta.get("correlation") or {}), font_name)
+            )
 
     if contr_delsys:
         filename = contr_delsys.get("filename") or "Delsys"
@@ -336,6 +690,410 @@ def build_results_pdf(
 
     if len(story) <= 3:
         story.append(Paragraph(_escape("尚無可匯出的結果，請先執行分析。"), body_style))
+
+    doc.build(story)
+    return buffer.getvalue()
+
+
+def _short(text: Any, max_len: int = 42) -> str:
+    s = "" if text is None else str(text)
+    if len(s) <= max_len:
+        return s
+    return s[: max_len - 1] + "…"
+
+
+def _interval_change_story(
+    changes: dict[str, Any],
+    *,
+    heading: str,
+    h_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+    small_style: ParagraphStyle,
+    font_name: str,
+) -> list[Any]:
+    """Pages listing contraction intervals that moved relative to the previous batch."""
+    story: list[Any] = [PageBreak(), Paragraph(_escape(heading), h_style)]
+    intro = [
+        "相對上一批（a10 帶通已套用、第一段起點仍常停在 6.0 秒），這次只改收縮區間的切法，特徵算法沒有改。",
+        "起點前追：門檻在 6 秒才生效時，若第一段其實更早開始，起點往前追到上升處。最早不超過門檻前 3 秒，也不早於 3.0 秒。後段不動。",
+        "底噪重切：0.25 秒 RMS 有八成以上時間貼在高位時，改依包絡重切，不再沿用 Schmitt 的碎段。",
+        "時間以各檔錄音起點為 0 秒。表內只列出有變動的那一側。標「上限」表示追到 3.0 秒就停。",
+    ]
+    for line in intro:
+        story.append(Paragraph(_escape(line), body_style))
+    story.append(Spacer(1, 0.2 * cm))
+
+    width = 27.6 * cm
+    onset = list(changes.get("onset") or [])
+    if onset:
+        story.append(Paragraph(_escape("只把第一段起點往前追"), h_style))
+        header = ["列", "部位", "目的", "裝置", "側", "第1段調整前", "第1段調整後"]
+        body = [header]
+        for item in onset:
+            new_first = str(item.get("new_first") or "")
+            if item.get("capped"):
+                new_first = f"{new_first} 上限"
+            body.append(
+                [
+                    _fmt(item.get("row")),
+                    _short(item.get("site"), 6),
+                    _short(item.get("purpose"), 4),
+                    _short(item.get("device"), 4),
+                    _short(item.get("side"), 6),
+                    _fmt(item.get("old_first")),
+                    new_first,
+                ]
+            )
+        story.append(
+            _make_table(
+                body,
+                font_name,
+                col_widths=[
+                    1.3 * cm,
+                    2.4 * cm,
+                    2.2 * cm,
+                    1.6 * cm,
+                    2.0 * cm,
+                    4.6 * cm,
+                    4.8 * cm,
+                ],
+                font_size=7.5,
+            )
+        )
+
+    reseg = list(changes.get("resegment") or [])
+    if reseg:
+        story.append(Spacer(1, 0.25 * cm))
+        story.append(Paragraph(_escape("整段重切"), h_style))
+        story.append(
+            Paragraph(
+                _escape(
+                    "第 20 列 ZE1 與第 29 列 Delsys 是同一份左腓腸肌 a09。"
+                    "第 21 列重切後第一段仍約 1.6 秒，這份 ZE1 在第二次出力前只有這一段較高的能量。"
+                ),
+                small_style,
+            )
+        )
+        header = ["列", "部位", "目的", "裝置", "側", "調整前", "調整後"]
+        body_rows: list[list[Any]] = [header]
+        for item in reseg:
+            body_rows.append(
+                [
+                    _fmt(item.get("row")),
+                    _short(item.get("site"), 6),
+                    _short(item.get("purpose"), 4),
+                    _short(item.get("device"), 4),
+                    _short(item.get("side"), 6),
+                    Paragraph(_escape(str(item.get("old") or "")), small_style),
+                    Paragraph(_escape(str(item.get("new") or "")), small_style),
+                ]
+            )
+        story.append(
+            _make_table(
+                body_rows,
+                font_name,
+                col_widths=[
+                    1.2 * cm,
+                    2.2 * cm,
+                    2.0 * cm,
+                    1.5 * cm,
+                    1.8 * cm,
+                    width * 0.28,
+                    width * 0.28,
+                ],
+                font_size=7.5,
+            )
+        )
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(
+        Paragraph(
+            _escape(
+                "這次沒有改區間：第 11 列左脛前肌 a10、第 12 列左脛前肌 ZE2、第 36 列右腓腸肌疲勞。"
+                "第 22、23 列左腓腸肌 a10 實驗組仍是 2 段（帶通後約 5–14 秒沒有連續超過門檻）。"
+                "第 15 列缺 Delsys，未執行。"
+            ),
+            body_style,
+        )
+    )
+    return story
+
+
+def build_pair_list_pdf(
+    summary_rows: list[dict[str, Any]],
+    *,
+    result_payloads: list[dict[str, Any]] | None = None,
+    title: str = "ZE1 清單分析結果報告",
+    interval_changes: dict[str, Any] | None = None,
+) -> bytes:
+    """
+    Standalone PDF for Excel pair-list batch results.
+
+    Includes overview metrics and a fatigue-visibility section with evidence.
+    """
+    font_name = _register_fonts()
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=landscape(A4),
+        leftMargin=1.0 * cm,
+        rightMargin=1.0 * cm,
+        topMargin=1.0 * cm,
+        bottomMargin=1.0 * cm,
+        title=title,
+    )
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        "TitleCJK",
+        parent=styles["Title"],
+        fontName=font_name,
+        fontSize=16,
+        leading=20,
+        textColor=colors.HexColor("#102018"),
+    )
+    h_style = ParagraphStyle(
+        "HeadingCJK",
+        parent=styles["Heading2"],
+        fontName=font_name,
+        fontSize=12,
+        leading=16,
+        textColor=colors.HexColor("#1f3b2e"),
+        spaceBefore=10,
+        spaceAfter=6,
+    )
+    body_style = ParagraphStyle(
+        "BodyCJK",
+        parent=styles["Normal"],
+        fontName=font_name,
+        fontSize=9,
+        leading=13,
+    )
+    small_style = ParagraphStyle(
+        "SmallCJK",
+        parent=styles["Normal"],
+        fontName=font_name,
+        fontSize=7.5,
+        leading=10,
+    )
+
+    story: list[Any] = []
+    story.append(Paragraph(_escape(title), title_style))
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    n_done = sum(1 for r in summary_rows if r.get("status") == "done")
+    n_miss = sum(1 for r in summary_rows if r.get("status") == "missing_files")
+    n_err = sum(1 for r in summary_rows if str(r.get("status") or "").startswith("error"))
+    story.append(Paragraph(_escape(f"匯出時間：{stamp}"), body_style))
+    story.append(
+        Paragraph(
+            _escape(
+                f"完成 {n_done}／缺檔 {n_miss}／錯誤 {n_err}　｜　"
+                "收縮：ze1_schmitt　特徵：TTRI　裝置比對／刮腿毛預期 3 段、疲勞 10 段"
+            ),
+            body_style,
+        )
+    )
+    story.append(
+        Paragraph(
+            _escape(
+                "疲勞可視性：跨收縮 MPF／MDF 下降為主（RMS／AEMG 上升為輔）→ 是／弱／否"
+            ),
+            body_style,
+        )
+    )
+    story.append(Spacer(1, 0.25 * cm))
+
+    # --- Overview ---
+    story.append(Paragraph(_escape("一、總覽"), h_style))
+    overview_header = [
+        "列",
+        "部位",
+        "目的",
+        "裝置",
+        "段數",
+        "RMS r",
+        "RMS ICC",
+        "iEMG r",
+        "TTRI RMS",
+        "疲勞",
+    ]
+    overview_body: list[list[str]] = []
+    for row in summary_rows:
+        overview_body.append(
+            [
+                _fmt(row.get("row")),
+                _short(row.get("site"), 8),
+                _short(row.get("purpose"), 6),
+                _short(row.get("device_note") or row.get("裝置"), 5),
+                _fmt(
+                    row.get("段數")
+                    or f"{row.get('ref_count') or '—'}/{row.get('exp_count') or '—'}"
+                ),
+                _fmt(row.get("rms_pearson_r") if "rms_pearson_r" in row else row.get("RMS r")),
+                _fmt(row.get("rms_icc") if "rms_icc" in row else row.get("RMS ICC")),
+                _fmt(row.get("iemg_pearson_r") if "iemg_pearson_r" in row else row.get("iEMG r")),
+                _fmt(row.get("ttri_rms_r") if "ttri_rms_r" in row else row.get("TTRI RMS r")),
+                _short(
+                    row.get("fatigue_visible")
+                    or row.get("疲勞可視")
+                    or ("—" if str(row.get("purpose") or row.get("目的") or "") != "疲勞" else ""),
+                    8,
+                ),
+            ]
+        )
+    story.append(_make_table([overview_header, *overview_body], font_name))
+
+    device_rows = [
+        r
+        for r in summary_rows
+        if str(r.get("purpose") or r.get("目的") or "") == "裝置比對"
+    ]
+    payload_by_row: dict[Any, dict[str, Any]] = {}
+    for payload in result_payloads or []:
+        if isinstance(payload, dict) and payload.get("row") is not None:
+            try:
+                key = int(payload["row"])
+            except (TypeError, ValueError):
+                key = payload["row"]
+            payload_by_row[key] = payload
+
+    section_no = 2
+    cn = "一二三四五六七八九十"
+
+    def _append_waveform_section(
+        *,
+        purpose: str,
+        title: str,
+        intro: str,
+        rows: list[dict[str, Any]],
+    ) -> None:
+        nonlocal section_no
+        if not rows:
+            return
+        story.append(PageBreak())
+        story.append(Paragraph(_escape(f"{cn[section_no - 1]}、{title}"), h_style))
+        section_no += 1
+        story.append(Paragraph(_escape(intro), small_style))
+        for index, row in enumerate(rows):
+            try:
+                row_i = int(row.get("row"))
+            except (TypeError, ValueError):
+                row_i = row.get("row")
+            if index:
+                story.append(PageBreak())
+            story.extend(
+                _pair_waveform_block(
+                    row,
+                    payload_by_row.get(row_i) or {},
+                    purpose=purpose,
+                    h_style=h_style,
+                    body_style=body_style,
+                )
+            )
+
+    if interval_changes:
+        story.extend(
+            _interval_change_story(
+                interval_changes,
+                heading=f"{cn[section_no - 1]}、收縮區間調整",
+                h_style=h_style,
+                body_style=body_style,
+                small_style=small_style,
+                font_name=font_name,
+            )
+        )
+        section_no += 1
+
+    shave_rows = [
+        r
+        for r in summary_rows
+        if str(r.get("purpose") or r.get("目的") or "") == "刮腿毛"
+    ]
+    fatigue_rows = [
+        r for r in summary_rows if str(r.get("purpose") or r.get("目的") or "") == "疲勞"
+    ]
+
+    _append_waveform_section(
+        purpose="裝置比對",
+        title="裝置比對波形",
+        intro=(
+            "每組一頁。上圖 Delsys、下圖 ZE1 或 ZE2，皆為原始 mV，時間軸以各檔錄音起點為 0 秒。"
+            "縱軸依主要振幅留白。若底噪把整段塗滿，該圖改畫 0.25 秒 RMS，收縮才看得清楚。"
+            "色帶是收縮區間。多數由 Schmitt 切出；底噪填滿的紀錄改依 0.25 秒 RMS 包絡重切。"
+            "a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
+        ),
+        rows=device_rows,
+    )
+    _append_waveform_section(
+        purpose="刮腿毛",
+        title="刮腿毛波形",
+        intro=(
+            "每組一頁。上圖刮毛前、下圖刮毛後，皆為 ZE1 TXT 原始 mV。"
+            "時間軸以各檔錄音起點為 0 秒；色帶是收縮區間。"
+        ),
+        rows=shave_rows,
+    )
+    _append_waveform_section(
+        purpose="疲勞",
+        title="疲勞波形",
+        intro=(
+            "每組一頁。上圖 Delsys、下圖 ZE1，皆為原始 mV；預期約 10 段收縮。"
+            "時間軸以各檔錄音起點為 0 秒；色帶是收縮區間。"
+            "若底噪把整段塗滿，該圖改畫 0.25 秒 RMS。"
+        ),
+        rows=fatigue_rows,
+    )
+
+    # --- Fatigue visibility table ---
+    if fatigue_rows:
+        story.append(PageBreak())
+        story.append(Paragraph(_escape(f"{cn[section_no - 1]}、疲勞：這一次能否看出疲勞"), h_style))
+        section_no += 1
+        story.append(
+            Paragraph(
+                _escape(
+                    "規則：≥5 段；MPF/MDF 對收縮序 r≤−0.35 且前→後三分之一 ≤−3%；"
+                    "振幅輔助 RMS/AEMG r≥0.35 且 ≥+5%。是＝兩項頻譜或一頻譜+一振幅。"
+                ),
+                small_style,
+            )
+        )
+        fat_header = ["列", "部位", "綜合", "Delsys", "TXT", "依據摘要"]
+        fat_body: list[list[Any]] = []
+        for row in fatigue_rows:
+            try:
+                row_i = int(row.get("row"))
+            except (TypeError, ValueError):
+                row_i = row.get("row")
+            payload = payload_by_row.get(row_i) or {}
+            fv = payload.get("fatigue_visibility") or {}
+            bits: list[str] = []
+            for side_key, tag in (("ref", "D"), ("exp", "T")):
+                side = fv.get(side_key) or {}
+                ev = side.get("evidence") or []
+                if ev:
+                    bits.append(f"{tag}: " + "; ".join(str(x) for x in ev[:2]))
+            evidence = " / ".join(bits) if bits else str(fv.get("summary") or "")
+            fat_body.append(
+                [
+                    _fmt(row_i),
+                    _short(row.get("site") or row.get("部位"), 8),
+                    _fmt(row.get("fatigue_visible") or row.get("綜合可視") or ""),
+                    _fmt(row.get("fatigue_ref") or row.get("對照組可視") or ""),
+                    _fmt(row.get("fatigue_exp") or row.get("實驗組可視") or ""),
+                    Paragraph(_escape(_short(evidence, 120)), small_style),
+                ]
+            )
+        story.append(_make_table([fat_header, *fat_body], font_name))
+
+    # --- Notes ---
+    story.append(Paragraph(_escape(f"{cn[section_no - 1]}、備註"), h_style))
+    notes = [
+        "詳細數值另見 analysis_results.xlsx（總覽／疲勞可視／區間特徵／區間一致性）。",
+        "波形章節：裝置比對、刮腿毛（刮毛前／後）、疲勞皆為原始 mV。縱軸依主要振幅留白。a10 與 ZE2 實驗組套用 20–400 Hz 帶通；a09 與刮腿毛維持原訊號。",
+        "第 15 列右腓腸肌 a09 缺 Delsys 對照檔，未執行。第 22、23 列左腓腸肌 a10 實驗組仍為 2 段：帶通後約 5–14 秒沒有連續超過門檻。",
+        "RMS＝各收縮段單一 RMS 再跨段比；TTRI RMS＝滑動窗 RMS 曲線僅收縮區間內相關。",
+    ]
+    for line in notes:
+        story.append(Paragraph(_escape(f"• {line}"), body_style))
 
     doc.build(story)
     return buffer.getvalue()
@@ -382,6 +1140,18 @@ def build_results_csv_zip(
             text.write("\ufeff")
             _write_csv(text, rows)
             zf.writestr("features_delta.csv", text.getvalue().encode("utf-8"))
+            if feat_delta.get("interval_agreement"):
+                agr_rows = _rows_from_interval_agreement(feat_delta.get("interval_agreement") or [])
+                agr_text = io.StringIO()
+                agr_text.write("\ufeff")
+                _write_csv(agr_text, agr_rows)
+                zf.writestr("features_interval_agreement.csv", agr_text.getvalue().encode("utf-8"))
+            if feat_delta.get("correlation"):
+                corr_rows = _rows_from_correlation(feat_delta.get("correlation") or {})
+                corr_text = io.StringIO()
+                corr_text.write("\ufeff")
+                _write_csv(corr_text, corr_rows)
+                zf.writestr("features_correlation.csv", corr_text.getvalue().encode("utf-8"))
 
         if contr_delsys:
             rows = _rows_from_contractions(contr_delsys.get("contractions") or [])

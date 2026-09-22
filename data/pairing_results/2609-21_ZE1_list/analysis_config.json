@@ -1,0 +1,29 @@
+{
+  "contraction_method": "ze1_schmitt",
+  "contraction_method_label": "ZE1 施密特觸發（Schmitt trigger）",
+  "feature_method": "ttri",
+  "feature_method_label": "TTRI（AEMG + 滑動窗 RMS/iEMG/MPF/MDF）",
+  "expected_count_default": 3,
+  "expected_count_by_purpose": {
+    "裝置比對": 3,
+    "刮腿毛": 3,
+    "疲勞": 10
+  },
+  "agreement_stats": [
+    "Pearson r",
+    "ICC(A,1)"
+  ],
+  "agreement_scope": "跨收縮區間特徵（同 index 配對）",
+  "series_correlation": "TTRI 滑動窗 Pearson r（僅 Delsys/對照收縮區間內）",
+  "ze1_scale": "TXT × 0.00026 mV/count",
+  "ze2_sample_rate_hz": 1000.0,
+  "ze2_mv_per_count": 4.8e-05,
+  "ze2_bandpass": "20–400 Hz（apply_bandpass=True）",
+  "a10_bandpass": "20–400 Hz（僅 a10 實驗組 TXT）",
+  "pipeline": {
+    "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT；a10 實驗組 20–400 Hz 帶通)",
+    "裝置比對_ze2": "build_feature_compare_ze2(Delsys CSV × ZE2 TXT)",
+    "刮腿毛": "build_feature_compare_txt_pair(ZE1 TXT × ZE1 TXT)",
+    "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT；expected_count=10)"
+  }
+}

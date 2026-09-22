@@ -1,0 +1,10 @@
+{
+  "row": 15,
+  "site": "右腓腸肌",
+  "purpose": "裝置比對",
+  "device_note": "a09",
+  "ref_listed": "",
+  "exp_listed": "09-09_11-50-05_808_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_2.txt",
+  "ref_resolved": "",
+  "exp_resolved": "09-09_11-50-05_808_ExgCh2Data_(Frank 右腓腸肌)_a09_褲XL_2.txt"
+}
