@@ -37,25 +37,25 @@
       },
       "txt": {
         "index": 1,
-        "start": 6.0,
+        "start": 5.1719,
         "end": 11.2656,
-        "duration": 5.2656,
-        "aemg": 0.06996,
-        "rms": 0.09757,
-        "iemg": 0.367971,
-        "mpf": 137.02,
-        "mdf": 126.61,
-        "peak_rms": 0.176702,
+        "duration": 6.0937,
+        "aemg": 0.072507,
+        "rms": 0.100768,
+        "iemg": 0.441777,
+        "mpf": 132.45,
+        "mdf": 120.94,
+        "peak_rms": 0.204313,
         "method": "ttri"
       },
       "delta": {
-        "duration": 0.6117,
-        "aemg": 0.113788,
-        "iemg": 0.718159,
-        "rms": 0.157854,
-        "mdf": -26.05,
-        "mpf": 2.82,
-        "peak_rms": 0.277772
+        "duration": -0.2164,
+        "aemg": 0.111241,
+        "iemg": 0.644353,
+        "rms": 0.154656,
+        "mdf": -20.38,
+        "mpf": 7.39,
+        "peak_rms": 0.250161
       }
     },
     {
@@ -145,44 +145,44 @@
     {
       "metric": "duration",
       "n": 3,
-      "pearson_r": 0.8317,
-      "icc": 0.833
+      "pearson_r": 0.9968,
+      "icc": 0.8544
     },
     {
       "metric": "aemg",
       "n": 3,
-      "pearson_r": 0.7393,
-      "icc": 0.0117
+      "pearson_r": 0.8954,
+      "icc": 0.0128
     },
     {
       "metric": "iemg",
       "n": 3,
-      "pearson_r": 0.8706,
-      "icc": 0.0135
+      "pearson_r": 0.8647,
+      "icc": 0.0053
     },
     {
       "metric": "rms",
       "n": 3,
-      "pearson_r": 0.6493,
-      "icc": 0.0089
+      "pearson_r": 0.8285,
+      "icc": 0.0102
     },
     {
       "metric": "mdf",
       "n": 3,
-      "pearson_r": 0.9777,
-      "icc": 0.1926
+      "pearson_r": 0.9969,
+      "icc": 0.1813
     },
     {
       "metric": "mpf",
       "n": 3,
-      "pearson_r": 0.989,
-      "icc": 0.8113
+      "pearson_r": 1.0,
+      "icc": 0.6279
     },
     {
       "metric": "peak_rms",
       "n": 3,
-      "pearson_r": 0.945,
-      "icc": 0.0187
+      "pearson_r": 0.7339,
+      "icc": 0.0076
     }
   ],
   "fatigue_visibility": {

@@ -37,25 +37,25 @@
       },
       "txt": {
         "index": 1,
-        "start": 6.0,
+        "start": 5.4453,
         "end": 12.1641,
-        "duration": 6.1641,
-        "aemg": 0.023157,
-        "rms": 0.027794,
-        "iemg": 0.140778,
-        "mpf": 78.34,
-        "mdf": 70.45,
-        "peak_rms": 0.110003,
+        "duration": 6.7188,
+        "aemg": 0.025117,
+        "rms": 0.029999,
+        "iemg": 0.168336,
+        "mpf": 77.85,
+        "mdf": 69.28,
+        "peak_rms": 0.110167,
         "method": "ttri"
       },
       "delta": {
-        "duration": -0.3273,
-        "aemg": 0.006089,
-        "iemg": 0.03104,
-        "rms": 0.011006,
-        "mdf": 11.74,
-        "mpf": 30.58,
-        "peak_rms": -0.046267
+        "duration": -0.882,
+        "aemg": 0.004129,
+        "iemg": 0.003482,
+        "rms": 0.008801,
+        "mdf": 12.91,
+        "mpf": 31.07,
+        "peak_rms": -0.046431
       }
     },
     {
@@ -411,44 +411,44 @@
     {
       "metric": "duration",
       "n": 10,
-      "pearson_r": 0.2701,
-      "icc": 0.0739
+      "pearson_r": 0.2264,
+      "icc": 0.0538
     },
     {
       "metric": "aemg",
       "n": 10,
-      "pearson_r": 0.4662,
-      "icc": 0.1872
+      "pearson_r": 0.3693,
+      "icc": 0.1445
     },
     {
       "metric": "iemg",
       "n": 10,
-      "pearson_r": 0.3837,
-      "icc": 0.324
+      "pearson_r": 0.2151,
+      "icc": 0.2091
     },
     {
       "metric": "rms",
       "n": 10,
-      "pearson_r": 0.5415,
-      "icc": 0.0727
+      "pearson_r": 0.4553,
+      "icc": 0.0522
     },
     {
       "metric": "mdf",
       "n": 10,
-      "pearson_r": -0.1565,
-      "icc": -0.0261
+      "pearson_r": -0.213,
+      "icc": -0.0338
     },
     {
       "metric": "mpf",
       "n": 10,
-      "pearson_r": -0.1493,
-      "icc": -0.0098
+      "pearson_r": -0.1755,
+      "icc": -0.0113
     },
     {
       "metric": "peak_rms",
       "n": 10,
-      "pearson_r": 0.5172,
-      "icc": 0.0322
+      "pearson_r": 0.515,
+      "icc": 0.0321
     }
   ],
   "fatigue_visibility": {
@@ -506,54 +506,55 @@
     "exp": {
       "label": "實驗組",
       "n_contractions": 10,
-      "visible": "弱／不明顯",
-      "visible_en": "weak",
+      "visible": "否",
+      "visible_en": "no",
       "evidence": [
-        "RMS↑ r=0.39, Δ=6.9% (0.032725→0.034994)"
+        "MPF r=0.15, Δ=1.6%",
+        "MDF r=0.14, Δ=1.1%"
       ],
       "metrics": {
         "mpf": {
           "n": 10.0,
-          "r_vs_index": 0.1336,
-          "slope_per_contraction": 0.193576,
-          "first_third_mean": 73.686667,
+          "r_vs_index": 0.1544,
+          "slope_per_contraction": 0.220303,
+          "first_third_mean": 73.523333,
           "last_third_mean": 74.686667,
-          "pct_change": 1.36
+          "pct_change": 1.58
         },
         "mdf": {
           "n": 10.0,
-          "r_vs_index": 0.0923,
-          "slope_per_contraction": 0.133697,
-          "first_third_mean": 65.806667,
+          "r_vs_index": 0.1418,
+          "slope_per_contraction": 0.197515,
+          "first_third_mean": 65.416667,
           "last_third_mean": 66.113333,
-          "pct_change": 0.47
+          "pct_change": 1.06
         },
         "rms": {
           "n": 10.0,
-          "r_vs_index": 0.3856,
-          "slope_per_contraction": 0.00035,
-          "first_third_mean": 0.032725,
+          "r_vs_index": 0.3168,
+          "slope_per_contraction": 0.000229,
+          "first_third_mean": 0.03346,
           "last_third_mean": 0.034994,
-          "pct_change": 6.93
+          "pct_change": 4.58
         },
         "aemg": {
           "n": 10.0,
-          "r_vs_index": 0.2421,
-          "slope_per_contraction": 0.000212,
-          "first_third_mean": 0.027801,
+          "r_vs_index": 0.1443,
+          "slope_per_contraction": 0.000105,
+          "first_third_mean": 0.028454,
           "last_third_mean": 0.029223,
-          "pct_change": 5.12
+          "pct_change": 2.7
         }
       },
       "rule": "需≥5段；頻譜疲勞：MPF/MDF 對收縮序 r≤-0.35 且前→後三分之一變化≤-3.0%；振幅輔助：RMS/AEMG r≥0.35 且變化≥5.0%。",
       "spectral_hits": 0,
-      "amplitude_hits": 1
+      "amplitude_hits": 0
     },
-    "summary": "綜合：是｜對照組：是｜實驗組：弱／不明顯",
+    "summary": "綜合：是｜對照組：是｜實驗組：否",
     "score_ref": 3,
-    "score_exp": 2
+    "score_exp": 1
   },
-  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。 疲勞可視性：綜合：是｜對照組：是｜實驗組：弱／不明顯。",
+  "note": "ZE1 已換算為 mV（×0.00026）。 iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。 疲勞可視性：綜合：是｜對照組：是｜實驗組：否。",
   "ref_count": 10,
   "exp_count": 10
 }

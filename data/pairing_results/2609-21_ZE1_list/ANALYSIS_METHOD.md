@@ -1,6 +1,6 @@
 # 分析設定（本批結果用此配方）
 
-來源清單：`ze1_list.xlsx`
+來源清單：`ze1_source_list.xlsx`
 
 ## 參數
 

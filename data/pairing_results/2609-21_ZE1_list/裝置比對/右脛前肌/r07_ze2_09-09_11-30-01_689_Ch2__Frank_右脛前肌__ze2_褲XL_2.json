@@ -36,25 +36,25 @@
         "method": "ttri"
       },
       "delta": {
-        "duration": 1.8319,
-        "aemg": 0.002537,
-        "iemg": 0.365385,
-        "rms": -0.003888,
-        "mdf": -20.12,
-        "mpf": 12.73,
-        "peak_rms": -0.050724
+        "duration": 0.1839,
+        "aemg": -0.019475,
+        "iemg": -0.083851,
+        "rms": -0.030001,
+        "mdf": -15.89,
+        "mpf": 16.63,
+        "peak_rms": -0.075077
       },
       "ze2": {
         "index": 1,
-        "start": 6.0,
+        "start": 4.352,
         "end": 10.768,
-        "duration": 4.768,
-        "aemg": 0.186944,
-        "rms": 0.262188,
-        "iemg": 0.891243,
-        "mpf": 131.45,
-        "mdf": 121.72,
-        "peak_rms": 0.47216,
+        "duration": 6.416,
+        "aemg": 0.208956,
+        "rms": 0.288301,
+        "iemg": 1.340479,
+        "mpf": 127.55,
+        "mdf": 117.49,
+        "peak_rms": 0.496513,
         "method": "ttri"
       }
     },
@@ -145,44 +145,44 @@
     {
       "metric": "duration",
       "n": 3,
-      "pearson_r": -0.9632,
-      "icc": -1.3991
+      "pearson_r": 0.9971,
+      "icc": 0.9195
     },
     {
       "metric": "aemg",
       "n": 3,
-      "pearson_r": -0.6244,
-      "icc": -0.1636
+      "pearson_r": -0.2734,
+      "icc": -0.0159
     },
     {
       "metric": "iemg",
       "n": 3,
-      "pearson_r": -0.9182,
-      "icc": -2.0894
+      "pearson_r": 0.9842,
+      "icc": 0.3004
     },
     {
       "metric": "rms",
       "n": 3,
-      "pearson_r": -0.7006,
-      "icc": -0.072
+      "pearson_r": -0.5216,
+      "icc": -0.0134
     },
     {
       "metric": "mdf",
       "n": 3,
-      "pearson_r": 0.8952,
-      "icc": 0.0738
+      "pearson_r": 0.824,
+      "icc": 0.0588
     },
     {
       "metric": "mpf",
       "n": 3,
-      "pearson_r": 0.9616,
-      "icc": 0.0917
+      "pearson_r": 0.9409,
+      "icc": 0.0469
     },
     {
       "metric": "peak_rms",
       "n": 3,
-      "pearson_r": 0.6273,
-      "icc": 0.4171
+      "pearson_r": 0.6378,
+      "icc": 0.3673
     }
   ],
   "fatigue_visibility": {

@@ -37,25 +37,25 @@
       },
       "txt": {
         "index": 1,
-        "start": 6.0,
+        "start": 5.5234,
         "end": 11.4609,
-        "duration": 5.4609,
-        "aemg": 0.019347,
-        "rms": 0.024897,
-        "iemg": 0.105615,
-        "mpf": 108.58,
-        "mdf": 88.14,
-        "peak_rms": 0.035493,
+        "duration": 5.9375,
+        "aemg": 0.019176,
+        "rms": 0.024712,
+        "iemg": 0.113268,
+        "mpf": 107.62,
+        "mdf": 85.89,
+        "peak_rms": 0.03643,
         "method": "ttri"
       },
       "delta": {
-        "duration": 0.4553,
-        "aemg": 0.015457,
-        "iemg": 0.100404,
-        "rms": 0.02033,
-        "mdf": 11.52,
-        "mpf": 11.44,
-        "peak_rms": 0.057075
+        "duration": -0.0213,
+        "aemg": 0.015628,
+        "iemg": 0.092751,
+        "rms": 0.020515,
+        "mdf": 13.77,
+        "mpf": 12.4,
+        "peak_rms": 0.056138
       }
     },
     {
@@ -145,44 +145,44 @@
     {
       "metric": "duration",
       "n": 3,
-      "pearson_r": 0.9964,
-      "icc": 0.3422
+      "pearson_r": -0.3262,
+      "icc": -0.1303
     },
     {
       "metric": "aemg",
       "n": 3,
-      "pearson_r": -0.8953,
-      "icc": -0.0034
+      "pearson_r": -0.9073,
+      "icc": -0.0037
     },
     {
       "metric": "iemg",
       "n": 3,
-      "pearson_r": 0.6568,
-      "icc": 0.0032
+      "pearson_r": 0.7597,
+      "icc": 0.0024
     },
     {
       "metric": "rms",
       "n": 3,
-      "pearson_r": -0.9057,
-      "icc": -0.0021
+      "pearson_r": -0.9161,
+      "icc": -0.0022
     },
     {
       "metric": "mdf",
       "n": 3,
-      "pearson_r": 0.9293,
-      "icc": 0.1366
+      "pearson_r": 0.961,
+      "icc": 0.0712
     },
     {
       "metric": "mpf",
       "n": 3,
-      "pearson_r": 0.9569,
-      "icc": 0.1245
+      "pearson_r": 0.9795,
+      "icc": 0.1017
     },
     {
       "metric": "peak_rms",
       "n": 3,
-      "pearson_r": 0.1683,
-      "icc": 0.0057
+      "pearson_r": 0.1966,
+      "icc": 0.0061
     }
   ],
   "fatigue_visibility": {

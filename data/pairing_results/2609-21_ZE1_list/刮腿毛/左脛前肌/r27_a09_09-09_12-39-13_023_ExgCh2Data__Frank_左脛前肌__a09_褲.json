@@ -24,38 +24,38 @@
       "index": 1,
       "delsys": {
         "index": 1,
-        "start": 6.0,
+        "start": 3.0,
         "end": 9.0,
-        "duration": 3.0,
-        "aemg": 0.061037,
-        "rms": 0.082415,
-        "iemg": 0.182899,
-        "mpf": 97.17,
-        "mdf": 94.35,
-        "peak_rms": 0.150054,
+        "duration": 6.0,
+        "aemg": 0.094785,
+        "rms": 0.126718,
+        "iemg": 0.568213,
+        "mpf": 103.32,
+        "mdf": 100.54,
+        "peak_rms": 0.281716,
         "method": "ttri"
       },
       "txt": {
         "index": 1,
-        "start": 6.0,
-        "end": 10.6133,
-        "duration": 4.6133,
-        "aemg": 0.121979,
-        "rms": 0.164965,
-        "iemg": 0.562292,
-        "mpf": 101.23,
-        "mdf": 97.75,
-        "peak_rms": 0.26955,
+        "start": 5.2188,
+        "end": 10.4932,
+        "duration": 5.2744,
+        "aemg": 0.138856,
+        "rms": 0.186907,
+        "iemg": 0.730566,
+        "mpf": 102.38,
+        "mdf": 98.77,
+        "peak_rms": 0.377634,
         "method": "ttri"
       },
       "delta": {
-        "duration": -1.6133,
-        "aemg": -0.060942,
-        "iemg": -0.379393,
-        "rms": -0.08255,
-        "mdf": -3.4,
-        "mpf": -4.06,
-        "peak_rms": -0.119496
+        "duration": 0.7256,
+        "aemg": -0.044071,
+        "iemg": -0.162353,
+        "rms": -0.060189,
+        "mdf": 1.77,
+        "mpf": 0.94,
+        "peak_rms": -0.095918
       }
     },
     {
@@ -136,53 +136,53 @@
     }
   ],
   "correlation": {
-    "rms": -0.525,
-    "iemg": 0.986,
-    "mpf": -0.2409,
-    "mdf": -0.239
+    "rms": -0.4959,
+    "iemg": 0.99,
+    "mpf": -0.2326,
+    "mdf": -0.232
   },
   "interval_agreement": [
     {
       "metric": "duration",
       "n": 3,
-      "pearson_r": 0.9996,
-      "icc": 0.5187
+      "pearson_r": 0.9917,
+      "icc": 0.0464
     },
     {
       "metric": "aemg",
       "n": 3,
-      "pearson_r": 0.9063,
-      "icc": 0.1079
+      "pearson_r": -0.6055,
+      "icc": -0.0065
     },
     {
       "metric": "iemg",
       "n": 3,
-      "pearson_r": 0.9768,
-      "icc": 0.4132
+      "pearson_r": -0.8863,
+      "icc": -0.0198
     },
     {
       "metric": "rms",
       "n": 3,
-      "pearson_r": 0.9191,
-      "icc": 0.1011
+      "pearson_r": -0.4373,
+      "icc": -0.0056
     },
     {
       "metric": "mdf",
       "n": 3,
-      "pearson_r": -0.5992,
-      "icc": -0.7188
+      "pearson_r": 0.6519,
+      "icc": 0.3468
     },
     {
       "metric": "mpf",
       "n": 3,
-      "pearson_r": -0.4268,
-      "icc": -0.6732
+      "pearson_r": 0.8498,
+      "icc": 0.4991
     },
     {
       "metric": "peak_rms",
       "n": 3,
-      "pearson_r": 0.9798,
-      "icc": 0.4181
+      "pearson_r": 0.3789,
+      "icc": 0.0373
     }
   ],
   "fatigue_visibility": {

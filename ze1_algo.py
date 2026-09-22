@@ -521,13 +521,20 @@ def detect_contractions_ze1(
         tail_rms_ratio=0.18,
         tail_pad_seconds=0.12,
     )
+    envelope_segments = _noise_floor_segments(
+        emg, sample_rate_hz=fs, expected_count=expected_count
+    )
+    segment_method = "ze1_schmitt"
+    if envelope_segments:
+        contractions = envelope_segments
+        segment_method = "rms_envelope"
 
     return {
         "contractions": contractions,
         "threshold": float(threshold),
         "baseline": float(baseline),
         "analysis_hz": float(analysis_hz),
-        "method": "ze1_schmitt",
+        "method": segment_method,
         "envelope": moving_avg_list,
         "threshold_mode": mode,
         "source_preset": (source or "delsys").strip().lower(),
@@ -592,6 +599,95 @@ def _onset_before_ready_gate(
     if onset_sample >= gated_start - int(fs * 0.08):
         return None
     return onset_sample
+
+
+def _noise_floor_segments(
+    emg: np.ndarray,
+    *,
+    sample_rate_hz: float,
+    expected_count: int | None,
+) -> list[dict[str, Any]] | None:
+    """
+    Re-segment a recording whose rest noise is as large as the bursts.
+
+    Schmitt then keeps only the tallest spikes and splits one effort into
+    short pieces. A 0.25 s RMS envelope, thresholded above the noise floor,
+    follows the sustained effort instead.
+    """
+    fs = float(sample_rate_hz) if sample_rate_hz > 0 else 1024.0
+    if emg.size < int(fs * 3):
+        return None
+    win = max(4, int(round(0.25 * fs)))
+    hop = max(1, int(round(0.05 * fs)))
+    if emg.size < win * 4:
+        return None
+    rms: list[float] = []
+    centers: list[int] = []
+    for i in range(0, len(emg) - win + 1, hop):
+        chunk = emg[i : i + win]
+        rms.append(float(np.sqrt(np.mean(chunk * chunk))))
+        centers.append(i + win // 2)
+    rms_a = np.asarray(rms, dtype=float)
+    loud = float(np.percentile(rms_a, 90))
+    if loud <= 0:
+        return None
+    # Only take over when most of the record is already near the loud level.
+    if float(np.mean(rms_a > 0.55 * loud)) < 0.8:
+        return None
+    base = float(np.percentile(rms_a, 20))
+    peak = float(np.percentile(rms_a, 95))
+    if base <= 0 or peak < base * 1.4:
+        return None
+    level = base + 0.40 * (peak - base)
+    active = rms_a > level
+    groups: list[list[int]] = []
+    i = 0
+    while i < len(active):
+        if not active[i]:
+            i += 1
+            continue
+        j = i
+        while j < len(active) and active[j]:
+            j += 1
+        if not groups:
+            groups.append([i, j - 1])
+        else:
+            gap = (centers[i] - centers[groups[-1][1]]) / fs
+            if gap < 0.8:
+                groups[-1][1] = j - 1
+            else:
+                groups.append([i, j - 1])
+        i = j
+
+    found: list[dict[str, Any]] = []
+    for a, b in groups:
+        start_sample = max(0, int(centers[a]) - win // 2)
+        end_sample = min(len(emg), int(centers[b]) + win // 2)
+        if (end_sample - start_sample) / fs < 1.0:
+            continue
+        seg = emg[start_sample:end_sample]
+        found.append(
+            {
+                "start_sample": start_sample,
+                "end_sample": end_sample,
+                "start": start_sample / fs,
+                "end": end_sample / fs,
+                "duration": (end_sample - start_sample) / fs,
+                "peak_rms": float(np.sqrt(np.mean(seg * seg))) if seg.size else 0.0,
+            }
+        )
+    if len(found) < 2:
+        return None
+    if expected_count and expected_count > 0 and len(found) > int(expected_count):
+        ranked = sorted(found, key=lambda c: float(c["duration"]), reverse=True)
+        found = sorted(ranked[: int(expected_count)], key=lambda c: float(c["start"]))
+    for index, item in enumerate(found, start=1):
+        item["index"] = index
+        item["start"] = round(float(item["start"]), 4)
+        item["end"] = round(float(item["end"]), 4)
+        item["duration"] = round(float(item["end"]) - float(item["start"]), 4)
+        item["peak_rms"] = round(float(item["peak_rms"]), 6)
+    return found
 
 
 def _trim_ze1_tail(

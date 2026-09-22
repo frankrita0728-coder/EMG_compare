@@ -36,25 +36,25 @@
         "method": "ttri"
       },
       "delta": {
-        "duration": 0.6644,
-        "aemg": 0.000153,
-        "iemg": 0.016454,
-        "rms": -0.001338,
-        "mdf": -26.27,
-        "mpf": -28.4,
-        "peak_rms": -0.007926
+        "duration": 0.1444,
+        "aemg": 0.00026,
+        "iemg": 0.004577,
+        "rms": -0.000957,
+        "mdf": -25.04,
+        "mpf": -26.89,
+        "peak_rms": -0.008594
       },
       "ze2": {
         "index": 1,
-        "start": 6.0,
+        "start": 5.48,
         "end": 11.76,
-        "duration": 5.76,
-        "aemg": 0.0242,
-        "rms": 0.031836,
-        "iemg": 0.139286,
-        "mpf": 127.04,
-        "mdf": 106.79,
-        "peak_rms": 0.054873,
+        "duration": 6.28,
+        "aemg": 0.024093,
+        "rms": 0.031455,
+        "iemg": 0.151163,
+        "mpf": 125.53,
+        "mdf": 105.56,
+        "peak_rms": 0.055541,
         "method": "ttri"
       }
     },
@@ -145,44 +145,44 @@
     {
       "metric": "duration",
       "n": 3,
-      "pearson_r": 0.8858,
-      "icc": 0.4255
+      "pearson_r": 0.9601,
+      "icc": 0.6832
     },
     {
       "metric": "aemg",
       "n": 3,
-      "pearson_r": 0.9851,
-      "icc": 0.9454
+      "pearson_r": 0.986,
+      "icc": 0.9447
     },
     {
       "metric": "iemg",
       "n": 3,
-      "pearson_r": 0.9904,
-      "icc": 0.8479
+      "pearson_r": 0.9997,
+      "icc": 0.9711
     },
     {
       "metric": "rms",
       "n": 3,
-      "pearson_r": 0.9654,
-      "icc": 0.6655
+      "pearson_r": 0.9699,
+      "icc": 0.6992
     },
     {
       "metric": "mdf",
       "n": 3,
-      "pearson_r": -0.0839,
-      "icc": -0.0027
+      "pearson_r": -0.1233,
+      "icc": -0.0033
     },
     {
       "metric": "mpf",
       "n": 3,
-      "pearson_r": -0.0745,
-      "icc": -0.0013
+      "pearson_r": -0.1131,
+      "icc": -0.0014
     },
     {
       "metric": "peak_rms",
       "n": 3,
-      "pearson_r": 0.8926,
-      "icc": 0.031
+      "pearson_r": 0.9232,
+      "icc": 0.0229
     }
   ],
   "fatigue_visibility": {

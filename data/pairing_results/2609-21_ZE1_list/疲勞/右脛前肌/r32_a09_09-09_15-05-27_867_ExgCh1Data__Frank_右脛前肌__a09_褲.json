@@ -37,25 +37,25 @@
       },
       "txt": {
         "index": 1,
-        "start": 6.0,
+        "start": 5.1562,
         "end": 14.2656,
-        "duration": 8.2656,
-        "aemg": 0.082548,
-        "rms": 0.10714,
-        "iemg": 0.680482,
-        "mpf": 82.11,
-        "mdf": 74.93,
-        "peak_rms": 0.22908,
+        "duration": 9.1094,
+        "aemg": 0.090155,
+        "rms": 0.117432,
+        "iemg": 0.819708,
+        "mpf": 82.95,
+        "mdf": 76.24,
+        "peak_rms": 0.285645,
         "method": "ttri"
       },
       "delta": {
-        "duration": -0.5111,
-        "aemg": 0.040426,
-        "iemg": 0.277491,
-        "rms": 0.066335,
-        "mdf": 40.08,
-        "mpf": 55.87,
-        "peak_rms": 0.93573
+        "duration": -1.3549,
+        "aemg": 0.032819,
+        "iemg": 0.138265,
+        "rms": 0.056043,
+        "mdf": 38.77,
+        "mpf": 55.03,
+        "peak_rms": 0.879165
       }
     },
     {
@@ -411,44 +411,44 @@
     {
       "metric": "duration",
       "n": 10,
-      "pearson_r": 0.0434,
-      "icc": 0.0331
+      "pearson_r": 0.0853,
+      "icc": 0.0821
     },
     {
       "metric": "aemg",
       "n": 10,
-      "pearson_r": 0.4012,
-      "icc": 0.3973
+      "pearson_r": 0.4597,
+      "icc": 0.4375
     },
     {
       "metric": "iemg",
       "n": 10,
-      "pearson_r": -0.256,
-      "icc": -0.1208
+      "pearson_r": 0.1119,
+      "icc": 0.0565
     },
     {
       "metric": "rms",
       "n": 10,
-      "pearson_r": 0.381,
-      "icc": 0.2759
+      "pearson_r": 0.4427,
+      "icc": 0.2986
     },
     {
       "metric": "mdf",
       "n": 10,
-      "pearson_r": 0.5171,
-      "icc": 0.0212
+      "pearson_r": 0.5184,
+      "icc": 0.0219
     },
     {
       "metric": "mpf",
       "n": 10,
-      "pearson_r": 0.4242,
-      "icc": 0.0077
+      "pearson_r": 0.4286,
+      "icc": 0.008
     },
     {
       "metric": "peak_rms",
       "n": 10,
-      "pearson_r": -0.665,
-      "icc": -0.1119
+      "pearson_r": -0.5326,
+      "icc": -0.057
     }
   ],
   "fatigue_visibility": {
@@ -509,43 +509,43 @@
       "visible": "是",
       "visible_en": "yes",
       "evidence": [
-        "MPF↓ r=-0.62, Δ=-7.9% (82.486667→75.946667)",
-        "MDF↓ r=-0.68, Δ=-10.9% (75.926667→67.64)",
-        "RMS↑ r=0.75, Δ=20.6% (0.138185→0.166663)",
-        "AEMG↑ r=0.75, Δ=21.0% (0.105875→0.128127)"
+        "MPF↓ r=-0.64, Δ=-8.2% (82.766667→75.946667)",
+        "MDF↓ r=-0.70, Δ=-11.4% (76.363333→67.64)",
+        "RMS↑ r=0.78, Δ=17.7% (0.141615→0.166663)",
+        "AEMG↑ r=0.78, Δ=18.2% (0.108411→0.128127)"
       ],
       "metrics": {
         "mpf": {
           "n": 10.0,
-          "r_vs_index": -0.6246,
-          "slope_per_contraction": -0.966,
-          "first_third_mean": 82.486667,
+          "r_vs_index": -0.6414,
+          "slope_per_contraction": -1.011818,
+          "first_third_mean": 82.766667,
           "last_third_mean": 75.946667,
-          "pct_change": -7.93
+          "pct_change": -8.24
         },
         "mdf": {
           "n": 10.0,
-          "r_vs_index": -0.6756,
-          "slope_per_contraction": -1.205333,
-          "first_third_mean": 75.926667,
+          "r_vs_index": -0.6988,
+          "slope_per_contraction": -1.276788,
+          "first_third_mean": 76.363333,
           "last_third_mean": 67.64,
-          "pct_change": -10.91
+          "pct_change": -11.42
         },
         "rms": {
           "n": 10.0,
-          "r_vs_index": 0.7506,
-          "slope_per_contraction": 0.004704,
-          "first_third_mean": 0.138185,
+          "r_vs_index": 0.7811,
+          "slope_per_contraction": 0.004143,
+          "first_third_mean": 0.141615,
           "last_third_mean": 0.166663,
-          "pct_change": 20.61
+          "pct_change": 17.69
         },
         "aemg": {
           "n": 10.0,
-          "r_vs_index": 0.7483,
-          "slope_per_contraction": 0.003642,
-          "first_third_mean": 0.105875,
+          "r_vs_index": 0.7752,
+          "slope_per_contraction": 0.003227,
+          "first_third_mean": 0.108411,
           "last_third_mean": 0.128127,
-          "pct_change": 21.02
+          "pct_change": 18.19
         }
       },
       "rule": "需≥5段；頻譜疲勞：MPF/MDF 對收縮序 r≤-0.35 且前→後三分之一變化≤-3.0%；振幅輔助：RMS/AEMG r≥0.35 且變化≥5.0%。",
@@ -556,7 +556,7 @@
     "score_ref": 3,
     "score_exp": 3
   },
-  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。 疲勞可視性：綜合：是｜對照組：是｜實驗組：是。",
+  "note": "ZE1 已換算為 mV（×0.00026）。 iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。 疲勞可視性：綜合：是｜對照組：是｜實驗組：是。",
   "ref_count": 10,
   "exp_count": 10
 }
