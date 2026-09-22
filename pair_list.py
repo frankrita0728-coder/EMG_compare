@@ -240,6 +240,7 @@ def run_one_pair_row(
                 expected_count=expected,
                 contraction_method=contr,
                 feature_method=feat,
+                apply_bandpass=(str(device_note).lower() == "a10"),
             )
         elif ref_suffix == ".txt" and exp_suffix == ".txt":
             result = build_feature_compare_txt_pair(

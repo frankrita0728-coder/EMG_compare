@@ -19,8 +19,9 @@
   "ze2_sample_rate_hz": 1000.0,
   "ze2_mv_per_count": 4.8e-05,
   "ze2_bandpass": "20–400 Hz（apply_bandpass=True）",
+  "a10_bandpass": "20–400 Hz（僅 a10 實驗組 TXT）",
   "pipeline": {
-    "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT)",
+    "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT；a10 實驗組 20–400 Hz 帶通)",
     "裝置比對_ze2": "build_feature_compare_ze2(Delsys CSV × ZE2 TXT)",
     "刮腿毛": "build_feature_compare_txt_pair(ZE1 TXT × ZE1 TXT)",
     "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT；expected_count=10)"

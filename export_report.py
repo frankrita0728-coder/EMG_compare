@@ -15,7 +15,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 
 def _find_cjk_font() -> str | None:
@@ -265,6 +265,240 @@ def _add_series_image(story: list[Any], series: dict[str, Any] | None, title: st
     story.append(img)
 
 
+def _stride(times: list[float], values: list[float], max_points: int = 4000) -> tuple[list[float], list[float]]:
+    n = min(len(times), len(values))
+    times, values = times[:n], values[:n]
+    if n <= max_points:
+        return times, values
+    step = max(1, n // max_points)
+    return times[::step], values[::step]
+
+
+def _percentile(values: list[float], q: float) -> float:
+    ordered = sorted(values)
+    if len(ordered) == 1:
+        return float(ordered[0])
+    pos = (len(ordered) - 1) * q
+    lo = int(pos)
+    hi = min(lo + 1, len(ordered) - 1)
+    frac = pos - lo
+    return float(ordered[lo]) * (1.0 - frac) + float(ordered[hi]) * frac
+
+
+def _readable_ylim(values: list[float]) -> tuple[float, float]:
+    """Frame the main waveform with headroom so peaks do not sit on the border."""
+    if not values:
+        return -1.0, 1.0
+    lo = _percentile(values, 0.005)
+    hi = _percentile(values, 0.995)
+    span = hi - lo
+    if span <= 0:
+        span = max(abs(hi), abs(lo), 1e-3)
+    # Extra room so the trace is not flush with the frame (that reads as clipping).
+    pad = 0.4 * span
+    return lo - pad, hi + pad
+
+
+def _style_dark_ax(ax, font_prop) -> None:
+    ax.set_facecolor("#141b18")
+    ax.tick_params(colors="#e7efe9", labelsize=8)
+    ax.xaxis.label.set_color("#e7efe9")
+    ax.yaxis.label.set_color("#e7efe9")
+    for spine in ax.spines.values():
+        spine.set_color("#2c3a33")
+    ax.grid(True, color="#24322b", alpha=0.7)
+    if font_prop is not None:
+        for label in ax.get_xticklabels() + ax.get_yticklabels():
+            label.set_fontproperties(font_prop)
+
+
+def _spans_from_pairs(
+    pairs: list[dict[str, Any]], keys: tuple[str, ...], offset: float
+) -> list[tuple[float, float]]:
+    spans: list[tuple[float, float]] = []
+    for item in pairs:
+        block = None
+        for key in keys:
+            if isinstance(item.get(key), dict):
+                block = item[key]
+                break
+        if not block:
+            continue
+        try:
+            start = float(block["start"]) + offset
+            end = float(block["end"]) + offset
+        except (KeyError, TypeError, ValueError):
+            continue
+        if end > start:
+            spans.append((start, end))
+    return spans
+
+
+def _waveform_compare_png(
+    *,
+    delsys: dict[str, Any],
+    exp: dict[str, Any],
+    exp_label: str,
+    title: str,
+) -> bytes | None:
+    """Two-panel raw waveform. Y-axis includes the full peak-to-peak range."""
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        from matplotlib.ticker import ScalarFormatter
+    except Exception:
+        return None
+
+    font_prop = _matplotlib_font_properties()
+    if font_prop is not None:
+        try:
+            plt.rcParams["font.family"] = font_prop.get_name()
+            plt.rcParams["axes.unicode_minus"] = False
+        except Exception:
+            pass
+
+    fig, (ax_ref, ax_exp) = plt.subplots(2, 1, figsize=(11.2, 5.3), sharex=False)
+    fig.patch.set_facecolor("#0f1412")
+    for ax in (ax_ref, ax_exp):
+        _style_dark_ax(ax, font_prop)
+
+    def _draw(ax, trace: dict[str, Any], *, color: str, label: str) -> None:
+        times = [float(t) for t in (trace.get("times") or [])]
+        values = [float(v) for v in (trace.get("values") or [])]
+        n = min(len(times), len(values))
+        times, values = times[:n], values[:n]
+        for start, end in trace.get("spans") or []:
+            ax.axvspan(start, end, color=color, alpha=0.16, linewidth=0)
+        if times and values:
+            y0, y1 = _readable_ylim(values)
+            draw_t, draw_v = _stride(times, values)
+            ax.plot(draw_t, draw_v, color=color, linewidth=0.7, label=label)
+            ax.set_ylim(y0, y1)
+            ax.set_xlim(times[0], times[-1])
+        formatter = ScalarFormatter(useOffset=False)
+        formatter.set_scientific(False)
+        ax.yaxis.set_major_formatter(formatter)
+        ax.margins(x=0.01)
+        y_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 9}
+        if font_prop is not None:
+            y_kwargs["fontproperties"] = font_prop
+        unit = str(trace.get("unit") or "mV")
+        ax.set_ylabel(f"{label} ({unit})", **y_kwargs)
+        legend_kwargs: dict[str, Any] = {
+            "loc": "upper right",
+            "facecolor": "#18201c",
+            "edgecolor": "#2c3a33",
+            "labelcolor": "#e7efe9",
+            "fontsize": 8,
+        }
+        if font_prop is not None:
+            legend_kwargs["prop"] = font_prop
+        ax.legend(**legend_kwargs)
+
+    _draw(ax_ref, delsys, color="#5ec8ff", label="Delsys")
+    _draw(ax_exp, exp, color="#3dd68c", label=exp_label)
+
+    title_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 11, "pad": 8}
+    if font_prop is not None:
+        title_kwargs["fontproperties"] = font_prop
+    ax_ref.set_title(title, **title_kwargs)
+    x_kwargs: dict[str, Any] = {"color": "#e7efe9", "fontsize": 9}
+    if font_prop is not None:
+        x_kwargs["fontproperties"] = font_prop
+    ax_exp.set_xlabel("Time (s)", **x_kwargs)
+    fig.tight_layout()
+
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png", dpi=130, facecolor=fig.get_facecolor())
+    plt.close(fig)
+    buf.seek(0)
+    return buf.getvalue()
+
+
+def _device_waveform_block(
+    row: dict[str, Any],
+    payload: dict[str, Any],
+    *,
+    h_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+) -> list[Any]:
+    """One device-comparison waveform: heading, caption, plot."""
+    row_i = row.get("row")
+    site = row.get("site") or row.get("部位") or ""
+    device = str(row.get("device_note") or row.get("裝置") or payload.get("device_note") or "")
+    ref_name = (
+        payload.get("ref_resolved")
+        or payload.get("ref")
+        or row.get("ref")
+        or row.get("ref_resolved")
+        or ((payload.get("delsys") or {}).get("filename") if isinstance(payload.get("delsys"), dict) else "")
+        or ""
+    )
+    exp_name = payload.get("exp_resolved") or payload.get("exp") or row.get("exp") or row.get("exp_resolved") or ""
+    if not exp_name:
+        for key in ("ze2", "ze1", "txt"):
+            block = payload.get(key)
+            if isinstance(block, dict) and block.get("filename"):
+                exp_name = block["filename"]
+                break
+
+    heading = f"第 {row_i} 列　{site}　{device}"
+    bits = [Paragraph(_escape(heading), h_style)]
+    status = str(row.get("status") or "")
+    if status and status != "done":
+        bits.append(Paragraph(_escape(f"未繪製波形：{status}"), body_style))
+        return bits
+    if not ref_name or not exp_name:
+        bits.append(Paragraph(_escape("未繪製波形：缺少對照或實驗檔名。"), body_style))
+        return bits
+
+    try:
+        from compare import build_device_compare_waveform
+
+        wave = build_device_compare_waveform(
+            str(ref_name),
+            str(exp_name),
+            device_note=device,
+            align_by_start=False,
+        )
+    except Exception as exc:  # noqa: BLE001
+        bits.append(Paragraph(_escape(f"波形讀取失敗：{exc}"), body_style))
+        return bits
+
+    pairs = payload.get("pairs") if isinstance(payload.get("pairs"), list) else []
+    delsys = dict(wave["delsys"])
+    exp = dict(wave["exp"])
+    delsys["spans"] = _spans_from_pairs(pairs, ("delsys",), 0.0)
+    exp["spans"] = _spans_from_pairs(pairs, ("txt", "ze2", "ze1", "exp"), 0.0)
+    exp_label = str(wave.get("exp_label") or "ZE1")
+    rms_r = row.get("rms_pearson_r") if "rms_pearson_r" in row else row.get("RMS r")
+    iemg_r = row.get("iemg_pearson_r") if "iemg_pearson_r" in row else row.get("iEMG r")
+    filter_note = ""
+    if device.lower() in {"a10", "ze2"}:
+        filter_note = "　｜　實驗組已套用 20–400 Hz 帶通"
+    caption = (
+        f"Delsys：{ref_name}　｜　{exp_label}：{exp_name}　｜　"
+        f"RMS r={_fmt(rms_r)}　iEMG r={_fmt(iemg_r)}　｜　"
+        f"時間軸以各檔錄音起點為 0 秒；縱軸依主要振幅留白"
+        f"{filter_note}"
+    )
+    bits.append(Paragraph(_escape(caption), body_style))
+    png = _waveform_compare_png(
+        delsys=delsys,
+        exp=exp,
+        exp_label=exp_label,
+        title=f"#{row_i}  {site}  {device}  Delsys vs {exp_label}",
+    )
+    if not png:
+        bits.append(Paragraph(_escape("波形圖產生失敗。"), body_style))
+        return bits
+    bits.append(Spacer(1, 0.15 * cm))
+    bits.append(Image(io.BytesIO(png), width=26.2 * cm, height=12.2 * cm))
+    return bits
+
+
 def build_results_pdf(
     *,
     title: str = "emg-compare.app Report",
@@ -505,9 +739,10 @@ def build_pair_list_pdf(
         )
     story.append(_make_table([overview_header, *overview_body], font_name))
 
-    # --- Fatigue ---
-    fatigue_rows = [
-        r for r in summary_rows if str(r.get("purpose") or r.get("目的") or "") == "疲勞"
+    device_rows = [
+        r
+        for r in summary_rows
+        if str(r.get("purpose") or r.get("目的") or "") == "裝置比對"
     ]
     payload_by_row: dict[Any, dict[str, Any]] = {}
     for payload in result_payloads or []:
@@ -518,8 +753,42 @@ def build_pair_list_pdf(
                 key = payload["row"]
             payload_by_row[key] = payload
 
+    if device_rows:
+        story.append(PageBreak())
+        story.append(Paragraph(_escape("二、裝置比對波形"), h_style))
+        story.append(
+            Paragraph(
+                _escape(
+                    "每組一頁。上圖 Delsys、下圖 ZE1 或 ZE2，皆為原始 mV，時間軸以各檔錄音起點為 0 秒。"
+                    "縱軸依主要振幅留白，波峰不貼齊框線；極少數單點突波不拿來撐滿刻度。"
+                    "色帶是 Schmitt 抓到的收縮段。a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
+                ),
+                small_style,
+            )
+        )
+        for index, row in enumerate(device_rows):
+            try:
+                row_i = int(row.get("row"))
+            except (TypeError, ValueError):
+                row_i = row.get("row")
+            if index:
+                story.append(PageBreak())
+            story.extend(
+                _device_waveform_block(
+                    row,
+                    payload_by_row.get(row_i) or {},
+                    h_style=h_style,
+                    body_style=body_style,
+                )
+            )
+
+    # --- Fatigue ---
+    fatigue_rows = [
+        r for r in summary_rows if str(r.get("purpose") or r.get("目的") or "") == "疲勞"
+    ]
     if fatigue_rows:
-        story.append(Paragraph(_escape("二、疲勞：這一次能否看出疲勞"), h_style))
+        story.append(PageBreak())
+        story.append(Paragraph(_escape("三、疲勞：這一次能否看出疲勞"), h_style))
         story.append(
             Paragraph(
                 _escape(
@@ -558,9 +827,10 @@ def build_pair_list_pdf(
         story.append(_make_table([fat_header, *fat_body], font_name))
 
     # --- Notes ---
-    story.append(Paragraph(_escape("三、備註"), h_style))
+    story.append(Paragraph(_escape("四、備註"), h_style))
     notes = [
         "詳細數值另見 analysis_results.xlsx（總覽／疲勞可視／區間特徵／區間一致性）。",
+        "裝置比對波形為原始 mV。縱軸依主要振幅留白，避免波峰貼齊框線。a10 與 ZE2 實驗組套用 20–400 Hz 帶通；a09 維持原訊號。",
         "第 15 列右腓腸肌 a09 缺 Delsys 對照檔，未執行。",
         "RMS＝各收縮段單一 RMS 再跨段比；TTRI RMS＝滑動窗 RMS 曲線僅收縮區間內相關。",
     ]

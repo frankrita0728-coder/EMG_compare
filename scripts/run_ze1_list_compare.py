@@ -47,8 +47,9 @@ ANALYSIS_CONFIG: dict[str, Any] = {
     "ze2_sample_rate_hz": float(ZE2_DEFAULT_FS),
     "ze2_mv_per_count": float(ZE2_MV_PER_COUNT),
     "ze2_bandpass": "20–400 Hz（apply_bandpass=True）",
+    "a10_bandpass": "20–400 Hz（僅 a10 實驗組 TXT）",
     "pipeline": {
-        "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT)",
+        "裝置比對_a09_a10": "build_feature_compare(Delsys CSV × ZE1 TXT；a10 實驗組 20–400 Hz 帶通)",
         "裝置比對_ze2": "build_feature_compare_ze2(Delsys CSV × ZE2 TXT)",
         "刮腿毛": "build_feature_compare_txt_pair(ZE1 TXT × ZE1 TXT)",
         "疲勞": "build_feature_compare(Delsys CSV × ZE1 TXT；expected_count=10)",
@@ -85,6 +86,7 @@ def _write_analysis_method(out_dir: Path, *, xlsx_name: str) -> None:
 | ZE2 取樣率 | {cfg['ze2_sample_rate_hz']} Hz |
 | ZE2 換算 | ×{cfg['ze2_mv_per_count']} mV/count |
 | ZE2 濾波 | {cfg['ze2_bandpass']} |
+| a10 濾波 | {cfg.get('a10_bandpass', '20–400 Hz（僅 a10 實驗組 TXT）')} |
 
 ## 預期收縮次數（依實驗目的）
 
@@ -370,6 +372,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
                         expected_count=expected,
                         contraction_method=str(ANALYSIS_CONFIG["contraction_method"]),
                         feature_method=str(ANALYSIS_CONFIG["feature_method"]),
+                        apply_bandpass=(device_note == "a10"),
                     )
                 elif ref_is_txt and exp_is_txt:
                     result = build_feature_compare_txt_pair(

@@ -460,12 +460,13 @@ def fig_contractions(result: dict[str, Any], *, color: str, title: str) -> go.Fi
         **plot_layout(title=title, y_title=str(result.get("unit") or "mV"), height=320),
         shapes=shapes,
     )
-    # Keep rare spikes from dominating the visible scale (mV waveform).
+    # Show the full waveform, including peaks, with headroom so the trace is not clipped.
     ys = list(result.get("values") or [])
     if ys:
-        lo = float(np.percentile(ys, 0.5))
-        hi = float(np.percentile(ys, 99.5))
-        pad = max(0.05, 0.08 * (hi - lo))
+        lo = float(min(ys))
+        hi = float(max(ys))
+        span = hi - lo
+        pad = max(1e-4, 0.18 * span) if span > 0 else max(1e-4, abs(hi) * 0.18 or 0.05)
         fig.update_yaxes(range=[lo - pad, hi + pad])
     return fig
 

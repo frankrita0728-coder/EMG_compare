@@ -239,6 +239,67 @@ def build_waveform_overlay(
     }
 
 
+def build_device_compare_waveform(
+    ref_name: str,
+    exp_name: str,
+    *,
+    device_note: str = "",
+    align_by_start: bool = True,
+) -> dict[str, Any]:
+    """Raw mV waveforms for one device pair (Delsys vs ZE1 TXT or ZE2)."""
+    note = str(device_note or "").strip().lower()
+    left = load_delsys_emg(ref_name, for_plot=False)
+    year = None
+    start = parse_delsys_start(left.get("metadata"))
+    if start:
+        year = start.year
+    apply_bandpass = note in {"ze2", "a10"}
+    if note == "ze2":
+        right = load_ze2_emg(
+            exp_name,
+            for_plot=False,
+            year=year,
+            apply_bandpass=True,
+        )
+        exp_label = "ZE2"
+        exp_source = "ze2"
+    else:
+        right = load_txt_emg(
+            exp_name,
+            for_plot=False,
+            year=year,
+            apply_bandpass=apply_bandpass,
+        )
+        exp_label = "ZE1"
+        exp_source = "txt"
+
+    def _trace(raw: dict[str, Any], source: str) -> dict[str, Any]:
+        normed = normalize_trace(raw, method="none")
+        return {
+            "filename": raw["filename"],
+            "unit": normed.get("unit") or raw.get("unit") or "mV",
+            "times": list(normed["times"]),
+            "values": list(normed["values"]),
+            "start_epoch": raw.get("start_epoch"),
+            "start_label": raw.get("start_label") or "",
+            "source": source,
+        }
+
+    delsys_trace = _trace(left, "delsys")
+    exp_trace = _trace(right, exp_source)
+    align_info: dict[str, Any] = {"aligned": False}
+    if align_by_start:
+        aligned, align_info = align_traces_by_start([delsys_trace, exp_trace])
+        delsys_trace, exp_trace = aligned[0], aligned[1]
+    return {
+        "exp_label": exp_label,
+        "delsys": delsys_trace,
+        "exp": exp_trace,
+        "align": align_info,
+        "apply_bandpass": apply_bandpass,
+    }
+
+
 def build_contraction_single(
     source: str,
     filename: str,
@@ -369,9 +430,10 @@ def build_feature_compare(
     expected_count: int = 3,
     contraction_method: str = "rms_peak",
     feature_method: str = "ttri",
+    apply_bandpass: bool = False,
 ) -> dict[str, Any]:
     left = load_delsys_emg(delsys_name, for_plot=False)
-    right = load_txt_emg(txt_name, for_plot=False)
+    right = load_txt_emg(txt_name, for_plot=False, apply_bandpass=apply_bandpass)
     left_feat = analyze_signal_features(
         left["times"],
         left["values"],
@@ -427,7 +489,12 @@ def build_feature_compare(
             "count": right_feat["count"],
         },
         "pairs": pairs,
-        "note": f"ZE1 已換算為 mV（×{TXT_MV_PER_COUNT}）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。",
+        "note": (
+            f"ZE1 已換算為 mV（×{TXT_MV_PER_COUNT}）"
+            + ("；已套用 20–400 Hz 帶通。" if apply_bandpass else "。")
+            + " iEMG / RMS / 時長 / MDF / MPF 可直接對照。"
+        ),
+        "apply_bandpass": bool(apply_bandpass),
     }
     return _attach_correlation_stats(result, left=left, right=right, left_feat=left_feat, right_feat=right_feat)
 
