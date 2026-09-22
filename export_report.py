@@ -265,6 +265,54 @@ def _add_series_image(story: list[Any], series: dict[str, Any] | None, title: st
     story.append(img)
 
 
+def _filled_fraction(times: list[float], values: list[float]) -> float:
+    """Share of the record that is already loud. Near 1 means noise fills the trace."""
+    n = min(len(times), len(values))
+    if n < 8:
+        return 0.0
+    dt = (float(times[n - 1]) - float(times[0])) / (n - 1)
+    if dt <= 0:
+        return 0.0
+    win = max(4, int(round(0.25 / dt)))
+    if n < win * 4:
+        return 0.0
+    try:
+        import numpy as np
+    except Exception:
+        return 0.0
+    x = np.asarray(values[:n], dtype=float)
+    sq = np.cumsum(x * x)
+    ends = np.arange(win, n + 1, win)
+    starts = ends - win
+    energy = sq[ends - 1] - np.where(starts > 0, sq[starts - 1], 0.0)
+    rms = np.sqrt(np.maximum(energy, 0.0) / win)
+    loud = float(np.percentile(rms, 90))
+    if loud <= 0:
+        return 0.0
+    return float(np.mean(rms > 0.55 * loud))
+
+
+def _rolling_rms(times: list[float], values: list[float], win_s: float = 0.25) -> list[float]:
+    n = min(len(times), len(values))
+    if n < 4:
+        return values[:n]
+    dt = (float(times[n - 1]) - float(times[0])) / (n - 1)
+    if dt <= 0:
+        return values[:n]
+    win = max(4, int(round(win_s / dt)))
+    try:
+        import numpy as np
+    except Exception:
+        return values[:n]
+    x = np.asarray(values[:n], dtype=float)
+    sq = np.cumsum(x * x)
+    idx = np.arange(n)
+    starts = np.maximum(0, idx - win + 1)
+    energy = sq[idx] - np.where(starts > 0, sq[starts - 1], 0.0)
+    counts = idx - starts + 1
+    return np.sqrt(np.maximum(energy, 0.0) / counts).tolist()
+
+
 def _stride(times: list[float], values: list[float], max_points: int = 4000) -> tuple[list[float], list[float]]:
     n = min(len(times), len(values))
     times, values = times[:n], values[:n]
@@ -369,12 +417,15 @@ def _waveform_compare_png(
         values = [float(v) for v in (trace.get("values") or [])]
         n = min(len(times), len(values))
         times, values = times[:n], values[:n]
+        use_envelope = _filled_fraction(times, values) >= 0.8
+        shown = _rolling_rms(times, values) if use_envelope else values
+        shown_label = f"{label} 0.25s RMS" if use_envelope else label
         for start, end in trace.get("spans") or []:
             ax.axvspan(start, end, color=color, alpha=0.16, linewidth=0)
-        if times and values:
-            y0, y1 = _readable_ylim(values)
-            draw_t, draw_v = _stride(times, values)
-            ax.plot(draw_t, draw_v, color=color, linewidth=0.7, label=label)
+        if times and shown:
+            y0, y1 = _readable_ylim(shown)
+            draw_t, draw_v = _stride(times, shown)
+            ax.plot(draw_t, draw_v, color=color, linewidth=1.1 if use_envelope else 0.7, label=shown_label)
             ax.set_ylim(y0, y1)
             ax.set_xlim(times[0], times[-1])
         formatter = ScalarFormatter(useOffset=False)
@@ -760,7 +811,7 @@ def build_pair_list_pdf(
             Paragraph(
                 _escape(
                     "每組一頁。上圖 Delsys、下圖 ZE1 或 ZE2，皆為原始 mV，時間軸以各檔錄音起點為 0 秒。"
-                    "縱軸依主要振幅留白，波峰不貼齊框線；極少數單點突波不拿來撐滿刻度。"
+                    "縱軸依主要振幅留白。若底噪把整段塗滿，該圖改畫 0.25 秒 RMS，收縮才看得清楚。"
                     "色帶是 Schmitt 抓到的收縮段。a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
                 ),
                 small_style,
