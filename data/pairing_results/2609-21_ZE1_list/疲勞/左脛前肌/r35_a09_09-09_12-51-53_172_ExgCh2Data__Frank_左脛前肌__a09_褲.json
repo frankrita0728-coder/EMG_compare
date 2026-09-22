@@ -451,7 +451,108 @@
       "icc": 0.0257
     }
   ],
-  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。",
+  "fatigue_visibility": {
+    "visible": "是",
+    "visible_en": "yes",
+    "ref": {
+      "label": "對照組",
+      "n_contractions": 10,
+      "visible": "是",
+      "visible_en": "yes",
+      "evidence": [
+        "MPF↓ r=-0.86, Δ=-7.9% (159.316667→146.69)",
+        "MDF↓ r=-0.80, Δ=-10.0% (137.976667→124.22)"
+      ],
+      "metrics": {
+        "mpf": {
+          "n": 10.0,
+          "r_vs_index": -0.8599,
+          "slope_per_contraction": -1.652,
+          "first_third_mean": 159.316667,
+          "last_third_mean": 146.69,
+          "pct_change": -7.93
+        },
+        "mdf": {
+          "n": 10.0,
+          "r_vs_index": -0.7977,
+          "slope_per_contraction": -1.704485,
+          "first_third_mean": 137.976667,
+          "last_third_mean": 124.22,
+          "pct_change": -9.97
+        },
+        "rms": {
+          "n": 10.0,
+          "r_vs_index": -0.8818,
+          "slope_per_contraction": -0.003254,
+          "first_third_mean": 0.164324,
+          "last_third_mean": 0.14274,
+          "pct_change": -13.13
+        },
+        "aemg": {
+          "n": 10.0,
+          "r_vs_index": -0.883,
+          "slope_per_contraction": -0.002495,
+          "first_third_mean": 0.117588,
+          "last_third_mean": 0.101067,
+          "pct_change": -14.05
+        }
+      },
+      "rule": "需≥5段；頻譜疲勞：MPF/MDF 對收縮序 r≤-0.35 且前→後三分之一變化≤-3.0%；振幅輔助：RMS/AEMG r≥0.35 且變化≥5.0%。",
+      "spectral_hits": 2,
+      "amplitude_hits": 0
+    },
+    "exp": {
+      "label": "實驗組",
+      "n_contractions": 10,
+      "visible": "是",
+      "visible_en": "yes",
+      "evidence": [
+        "MPF↓ r=-0.85, Δ=-5.2% (99.256667→94.043333)",
+        "MDF↓ r=-0.82, Δ=-7.0% (94.053333→87.51)"
+      ],
+      "metrics": {
+        "mpf": {
+          "n": 10.0,
+          "r_vs_index": -0.8522,
+          "slope_per_contraction": -0.75897,
+          "first_third_mean": 99.256667,
+          "last_third_mean": 94.043333,
+          "pct_change": -5.25
+        },
+        "mdf": {
+          "n": 10.0,
+          "r_vs_index": -0.8151,
+          "slope_per_contraction": -0.970909,
+          "first_third_mean": 94.053333,
+          "last_third_mean": 87.51,
+          "pct_change": -6.96
+        },
+        "rms": {
+          "n": 10.0,
+          "r_vs_index": -0.7926,
+          "slope_per_contraction": -0.00199,
+          "first_third_mean": 0.153741,
+          "last_third_mean": 0.141901,
+          "pct_change": -7.7
+        },
+        "aemg": {
+          "n": 10.0,
+          "r_vs_index": -0.8194,
+          "slope_per_contraction": -0.001758,
+          "first_third_mean": 0.11359,
+          "last_third_mean": 0.103256,
+          "pct_change": -9.1
+        }
+      },
+      "rule": "需≥5段；頻譜疲勞：MPF/MDF 對收縮序 r≤-0.35 且前→後三分之一變化≤-3.0%；振幅輔助：RMS/AEMG r≥0.35 且變化≥5.0%。",
+      "spectral_hits": 2,
+      "amplitude_hits": 0
+    },
+    "summary": "綜合：是｜對照組：是｜實驗組：是",
+    "score_ref": 3,
+    "score_exp": 3
+  },
+  "note": "ZE1 已換算為 mV（×0.00026）；iEMG / RMS / 時長 / MDF / MPF 可直接對照。 收縮區間一致性：跨 10 段的 Pearson r 與 ICC(A,1)。 另有 TTRI 滑動窗曲線（window_l=157, overlap=79） 僅收縮區間內點的 Pearson r。 疲勞可視性：綜合：是｜對照組：是｜實驗組：是。",
   "ref_count": 10,
   "exp_count": 10
 }

@@ -4,10 +4,11 @@
 2. **第 17 列已修正**：對照組改為 `2609-09 frank右腓腸肌(Delsys)_with_a10_2.csv`（先前誤寫左脛前肌）。
 3. **右腓腸肌 ZE2 Delsys**：清單 `with_ze2_` 對上實際檔名 `with_ZE2_`（大小寫）。
 4. **門檻問題列**：詳見 `PROBLEM_THRESHOLDS.md`。曾缺段的 #6 / #8 / #27 / #37 已全部達標。
+5. **疲勞可視性**：詳見 `FATIGUE_VISIBILITY.md`。依跨收縮 MPF/MDF 下降（及 RMS/AEMG 上升輔助）判定「這一次能否看出疲勞」。
 
 分析配方見 `ANALYSIS_METHOD.md`：
 - 裝置比對／刮腿毛：Schmitt + TTRI，預期 **3** 段
-- 疲勞：Schmitt + TTRI，預期 **10** 段
+- 疲勞：Schmitt + TTRI，預期 **10** 段；並輸出疲勞可視性（是／弱／否）
 
 ## Schmitt 門檻調整（`ze1_algo.py`）
 

@@ -1,6 +1,6 @@
 # 分析設定（本批結果用此配方）
 
-來源清單：`2609-21_ZE1____list_155f.xlsx`
+來源清單：`ze1_list.xlsx`
 
 ## 參數
 
@@ -41,6 +41,12 @@
 - `ttri_rms_r` / `ttri_iemg_r`：TTRI 滑動窗序列 Pearson r
 - `ref_count` / `exp_count`：對照組／實驗組偵測到的收縮段數
 - `contraction_method` / `feature_method` / `expected_count`：本列實際使用的分析參數
+- `fatigue_visible` / `fatigue_ref` / `fatigue_exp`：僅「疲勞」列——這一次能否看出疲勞（綜合／對照／實驗）
+
+## 疲勞可視性（僅 purpose=疲勞）
+
+跨連續收縮看 **MPF／MDF 是否下降**（頻譜向低頻移動＝典型 EMG 疲勞訊號）；
+RMS／AEMG 上升為輔助證據。詳細規則見 `FATIGUE_VISIBILITY.md`。
 
 重跑指令：
 
