@@ -129,6 +129,15 @@ Streamlit「特徵」分頁載入 Excel 清單分析後，也可直接下載同�
 跨連續收縮看 **MPF／MDF 是否下降**（頻譜向低頻移動＝典型 EMG 疲勞訊號）；
 RMS／AEMG 上升為輔助證據。詳細規則見 `FATIGUE_VISIBILITY.md`。
 
+## 收縮區間修正
+
+相對「第一段起點常停在 6.0 秒」的上一批，偵測多了兩步（`ze1_algo.py`）：
+
+1. **起點前追**：門檻在 6 秒才生效時，若第一段當時已經高過門檻，起點往前追。最早不超過門檻前 3 秒，也不早於 3.0 秒。
+2. **底噪重切**：0.25 秒 RMS 有八成以上時間貼在高位、且高低對比夠大時，改依 RMS 包絡重切（`rms_envelope`）。
+
+受影響的列見同目錄 `INTERVAL_CHANGES.md`，並寫入 `analysis_results.pdf` 的「收縮區間調整」。
+
 重跑指令：
 
 ```bash
@@ -285,6 +294,8 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             "NOTES.md",
             "PROBLEM_THRESHOLDS.md",
             "FATIGUE_VISIBILITY.md",
+            "INTERVAL_CHANGES.md",
+            "interval_changes.json",
         }:
             child.unlink(missing_ok=True)
     shutil.copy2(xlsx, out_dir / "source_list.xlsx")
@@ -459,6 +470,7 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
         f"- 預期收縮：裝置比對／刮腿毛 = **3**；疲勞 = **10**",
         f"- 統計：區間 Pearson r + ICC(A,1)；另算 TTRI 滑動窗 Pearson r",
         f"- 疲勞可視性：跨收縮 MPF/MDF 下降（振幅 RMS/AEMG 上升為輔助）→ 是／弱／否",
+        "- 收縮區間調整：見 [`INTERVAL_CHANGES.md`](INTERVAL_CHANGES.md) 與 PDF「收縮區間調整」",
         "",
         "詳見 [`ANALYSIS_METHOD.md`](ANALYSIS_METHOD.md) / [`analysis_config.json`](analysis_config.json)。",
         "",
@@ -535,11 +547,16 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             from export_report import build_pair_list_pdf
 
             pdf_path = out_dir / "analysis_results.pdf"
+            changes_path = out_dir / "interval_changes.json"
+            interval_changes = None
+            if changes_path.exists():
+                interval_changes = json.loads(changes_path.read_text(encoding="utf-8"))
             pdf_path.write_bytes(
                 build_pair_list_pdf(
                     summary_rows,
                     result_payloads=payloads,
                     title="2609-21 ZE1 清單分析結果報告",
+                    interval_changes=interval_changes,
                 )
             )
             print(f"pdf: {pdf_path}")

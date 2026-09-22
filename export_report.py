@@ -150,13 +150,19 @@ def _rows_from_interval_agreement(rows: list[dict[str, Any]] | None) -> list[lis
     return [["metric", "n", "pearson_r", "icc"], *body]
 
 
-def _make_table(data: list[list[str]], font_name: str) -> Table:
-    table = Table(data, repeatRows=1)
+def _make_table(
+    data: list[list[str]],
+    font_name: str,
+    *,
+    col_widths: list[float] | None = None,
+    font_size: float = 8,
+) -> Table:
+    table = Table(data, colWidths=col_widths, repeatRows=1)
     table.setStyle(
         TableStyle(
             [
                 ("FONTNAME", (0, 0), (-1, -1), font_name),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
+                ("FONTSIZE", (0, 0), (-1, -1), font_size),
                 ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#18201c")),
                 ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#e7efe9")),
                 ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#f7faf8")),
@@ -668,11 +674,128 @@ def _short(text: Any, max_len: int = 42) -> str:
     return s[: max_len - 1] + "…"
 
 
+def _interval_change_story(
+    changes: dict[str, Any],
+    *,
+    heading: str,
+    h_style: ParagraphStyle,
+    body_style: ParagraphStyle,
+    small_style: ParagraphStyle,
+    font_name: str,
+) -> list[Any]:
+    """Pages listing contraction intervals that moved relative to the previous batch."""
+    story: list[Any] = [PageBreak(), Paragraph(_escape(heading), h_style)]
+    intro = [
+        "相對上一批（a10 帶通已套用、第一段起點仍常停在 6.0 秒），這次只改收縮區間的切法，特徵算法沒有改。",
+        "起點前追：門檻在 6 秒才生效時，若第一段其實更早開始，起點往前追到上升處。最早不超過門檻前 3 秒，也不早於 3.0 秒。後段不動。",
+        "底噪重切：0.25 秒 RMS 有八成以上時間貼在高位時，改依包絡重切，不再沿用 Schmitt 的碎段。",
+        "時間以各檔錄音起點為 0 秒。表內只列出有變動的那一側。標「上限」表示追到 3.0 秒就停。",
+    ]
+    for line in intro:
+        story.append(Paragraph(_escape(line), body_style))
+    story.append(Spacer(1, 0.2 * cm))
+
+    width = 27.6 * cm
+    onset = list(changes.get("onset") or [])
+    if onset:
+        story.append(Paragraph(_escape("只把第一段起點往前追"), h_style))
+        header = ["列", "部位", "目的", "裝置", "側", "第1段調整前", "第1段調整後"]
+        body = [header]
+        for item in onset:
+            new_first = str(item.get("new_first") or "")
+            if item.get("capped"):
+                new_first = f"{new_first} 上限"
+            body.append(
+                [
+                    _fmt(item.get("row")),
+                    _short(item.get("site"), 6),
+                    _short(item.get("purpose"), 4),
+                    _short(item.get("device"), 4),
+                    _short(item.get("side"), 6),
+                    _fmt(item.get("old_first")),
+                    new_first,
+                ]
+            )
+        story.append(
+            _make_table(
+                body,
+                font_name,
+                col_widths=[
+                    1.3 * cm,
+                    2.4 * cm,
+                    2.2 * cm,
+                    1.6 * cm,
+                    2.0 * cm,
+                    4.6 * cm,
+                    4.8 * cm,
+                ],
+                font_size=7.5,
+            )
+        )
+
+    reseg = list(changes.get("resegment") or [])
+    if reseg:
+        story.append(Spacer(1, 0.25 * cm))
+        story.append(Paragraph(_escape("整段重切"), h_style))
+        story.append(
+            Paragraph(
+                _escape(
+                    "第 20 列 ZE1 與第 29 列 Delsys 是同一份左腓腸肌 a09。"
+                    "第 21 列重切後第一段仍約 1.6 秒，這份 ZE1 在第二次出力前只有這一段較高的能量。"
+                ),
+                small_style,
+            )
+        )
+        header = ["列", "部位", "目的", "裝置", "側", "調整前", "調整後"]
+        body_rows: list[list[Any]] = [header]
+        for item in reseg:
+            body_rows.append(
+                [
+                    _fmt(item.get("row")),
+                    _short(item.get("site"), 6),
+                    _short(item.get("purpose"), 4),
+                    _short(item.get("device"), 4),
+                    _short(item.get("side"), 6),
+                    Paragraph(_escape(str(item.get("old") or "")), small_style),
+                    Paragraph(_escape(str(item.get("new") or "")), small_style),
+                ]
+            )
+        story.append(
+            _make_table(
+                body_rows,
+                font_name,
+                col_widths=[
+                    1.2 * cm,
+                    2.2 * cm,
+                    2.0 * cm,
+                    1.5 * cm,
+                    1.8 * cm,
+                    width * 0.28,
+                    width * 0.28,
+                ],
+                font_size=7.5,
+            )
+        )
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(
+        Paragraph(
+            _escape(
+                "這次沒有改區間：第 11 列左脛前肌 a10、第 12 列左脛前肌 ZE2、第 36 列右腓腸肌疲勞。"
+                "第 22、23 列左腓腸肌 a10 實驗組仍是 2 段（帶通後約 5–14 秒沒有連續超過門檻）。"
+                "第 15 列缺 Delsys，未執行。"
+            ),
+            body_style,
+        )
+    )
+    return story
+
+
 def build_pair_list_pdf(
     summary_rows: list[dict[str, Any]],
     *,
     result_payloads: list[dict[str, Any]] | None = None,
     title: str = "ZE1 清單分析結果報告",
+    interval_changes: dict[str, Any] | None = None,
 ) -> bytes:
     """
     Standalone PDF for Excel pair-list batch results.
@@ -804,15 +927,32 @@ def build_pair_list_pdf(
                 key = payload["row"]
             payload_by_row[key] = payload
 
+    section_no = 2
+    cn = "一二三四五六"
+    if interval_changes:
+        story.extend(
+            _interval_change_story(
+                interval_changes,
+                heading=f"{cn[section_no - 1]}、收縮區間調整",
+                h_style=h_style,
+                body_style=body_style,
+                small_style=small_style,
+                font_name=font_name,
+            )
+        )
+        section_no += 1
+
     if device_rows:
         story.append(PageBreak())
-        story.append(Paragraph(_escape("二、裝置比對波形"), h_style))
+        story.append(Paragraph(_escape(f"{cn[section_no - 1]}、裝置比對波形"), h_style))
+        section_no += 1
         story.append(
             Paragraph(
                 _escape(
                     "每組一頁。上圖 Delsys、下圖 ZE1 或 ZE2，皆為原始 mV，時間軸以各檔錄音起點為 0 秒。"
                     "縱軸依主要振幅留白。若底噪把整段塗滿，該圖改畫 0.25 秒 RMS，收縮才看得清楚。"
-                    "色帶是 Schmitt 抓到的收縮段。a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
+                    "色帶是收縮區間。多數由 Schmitt 切出；底噪填滿的紀錄改依 0.25 秒 RMS 包絡重切。"
+                    "a10 與 ZE2 的實驗組另套用 20–400 Hz 帶通。"
                 ),
                 small_style,
             )
@@ -839,7 +979,8 @@ def build_pair_list_pdf(
     ]
     if fatigue_rows:
         story.append(PageBreak())
-        story.append(Paragraph(_escape("三、疲勞：這一次能否看出疲勞"), h_style))
+        story.append(Paragraph(_escape(f"{cn[section_no - 1]}、疲勞：這一次能否看出疲勞"), h_style))
+        section_no += 1
         story.append(
             Paragraph(
                 _escape(
@@ -878,11 +1019,11 @@ def build_pair_list_pdf(
         story.append(_make_table([fat_header, *fat_body], font_name))
 
     # --- Notes ---
-    story.append(Paragraph(_escape("四、備註"), h_style))
+    story.append(Paragraph(_escape(f"{cn[section_no - 1]}、備註"), h_style))
     notes = [
         "詳細數值另見 analysis_results.xlsx（總覽／疲勞可視／區間特徵／區間一致性）。",
         "裝置比對波形為原始 mV。縱軸依主要振幅留白，避免波峰貼齊框線。a10 與 ZE2 實驗組套用 20–400 Hz 帶通；a09 維持原訊號。",
-        "第 15 列右腓腸肌 a09 缺 Delsys 對照檔，未執行。",
+        "第 15 列右腓腸肌 a09 缺 Delsys 對照檔，未執行。第 22、23 列左腓腸肌 a10 實驗組仍為 2 段：帶通後約 5–14 秒沒有連續超過門檻。",
         "RMS＝各收縮段單一 RMS 再跨段比；TTRI RMS＝滑動窗 RMS 曲線僅收縮區間內相關。",
     ]
     for line in notes:

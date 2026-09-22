@@ -13,6 +13,7 @@
 - 預期收縮：裝置比對／刮腿毛 = **3**；疲勞 = **10**
 - 統計：區間 Pearson r + ICC(A,1)；另算 TTRI 滑動窗 Pearson r
 - 疲勞可視性：跨收縮 MPF/MDF 下降（振幅 RMS/AEMG 上升為輔助）→ 是／弱／否
+- 收縮區間調整：見 [`INTERVAL_CHANGES.md`](INTERVAL_CHANGES.md) 與 PDF「收縮區間調整」
 
 詳見 [`ANALYSIS_METHOD.md`](ANALYSIS_METHOD.md) / [`analysis_config.json`](analysis_config.json)。
 
