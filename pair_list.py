@@ -278,6 +278,15 @@ def run_one_pair_row(
         "iemg_icc": iemg.get("icc"),
         "ttri_rms_r": corr.get("rms"),
         "ttri_iemg_r": corr.get("iemg"),
+        "fatigue_visible": (result.get("fatigue_visibility") or {}).get("visible")
+        if purpose == "疲勞"
+        else "",
+        "fatigue_ref": ((result.get("fatigue_visibility") or {}).get("ref") or {}).get("visible")
+        if purpose == "疲勞"
+        else "",
+        "fatigue_exp": ((result.get("fatigue_visibility") or {}).get("exp") or {}).get("visible")
+        if purpose == "疲勞"
+        else "",
         "note": result.get("note") or "",
         "result": result,
     }
@@ -328,6 +337,9 @@ def summary_table(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "iEMG r": row.get("iemg_pearson_r"),
                 "iEMG ICC": row.get("iemg_icc"),
                 "TTRI RMS r": row.get("ttri_rms_r"),
+                "疲勞可視": row.get("fatigue_visible") or "—",
+                "疲勞(對照)": row.get("fatigue_ref") or "—",
+                "疲勞(實驗)": row.get("fatigue_exp") or "—",
             }
         )
     return table

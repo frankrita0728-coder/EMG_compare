@@ -110,6 +110,12 @@ def _write_analysis_method(out_dir: Path, *, xlsx_name: str) -> None:
 - `ttri_rms_r` / `ttri_iemg_r`：TTRI 滑動窗序列 Pearson r
 - `ref_count` / `exp_count`：對照組／實驗組偵測到的收縮段數
 - `contraction_method` / `feature_method` / `expected_count`：本列實際使用的分析參數
+- `fatigue_visible` / `fatigue_ref` / `fatigue_exp`：僅「疲勞」列——這一次能否看出疲勞（綜合／對照／實驗）
+
+## 疲勞可視性（僅 purpose=疲勞）
+
+跨連續收縮看 **MPF／MDF 是否下降**（頻譜向低頻移動＝典型 EMG 疲勞訊號）；
+RMS／AEMG 上升為輔助證據。詳細規則見 `FATIGUE_VISIBILITY.md`。
 
 重跑指令：
 
@@ -235,6 +241,7 @@ def _slim(result: dict[str, Any], meta: dict[str, Any]) -> dict[str, Any]:
         "pairs": result.get("pairs"),
         "correlation": result.get("correlation"),
         "interval_agreement": result.get("interval_agreement"),
+        "fatigue_visibility": result.get("fatigue_visibility"),
         "note": result.get("note"),
         "ref_count": (result.get("delsys") or {}).get("count"),
         "exp_count": (
@@ -262,7 +269,11 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
     for child in list(out_dir.iterdir()):
         if child.is_dir():
             shutil.rmtree(child)
-        elif child.name not in {"NOTES.md"}:
+        elif child.name not in {
+            "NOTES.md",
+            "PROBLEM_THRESHOLDS.md",
+            "FATIGUE_VISIBILITY.md",
+        }:
             child.unlink(missing_ok=True)
     shutil.copy2(xlsx, out_dir / "source_list.xlsx")
     _write_analysis_method(out_dir, xlsx_name=xlsx.name)
@@ -378,6 +389,10 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
 
         rms = agreement.get("rms") or {}
         iemg = agreement.get("iemg") or {}
+        fatigue = {}
+        if status == "done" and out_json.exists():
+            # Will fill below after payload load; placeholder for field order.
+            pass
         summary_row = {
             "row": row_i,
             "status": status,
@@ -397,6 +412,9 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             "iemg_icc": iemg.get("icc", ""),
             "ttri_rms_r": corr.get("rms", ""),
             "ttri_iemg_r": corr.get("iemg", ""),
+            "fatigue_visible": "",
+            "fatigue_ref": "",
+            "fatigue_exp": "",
             "note": note,
             "json": str(out_json.relative_to(out_dir)) if status == "done" else "",
         }
@@ -404,6 +422,11 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
             payload = json.loads(out_json.read_text(encoding="utf-8"))
             summary_row["ref_count"] = payload.get("ref_count", "")
             summary_row["exp_count"] = payload.get("exp_count", "")
+            fatigue = payload.get("fatigue_visibility") or {}
+            if purpose == "疲勞" and fatigue:
+                summary_row["fatigue_visible"] = fatigue.get("visible", "")
+                summary_row["fatigue_ref"] = (fatigue.get("ref") or {}).get("visible", "")
+                summary_row["fatigue_exp"] = (fatigue.get("exp") or {}).get("visible", "")
         summary_rows.append(summary_row)
         print(f"[{row_i:02d}] {status} | {purpose} | {site} | {device_note}")
 
@@ -422,18 +445,37 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
         f"- 特徵計算：`{ANALYSIS_CONFIG['feature_method']}`（{ANALYSIS_CONFIG['feature_method_label']}）",
         f"- 預期收縮：裝置比對／刮腿毛 = **3**；疲勞 = **10**",
         f"- 統計：區間 Pearson r + ICC(A,1)；另算 TTRI 滑動窗 Pearson r",
+        f"- 疲勞可視性：跨收縮 MPF/MDF 下降（振幅 RMS/AEMG 上升為輔助）→ 是／弱／否",
         "",
         "詳見 [`ANALYSIS_METHOD.md`](ANALYSIS_METHOD.md) / [`analysis_config.json`](analysis_config.json)。",
         "",
-        "| # | 狀態 | 部位 | 目的 | 裝置 | RMS Pearson r | RMS ICC | iEMG Pearson r | iEMG ICC | TTRI RMS r |",
-        "|---|------|------|------|------|---------------|---------|----------------|----------|------------|",
+        "| # | 狀態 | 部位 | 目的 | 裝置 | RMS Pearson r | RMS ICC | iEMG Pearson r | iEMG ICC | TTRI RMS r | 疲勞可視 |",
+        "|---|------|------|------|------|---------------|---------|----------------|----------|------------|----------|",
     ]
     for r in summary_rows:
         readme_lines.append(
             f"| {r['row']} | {r['status']} | {r['site']} | {r['purpose']} | {r['device_note']} | "
             f"{r['rms_pearson_r']} | {r['rms_icc']} | {r['iemg_pearson_r']} | {r['iemg_icc']} | "
-            f"{r['ttri_rms_r']} |"
+            f"{r['ttri_rms_r']} | {r.get('fatigue_visible') or '—'} |"
         )
+    fatigue_rows = [r for r in summary_rows if r.get("purpose") == "疲勞"]
+    if fatigue_rows:
+        readme_lines.extend(
+            [
+                "",
+                "## 疲勞：這一次能否看出疲勞",
+                "",
+                "判定規則見 `FATIGUE_VISIBILITY.md`（MPF/MDF 跨收縮下降為主）。",
+                "",
+                "| # | 部位 | 綜合 | 對照組(Delsys) | 實驗組(TXT) |",
+                "|---|------|------|----------------|-------------|",
+            ]
+        )
+        for r in fatigue_rows:
+            readme_lines.append(
+                f"| {r['row']} | {r['site']} | {r.get('fatigue_visible') or '—'} | "
+                f"{r.get('fatigue_ref') or '—'} | {r.get('fatigue_exp') or '—'} |"
+            )
     readme_lines.extend(
         [
             "",
@@ -457,7 +499,63 @@ def run_list(xlsx: Path, out_dir: Path) -> Path:
         for row in summary_rows:
             writer.writerow(row)
 
+    _write_fatigue_visibility_doc(out_dir, summary_rows)
     return out_dir
+
+
+def _write_fatigue_visibility_doc(out_dir: Path, summary_rows: list[dict[str, Any]]) -> None:
+    """Write FATIGUE_VISIBILITY.md from fatigue summary + JSON evidence."""
+    from features import (
+        FATIGUE_AMP_PCT_MIN,
+        FATIGUE_AMP_R_MIN,
+        FATIGUE_MIN_SEGMENTS,
+        FATIGUE_SPECTRAL_PCT_MAX,
+        FATIGUE_SPECTRAL_R_MAX,
+    )
+
+    lines = [
+        "# 疲勞可視性：這一次能否看出疲勞",
+        "",
+        "針對「疲勞」目的的每一組（通常 10 次收縮），依收縮序看特徵趨勢。",
+        "",
+        "## 判定規則",
+        "",
+        f"- 至少 **{FATIGUE_MIN_SEGMENTS}** 段收縮才評斷。",
+        f"- **頻譜疲勞（主）**：MPF 或 MDF 對收縮序 Pearson r ≤ **{FATIGUE_SPECTRAL_R_MAX}**，"
+        f"且前三分之一 → 後三分之一相對變化 ≤ **{FATIGUE_SPECTRAL_PCT_MAX}%**。",
+        f"- **振幅輔助**：RMS 或 AEMG r ≥ **{FATIGUE_AMP_R_MIN}** 且變化 ≥ **{FATIGUE_AMP_PCT_MIN}%**。",
+        "- **是**：兩項頻譜都達標，或一項頻譜 + 一項振幅。",
+        "- **弱／不明顯**：僅一項達標。",
+        "- **否**：都未達標。",
+        "",
+        "## 本批結果",
+        "",
+        "| # | 部位 | 綜合 | Delsys | TXT | 依據摘要 |",
+        "|---|------|------|--------|-----|----------|",
+    ]
+    for r in summary_rows:
+        if r.get("purpose") != "疲勞" or r.get("status") != "done":
+            continue
+        evidence = ""
+        jp = r.get("json")
+        if jp:
+            path = out_dir / str(jp)
+            if path.exists():
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                fv = payload.get("fatigue_visibility") or {}
+                bits: list[str] = []
+                for side_key, tag in (("ref", "D"), ("exp", "T")):
+                    side = fv.get(side_key) or {}
+                    ev = side.get("evidence") or []
+                    if ev:
+                        bits.append(f"{tag}: " + "; ".join(ev[:2]))
+                evidence = " / ".join(bits) if bits else (fv.get("summary") or "")
+        lines.append(
+            f"| {r['row']} | {r['site']} | {r.get('fatigue_visible') or '—'} | "
+            f"{r.get('fatigue_ref') or '—'} | {r.get('fatigue_exp') or '—'} | {evidence} |"
+        )
+    lines.append("")
+    (out_dir / "FATIGUE_VISIBILITY.md").write_text("\n".join(lines), encoding="utf-8")
 
 
 def main() -> None:

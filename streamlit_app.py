@@ -1606,6 +1606,18 @@ def _render_feature_pair_list_panel(
             )
             if res.get("note"):
                 st.caption(res["note"])
+            fatigue = res.get("fatigue_visibility") or {}
+            if item.get("purpose") == "疲勞" and fatigue:
+                st.markdown("**這一次能否看出疲勞**")
+                st.write(
+                    f"綜合：**{fatigue.get('visible', '—')}**　｜　"
+                    f"對照組：{((fatigue.get('ref') or {}).get('visible')) or '—'}　｜　"
+                    f"實驗組：{((fatigue.get('exp') or {}).get('visible')) or '—'}"
+                )
+                with st.expander("疲勞判定依據", expanded=False):
+                    for side_key, title in (("ref", "對照組"), ("exp", "實驗組")):
+                        side = fatigue.get(side_key) or {}
+                        st.markdown(f"*{title}*：{side.get('visible')} — {', '.join(side.get('evidence') or []) or '—'}")
             agreement = res.get("interval_agreement") or []
             if agreement:
                 st.markdown("**收縮區間一致性**")

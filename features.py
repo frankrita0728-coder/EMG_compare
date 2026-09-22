@@ -322,6 +322,194 @@ def interval_agreement(
     return rows
 
 
+# Fatigue visibility: spectral shift across successive contractions.
+# Classic EMG fatigue: MPF/MDF decline; amplitude (RMS/AEMG) may rise.
+FATIGUE_MIN_SEGMENTS = 5
+FATIGUE_SPECTRAL_R_MAX = -0.35  # Pearson r of metric vs contraction index
+FATIGUE_SPECTRAL_PCT_MAX = -3.0  # first-third → last-third relative %
+FATIGUE_AMP_R_MIN = 0.35
+FATIGUE_AMP_PCT_MIN = 5.0
+
+
+def _trend_vs_index(values: list[float]) -> dict[str, float | None]:
+    """Linear trend of a metric across ordered contraction indices (1..n)."""
+    n = len(values)
+    if n < 2:
+        return {
+            "n": float(n),
+            "r_vs_index": None,
+            "slope_per_contraction": None,
+            "first_third_mean": None,
+            "last_third_mean": None,
+            "pct_change": None,
+        }
+    idx = [float(i + 1) for i in range(n)]
+    r = pearson_corr(idx, values)
+    x = np.asarray(idx, dtype=float)
+    y = np.asarray(values, dtype=float)
+    slope = float(np.polyfit(x, y, 1)[0]) if np.isfinite(y).all() else None
+    third = max(1, n // 3)
+    first_m = float(np.mean(y[:third]))
+    last_m = float(np.mean(y[-third:]))
+    pct = None
+    if abs(first_m) > 1e-12:
+        pct = 100.0 * (last_m - first_m) / first_m
+    return {
+        "n": float(n),
+        "r_vs_index": r,
+        "slope_per_contraction": round(slope, 6) if slope is not None and np.isfinite(slope) else None,
+        "first_third_mean": round(first_m, 6),
+        "last_third_mean": round(last_m, 6),
+        "pct_change": round(pct, 2) if pct is not None and np.isfinite(pct) else None,
+    }
+
+
+def _metric_series(rows: list[dict[str, Any]], key: str) -> list[float]:
+    out: list[float] = []
+    for row in rows:
+        v = row.get(key)
+        if isinstance(v, (int, float)) and np.isfinite(float(v)):
+            out.append(float(v))
+    return out
+
+
+def assess_fatigue_visibility(
+    feature_rows: list[dict[str, Any]] | None,
+    *,
+    label: str = "",
+) -> dict[str, Any]:
+    """
+    Decide whether fatigue is visible within one recording's contraction sequence.
+
+    Primary evidence: MPF and/or MDF decline across successive contractions
+    (spectral compression). Supporting: RMS/AEMG rise.
+
+    Returns Chinese ``visible`` label: 是 / 弱／不明顯 / 否 / 段數不足.
+    """
+    rows = list(feature_rows or [])
+    n = len(rows)
+    base: dict[str, Any] = {
+        "label": label,
+        "n_contractions": n,
+        "visible": "段數不足",
+        "visible_en": "insufficient",
+        "evidence": [],
+        "metrics": {},
+        "rule": (
+            f"需≥{FATIGUE_MIN_SEGMENTS}段；頻譜疲勞：MPF/MDF 對收縮序 r≤{FATIGUE_SPECTRAL_R_MAX} "
+            f"且前→後三分之一變化≤{FATIGUE_SPECTRAL_PCT_MAX}%；"
+            f"振幅輔助：RMS/AEMG r≥{FATIGUE_AMP_R_MIN} 且變化≥{FATIGUE_AMP_PCT_MIN}%。"
+        ),
+    }
+    if n < FATIGUE_MIN_SEGMENTS:
+        return base
+
+    trends: dict[str, dict[str, float | None]] = {}
+    for key in ("mpf", "mdf", "rms", "aemg"):
+        series = _metric_series(rows, key)
+        if len(series) >= FATIGUE_MIN_SEGMENTS:
+            trends[key] = _trend_vs_index(series)
+    base["metrics"] = trends
+
+    evidence: list[str] = []
+    spectral_hits = 0
+    for key in ("mpf", "mdf"):
+        t = trends.get(key) or {}
+        r = t.get("r_vs_index")
+        pct = t.get("pct_change")
+        if (
+            isinstance(r, (int, float))
+            and isinstance(pct, (int, float))
+            and float(r) <= FATIGUE_SPECTRAL_R_MAX
+            and float(pct) <= FATIGUE_SPECTRAL_PCT_MAX
+        ):
+            spectral_hits += 1
+            evidence.append(
+                f"{key.upper()}↓ r={float(r):.2f}, Δ={float(pct):.1f}% "
+                f"({t.get('first_third_mean')}→{t.get('last_third_mean')})"
+            )
+
+    amp_hits = 0
+    for key in ("rms", "aemg"):
+        t = trends.get(key) or {}
+        r = t.get("r_vs_index")
+        pct = t.get("pct_change")
+        if (
+            isinstance(r, (int, float))
+            and isinstance(pct, (int, float))
+            and float(r) >= FATIGUE_AMP_R_MIN
+            and float(pct) >= FATIGUE_AMP_PCT_MIN
+        ):
+            amp_hits += 1
+            evidence.append(
+                f"{key.upper()}↑ r={float(r):.2f}, Δ={float(pct):.1f}% "
+                f"({t.get('first_third_mean')}→{t.get('last_third_mean')})"
+            )
+
+    base["evidence"] = evidence
+    base["spectral_hits"] = spectral_hits
+    base["amplitude_hits"] = amp_hits
+
+    if spectral_hits >= 2 or (spectral_hits >= 1 and amp_hits >= 1):
+        base["visible"] = "是"
+        base["visible_en"] = "yes"
+    elif spectral_hits >= 1 or amp_hits >= 1:
+        base["visible"] = "弱／不明顯"
+        base["visible_en"] = "weak"
+    else:
+        base["visible"] = "否"
+        base["visible_en"] = "no"
+        if not evidence:
+            # Summarize why not: report MPF/MDF direction briefly
+            notes: list[str] = []
+            for key in ("mpf", "mdf"):
+                t = trends.get(key) or {}
+                r = t.get("r_vs_index")
+                pct = t.get("pct_change")
+                if r is not None and pct is not None:
+                    notes.append(f"{key.upper()} r={float(r):.2f}, Δ={float(pct):.1f}%")
+            base["evidence"] = notes or ["頻譜／振幅趨勢未達門檻"]
+    return base
+
+
+def assess_pair_fatigue_visibility(
+    left_rows: list[dict[str, Any]] | None,
+    right_rows: list[dict[str, Any]] | None,
+    *,
+    left_label: str = "對照組",
+    right_label: str = "實驗組",
+) -> dict[str, Any]:
+    """Fatigue visibility for both sides of a compare pair + combined verdict."""
+    left = assess_fatigue_visibility(left_rows, label=left_label)
+    right = assess_fatigue_visibility(right_rows, label=right_label)
+    left_v = str(left.get("visible_en") or "")
+    right_v = str(right.get("visible_en") or "")
+
+    rank = {"yes": 3, "weak": 2, "no": 1, "insufficient": 0}
+    # Combined: yes if either side clearly shows fatigue; weak if only weak; else no.
+    if left_v == "yes" or right_v == "yes":
+        combined, combined_en = "是", "yes"
+    elif left_v == "weak" or right_v == "weak":
+        combined, combined_en = "弱／不明顯", "weak"
+    elif left_v == "insufficient" and right_v == "insufficient":
+        combined, combined_en = "段數不足", "insufficient"
+    else:
+        combined, combined_en = "否", "no"
+
+    return {
+        "visible": combined,
+        "visible_en": combined_en,
+        "ref": left,
+        "exp": right,
+        "summary": (
+            f"綜合：{combined}｜{left_label}：{left.get('visible')}｜"
+            f"{right_label}：{right.get('visible')}"
+        ),
+        "score_ref": rank.get(left_v, 0),
+        "score_exp": rank.get(right_v, 0),
+    }
+
+
 def _interval_mask(times: np.ndarray, intervals: list[dict[str, Any]] | None) -> np.ndarray:
     """True where time falls inside any [start, end] contraction interval."""
     if times.size == 0:

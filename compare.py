@@ -6,6 +6,7 @@ from align import align_traces_by_start, parse_delsys_start
 from detector import detect_contractions_dispatch
 from features import (
     analyze_signal_features,
+    assess_pair_fatigue_visibility,
     compare_feature_rows,
     interval_agreement,
     series_correlations,
@@ -556,6 +557,17 @@ def _attach_correlation_stats(
     result["correlation"] = correlation
     result["correlation_method"] = "ttri_series_pearson_contraction_only"
     result["correlation_window"] = {"window_l": window_l, "overlap": overlap}
+
+    left_feats = left_feat.get("features") or []
+    right_feats = right_feat.get("features") or []
+    fatigue = assess_pair_fatigue_visibility(
+        left_feats,
+        right_feats,
+        left_label="對照組",
+        right_label="實驗組",
+    )
+    result["fatigue_visibility"] = fatigue
+
     note = str(result.get("note") or "")
     result["note"] = (
         note
@@ -563,4 +575,6 @@ def _attach_correlation_stats(
         + f" 另有 TTRI 滑動窗曲線（window_l={window_l}, overlap={overlap}）"
         + " 僅收縮區間內點的 Pearson r。"
     )
+    if max(len(left_feats), len(right_feats)) >= 5:
+        result["note"] = str(result["note"]) + f" 疲勞可視性：{fatigue.get('summary')}。"
     return result
